@@ -1,0 +1,161 @@
+// =====================================================================
+// M/S SUSHANT CONSTRUCTION - Prisma schema
+//
+// To switch to PostgreSQL for production:
+//   1. Change `provider = "sqlite"`  ->  `provider = "postgresql"`
+//   2. Point DATABASE_URL in .env to your PostgreSQL connection string
+//   3. Run `npm run db:migrate` again
+// No model changes are required.
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // PostgreSQL connection string example:
+  //   DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public"
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------- Admin ---------------------------------
+model Admin {
+  id           Int              @id @default(autoincrement())
+  username     String           @unique
+  email        String?          @unique
+  passwordHash String
+  role         String           @default("ADMIN")
+  isActive     Boolean          @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  auditLogs    AdminAuditLog[]
+}
+
+// --------------------------- Category --------------------------------
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String
+  slug        String    @unique
+  displayOrder Int      @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+
+  @@index([displayOrder])
+  @@index([isActive])
+}
+
+// ---------------------------- Product --------------------------------
+model Product {
+  id          Int            @id @default(autoincrement())
+  name        String
+  description String?
+  unit        String         @default("bag")
+  price       Float
+  mrp         Float
+  stock       Int            @default(0)
+  isActive    Boolean        @default(true)
+  categoryId  Int
+  category    Category       @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
+  orderItems  OrderItem[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([price])
+}
+
+// -------------------------- ProductImage -----------------------------
+model ProductImage {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  url         String
+  alt         String?
+  isPrimary   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([productId, isPrimary])
+}
+
+// ----------------------------- Order ---------------------------------
+// NOTE: SQLite does not support Prisma `enum` blocks, so `status` is a
+// String validated against ORDER_STATUSES in server/src/utils/orderStatus.ts.
+model Order {
+  id              Int         @id @default(autoincrement())
+  orderNumber     String      @unique
+  customerName    String
+  customerMobile  String
+  deliveryAddress String
+  notes           String?
+  subtotal        Float
+  status          String      @default("PENDING")
+  items           OrderItem[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([customerMobile])
+}
+
+model OrderItem {
+  id         Int     @id @default(autoincrement())
+  orderId    Int
+  order      Order   @relation(fields: [orderId], references: [id])
+  productId  Int
+  product    Product @relation(fields: [productId], references: [id])
+  productName String // snapshot at order time
+  unit       String  // snapshot at order time
+  price      Float   // unit price at order time (server-verified)
+  quantity   Int
+  total      Float
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// --------------------------- SiteSetting -----------------------------
+model SiteSetting {
+  id          Int      @id @default(autoincrement())
+  companyName String   @default("M/S SUSHANT CONSTRUCTION")
+  tagline     String   @default("Your trusted construction material supplier")
+  logoUrl     String?
+  heroTitle   String   @default("Quality Construction Materials")
+  heroSubtitle String  @default("Cement, steel, roofing sheets and more at the best prices.")
+  heroBannerUrl String?
+  phone       String   @default("")
+  whatsappNumber String @default("")
+  email       String   @default("")
+  address     String   @default("")
+  googleMapsUrl String @default("")
+  aboutContent String  @default("")
+  facebookUrl String   @default("")
+  instagramUrl String  @default("")
+  youtubeUrl  String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// -------------------------- AdminAuditLog ----------------------------
+model AdminAuditLog {
+  id          Int      @id @default(autoincrement())
+  adminId     Int?
+  admin       Admin?   @relation(fields: [adminId], references: [id])
+  action      String
+  entity      String?
+  entityId    String?
+  details     String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([adminId])
+  @@index([createdAt])
+}
+

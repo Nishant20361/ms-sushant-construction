@@ -1,0 +1,30 @@
+{
+  "name": "ms-sushant-construction",
+  "version": "1.0.0",
+  "private": true,
+  "description": "M/S SUSHANT CONSTRUCTION - construction material supplier website + admin panel",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,green \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
+    "dev:server": "npm run dev --workspace server",
+    "dev:client": "npm run dev --workspace client",
+    "build": "npm run build --workspace server && npm run build --workspace client",
+    "lint": "npm run lint --workspace server && npm run lint --workspace client",
+    "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace client",
+    "test": "npm run test --workspace server",
+    "db:migrate": "npm run db:migrate --workspace server",
+    "db:seed": "npm run db:seed --workspace server",
+    "db:setup": "npm run db:migrate --workspace server && npm run db:seed --workspace server",
+    "db:reset": "npm run db:reset --workspace server",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "archiver": "^7.0.1",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3"
+  }
+}
+

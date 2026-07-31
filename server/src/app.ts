@@ -1,0 +1,111 @@
+import express from "express";
+import helmet from "helmet";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import path from "path";
+import fs from "fs";
+import { config } from "./config.js";
+import { generalLimiter } from "./middleware/rateLimit.js";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { csrfProtect, issueCsrfToken } from "./utils/csrf.js";
+import publicRoutes from "./routes/public.js";
+import adminRoutes from "./routes/admin/index.js";
+import { isUploadedFileSafe } from "./middleware/upload.js";
+
+export function createApp() {
+  const app = express();
+
+  // ---------- Security headers ----------
+  app.set("trust proxy", 1);
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https:"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+          connectSrc: ["'self'", config.clientUrl],
+          frameSrc: ["https://www.google.com", "https://maps.google.com"],
+        },
+      },
+    })
+  );
+
+  // ---------- CORS (allowlist only) ----------
+  // In development we also allow every loopback origin (localhost, 127.0.0.1,
+  // [::1]) so the admin panel works regardless of which hostname is used to
+  // open the Vite dev server. In production only CLIENT_URL is allowed.
+  const allowedOrigins = [config.clientUrl].filter(Boolean);
+  const isLoopbackOrigin = (origin: string): boolean => {
+    try {
+      const host = new URL(origin).hostname;
+      return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+    } catch {
+      return false;
+    }
+  };
+  app.use(
+    cors({
+      origin(origin, cb) {
+        // Allow same-origin (no Origin header) and allowlisted origins.
+        if (!origin) return cb(null, true);
+        if (allowedOrigins.includes(origin)) return cb(null, true);
+        if (config.env === "development" && isLoopbackOrigin(origin)) return cb(null, true);
+        return cb(new Error("Not allowed by CORS"));
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "X-CSRF-Token", "X-Requested-With"],
+    })
+  );
+
+  app.use(express.json({ limit: "1mb" }));
+  app.use(cookieParser());
+
+  // ---------- Rate limiting (general) ----------
+  app.use("/api", generalLimiter);
+
+  // ---------- Health (no secrets) ----------
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", service: "ms-sushant-construction", time: new Date().toISOString() });
+  });
+
+  // ---------- Public static uploads (safe allowlist only) ----------
+  const uploadsDir = path.resolve(process.cwd(), "uploads");
+  if (fs.existsSync(uploadsDir)) {
+    app.use(
+      "/uploads",
+      (req, res, next) => {
+        const file = decodeURIComponent(req.path.slice(1));
+        if (!isUploadedFileSafe(file)) {
+          res.status(404).json({ error: "Not found" });
+          return;
+        }
+        next();
+      },
+      express.static(uploadsDir, { maxAge: "7d", immutable: false })
+    );
+  }
+
+  // ---------- CSRF token issuance for the SPA ----------
+  app.get("/api/csrf", (req, res) => {
+    issueCsrfToken(req, res);
+    res.json({ ok: true });
+  });
+
+  // ---------- CSRF protection for state-changing routes ----------
+  app.use("/api", csrfProtect);
+
+  // ---------- Routes ----------
+  app.use("/api", publicRoutes);
+  app.use("/api/admin", adminRoutes);
+
+  // ---------- Errors ----------
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+
+  return app;
+}
+

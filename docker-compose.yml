@@ -1,0 +1,33 @@
+# ------------------------------------------------------------------
+# M/S SUSHANT CONSTRUCTION
+# Docker Compose is OPTIONAL. The project runs on SQLite locally with
+# zero external services. Use this file only when you want a PostgreSQL
+# database for production-style development:
+#
+#   1. Change the Prisma provider in server/prisma/schema.prisma to "postgresql"
+#   2. Set DATABASE_URL in .env to the PostgreSQL URL below
+#   3. Run: docker compose up -d
+#   4. Run: npm run db:migrate && npm run db:seed
+# ------------------------------------------------------------------
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ms-sushant-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sushant
+      POSTGRES_PASSWORD: sushant
+      POSTGRES_DB: sushant_construction
+    ports:
+      - "5432:5432"
+    volumes:
+      - ms_sushant_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sushant -d sushant_construction"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  ms_sushant_pgdata:
+

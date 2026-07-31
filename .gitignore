@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+client/dist/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Database (SQLite dev file - never commit)
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/prisma/migrations/dev.db
+server/prisma/test.db
+server/prisma/test.db-journal
+*.sqlite
+*.db
+
+# Uploads
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Test / coverage
+coverage/
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+__MACOSX/
+
+# Archives
+*.zip
+
+# Temporary / debug scripts
+*.tmp.ts
+
+# Editor
+.vscode/
+.idea/
+
