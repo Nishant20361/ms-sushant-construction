@@ -23,16 +23,24 @@ export function formatDate(iso: string): string {
  *
  * The backend stores image URLs as absolute paths like `/uploads/abc.webp`.
  * They may also be stored as full URLs (`https://…`) in some cases. This
- * helper avoids double-prefixing the uploads base:
- *   - full URL  -> returned unchanged
- *   - already prefixed with `/uploads` -> returned unchanged
- *   - otherwise -> `UPLOADS_BASE` is prepended
+ * helper converts relative paths to a full backend URL:
+ *
+ *   - full URL (`http://` / `https://`) → returned unchanged
+ *   - already prefixed with `UPLOADS_BASE` → returned unchanged
+ *   - relative path starting with `/uploads/` → `UPLOADS_BASE` + filename
+ *   - otherwise → `UPLOADS_BASE` is prepended
+ *
+ * In production the frontend and API live on different origins, so relative
+ * `/uploads/` paths must be converted to the backend URL or they will 404.
  */
 export function resolveImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   if (url.startsWith(UPLOADS_BASE)) return url;
-  if (url.startsWith("/uploads/")) return url;
+  // Convert relative /uploads/ paths to the backend URL
+  if (url.startsWith("/uploads/")) {
+    return `${UPLOADS_BASE}${url.replace(/^\/uploads/, "")}`;
+  }
   return `${UPLOADS_BASE}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
