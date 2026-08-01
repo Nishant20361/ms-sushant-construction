@@ -10,24 +10,60 @@ import { orderLimiter } from "../middleware/rateLimit.js";
 
 const router = Router();
 
-// GET /api/products?category=slug&search=term&active=1
+// GET /api/products?category=slug&search=term&page=1&limit=12
 router.get(
   "/products",
   asyncHandler(async (req, res) => {
-    const { category, search } = req.query;
+    const {
+      category,
+      search,
+      page = "1",
+      limit = "12",
+    } = req.query as Record<string, string>;
+
     const where: any = { isActive: true };
-    if (typeof category === "string" && category.length) {
-      where.category = { slug: category, isActive: true };
+
+    if (category) {
+      where.category = {
+        slug: category,
+        isActive: true,
+      };
     }
-    if (typeof search === "string" && search.trim()) {
-      where.name = { contains: search.trim() };
+
+    if (search?.trim()) {
+      where.name = {
+        contains: search.trim(),
+      };
     }
-    const products = await prisma.product.findMany({
-      where,
-      include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
-      orderBy: { createdAt: "desc" },
+
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.max(1, Number(limit));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: {
+          category: true,
+          images: {
+            orderBy: { isPrimary: "desc" },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limitNum,
+      }),
+      prisma.product.count({ where }),
+    ]);
+
+    res.json({
+      products: products.map(serializeProduct),
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum),
     });
-    res.json({ products: products.map(serializeProduct) });
   })
 );
 
