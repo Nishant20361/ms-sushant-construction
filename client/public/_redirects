@@ -1,0 +1,5 @@
+# Render / Netlify-style SPA fallback
+# Any request that does not match a static asset is served index.html so
+# React Router can handle /admin, /admin/login, /checkout, etc.
+/*    /index.html   200
+

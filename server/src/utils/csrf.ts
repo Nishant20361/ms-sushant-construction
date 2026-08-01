@@ -1,27 +1,37 @@
 import { NextFunction, Request, Response } from "express";
 import crypto from "crypto";
 import { HttpError } from "./httpError.js";
+import { config } from "../config.js";
 
 export const CSRF_COOKIE = "ms_sushant_csrf";
 export const CSRF_HEADER = "x-csrf-token";
 
 /**
- * Sends the CSRF token to the client as a readable cookie.
- * The client must echo it back in the `X-CSRF-Token` header for any
- * authenticated state-changing request.
+ * Sends the CSRF token to the client as a readable cookie and returns the
+ * token so the caller can also include it in the JSON response body.
+ *
+ * This is essential in production where the frontend and API are on different
+ * origins: the cookie belongs to the API origin, so it is NOT visible via
+ * `document.cookie` on the frontend origin. The SPA must therefore receive the
+ * token in the response body and echo it back in the X-CSRF-Token header while
+ * the browser automatically sends the cookie with credentials: "include".
  */
-export function issueCsrfToken(req: Request, res: Response): void {
+export function issueCsrfToken(req: Request, res: Response): string {
   let token = (req.cookies as Record<string, string> | undefined)?.[CSRF_COOKIE];
   if (!token) {
     token = crypto.randomBytes(32).toString("hex");
   }
+  const sameSite: "none" | "strict" = config.isProd ? "none" : "strict";
   res.cookie(CSRF_COOKIE, token, {
     httpOnly: false, // must be readable by frontend JS
     secure: req.secure || req.headers["x-forwarded-proto"] === "https",
-    sameSite: "strict",
+    // Cross-origin (different subdomain) in production requires SameSite=None
+    // so the browser sends the cookie with cross-origin fetch requests.
+    sameSite,
     path: "/",
     maxAge: 24 * 60 * 60 * 1000,
   });
+  return token;
 }
 
 /**

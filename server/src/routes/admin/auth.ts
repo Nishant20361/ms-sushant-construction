@@ -17,17 +17,23 @@ const router = Router();
 
 function setAdminCookie(res: Response, token: string): void {
   const secure = config.isProd;
+  // SameSite=None in production because the frontend and API are on different
+  // origins (different subdomains). Secure is implied by isProd (HTTPS).
+  const sameSite: "none" | "strict" = config.isProd ? "none" : "strict";
   res.cookie(config.cookieName, token, {
     httpOnly: true,
     secure,
-    sameSite: "strict",
+    sameSite,
     path: "/",
     maxAge: 24 * 60 * 60 * 1000,
   });
 }
 
 function clearAdminCookie(res: Response): void {
-  res.clearCookie(config.cookieName, { path: "/", sameSite: "strict" });
+  res.clearCookie(config.cookieName, {
+    path: "/",
+    sameSite: config.isProd ? "none" : "strict",
+  });
 }
 
 // POST /api/admin/auth/login

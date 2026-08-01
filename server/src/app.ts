@@ -91,8 +91,8 @@ export function createApp() {
 
   // ---------- CSRF token issuance for the SPA ----------
   app.get("/api/csrf", (req, res) => {
-    issueCsrfToken(req, res);
-    res.json({ ok: true });
+    const token = issueCsrfToken(req, res);
+    res.json({ ok: true, token });
   });
 
   // ---------- CSRF protection for state-changing routes ----------

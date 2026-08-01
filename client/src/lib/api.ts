@@ -11,14 +11,21 @@ import type {
 
 // ------------------------------------------------------------------
 // CSRF handling
-// The backend issues a readable CSRF cookie. For every state-changing
-// request we attach its value as the X-CSRF-Token header.
+// The backend issues a CSRF cookie AND returns the token in the JSON body
+// of GET /api/csrf. We attach the token as the X-CSRF-Token header for
+// every state-changing request.
+//
+// In production the frontend and API live on different origins, so the
+// cookie is set for the API origin and is NOT visible via document.cookie
+// from the frontend page. We therefore prefer the token from the response
+// body, falling back to the cookie only for same-origin (dev) setups.
 // ------------------------------------------------------------------
 let csrfToken: string | null = null;
 
 async function getCsrfToken(): Promise<string> {
   if (csrfToken) return csrfToken;
-  // Try the cookie first (no network call if present)
+
+  // 1) Same-origin dev case: cookie is readable, avoid a network round-trip.
   const fromCookie = document.cookie
     .split("; ")
     .find((c) => c.startsWith("ms_sushant_csrf="));
@@ -26,12 +33,20 @@ async function getCsrfToken(): Promise<string> {
     csrfToken = decodeURIComponent(fromCookie.split("=")[1]);
     return csrfToken;
   }
+
+  // 2) Fetch the token from the response body (works cross-origin).
   const res = await fetch(`${API_BASE}/csrf`, { credentials: "include" });
   if (!res.ok) throw new Error("Unable to initialize security token");
-  const cookie = document.cookie
-    .split("; ")
-    .find((c) => c.startsWith("ms_sushant_csrf="));
-  csrfToken = cookie ? decodeURIComponent(cookie.split("=")[1]) : null;
+  const data = (await res.json()) as { token?: string };
+  csrfToken = data.token ?? null;
+
+  // 3) Last resort: read the cookie if the server set it readable.
+  if (!csrfToken) {
+    const cookie = document.cookie
+      .split("; ")
+      .find((c) => c.startsWith("ms_sushant_csrf="));
+    csrfToken = cookie ? decodeURIComponent(cookie.split("=")[1]) : null;
+  }
   return csrfToken ?? "";
 }
 
