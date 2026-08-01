@@ -2,7 +2,7 @@
 // M/S SUSHANT CONSTRUCTION - Prisma schema
 //
 // To switch to PostgreSQL for production:
-//   1. Change `provider = "sqlite"`  ->  `provider = "postgresql"`
+//   1. Change `provider = "postgresql"`  ->  `provider = "postgresql"`
 //   2. Point DATABASE_URL in .env to your PostgreSQL connection string
 //   3. Run `npm run db:migrate` again
 // No model changes are required.
@@ -15,7 +15,7 @@ generator client {
 datasource db {
   // PostgreSQL connection string example:
   //   DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public"
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
