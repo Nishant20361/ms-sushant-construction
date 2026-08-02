@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { prisma } from "../../db.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { parseIntegerParam } from "../../utils/request.js";
 import { HttpError } from "../../utils/httpError.js";
 import { orderStatusSchema } from "../../validators/index.js";
 import { requireAdmin } from "../../middleware/auth.js";
 import { writeAudit } from "../../middleware/audit.js";
-import { serializeOrder } from "../../utils/serializer.js";
+import { serializeBill, serializeOrder } from "../../utils/serializer.js";
 import { AuthenticatedRequest } from "../../types.js";
 
 const router = Router();
@@ -74,10 +75,10 @@ router.get(
   "/orders/:id",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
-    const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
+    const id = parseIntegerParam(req.params.id, "order id");
+    const order = await prisma.order.findUnique({ where: { id }, include: { items: true, bill: true } });
     if (!order) throw new HttpError(404, "Order not found");
-    res.json({ order: serializeOrder(order) });
+    res.json({ order: serializeOrder(order), bill: serializeBill(order.bill) });
   })
 );
 
@@ -86,7 +87,7 @@ router.patch(
   "/orders/:id/status",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "order id");
     const body = orderStatusSchema.parse(req.body);
     const existing = await prisma.order.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Order not found");
@@ -105,9 +106,8 @@ router.patch(
 router.patch(
   "/orders/:id/edit",
   requireAdmin,
-  asyncHandler(async (req: any, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, "Invalid order id");
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const id = parseIntegerParam(req.params.id, "order id");
     const body = req.body;
     // Basic validation: items array
     if (!body || !Array.isArray(body.items) || body.items.length === 0) {
@@ -154,7 +154,7 @@ router.patch(
       if (delta > 0) {
         const prod = products.find((p) => p.id === pid)!;
         if (prod.stock < delta) {
-          throw new HttpError(400, `Only ${prod.stock} units available. Please reduce quantity.`);
+          throw new HttpError(400, `Only ${prod.stock} units in stock. Please reduce quantity.`);
         }
       }
       deltas.push({ productId: pid, delta });
@@ -190,7 +190,7 @@ router.patch(
             });
             if (updated.count === 0) {
               const prod = products.find((p) => p.id === d.productId)!;
-              throw new HttpError(400, `Only ${prod.stock} units available. Please reduce quantity.`);
+              throw new HttpError(400, `Only ${prod.stock} units in stock. Please reduce quantity.`);
             }
           } else {
             await tx.product.update({

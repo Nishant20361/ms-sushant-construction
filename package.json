@@ -16,6 +16,7 @@
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace client",
     "test": "npm run test --workspace server",
     "db:migrate": "npm run db:migrate --workspace server",
+    "db:push": "npm run db:push --workspace server",
     "db:seed": "npm run db:seed --workspace server",
     "db:setup": "npm run db:migrate --workspace server && npm run db:seed --workspace server",
     "db:reset": "npm run db:reset --workspace server",

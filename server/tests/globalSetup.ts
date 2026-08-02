@@ -2,7 +2,7 @@
  * Vitest global setup.
  *
  * Runs BEFORE the test workers start. It provisions an isolated SQLite
- * database (server/prisma/test.db) using Prisma migrations, so the test
+ * database (server/prisma/test.db) using Prisma schema push, so the test
  * suite never touches the dev database (server/prisma/dev.db).
  */
 import { execSync } from "child_process";
@@ -26,7 +26,7 @@ export default function setup(): () => void {
   // Start from a clean isolated test database.
   removeTestDb();
 
-  execSync("npx prisma migrate deploy", {
+  execSync("npx prisma db push --accept-data-loss", {
     cwd: serverDir,
     env: { ...process.env, DATABASE_URL: TEST_DB_URL },
     stdio: "inherit",

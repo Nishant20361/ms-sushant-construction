@@ -32,9 +32,9 @@ export const config = {
   jwtSecret: required("JWT_SECRET"),
   cookieDomain: process.env.COOKIE_DOMAIN || "",
   initialAdmin: {
-    username: process.env.INITIAL_ADMIN_USERNAME || "admin",
-    password: process.env.INITIAL_ADMIN_PASSWORD || "",
-    email: process.env.INITIAL_ADMIN_EMAIL || "",
+    username: process.env.ADMIN_USERNAME || process.env.INITIAL_ADMIN_USERNAME || "admin",
+    password: process.env.ADMIN_PASSWORD || process.env.INITIAL_ADMIN_PASSWORD || "",
+    email: process.env.ADMIN_EMAIL || process.env.INITIAL_ADMIN_EMAIL || "",
   },
   cookieName: "ms_sushant_admin_token",
   smtp: {

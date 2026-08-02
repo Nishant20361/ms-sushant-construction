@@ -31,6 +31,9 @@ server/prisma/test.db-journal
 server/uploads/*
 !server/uploads/.gitkeep
 
+# Local Prisma environment (dev override)
+server/.env
+
 # Test / coverage
 coverage/
 *.tsbuildinfo

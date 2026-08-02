@@ -33,6 +33,10 @@ export function errorHandler(
       res.status(404).json({ error: "Record not found." });
       return;
     }
+    if (err.code === "P2023" || err.message.includes("22P03") || err.message.includes("invalid binary data format")) {
+      res.status(400).json({ error: "Invalid numeric value provided. Please check the data and try again." });
+      return;
+    }
   }
 
   // Our own HTTP errors

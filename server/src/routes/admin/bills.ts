@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { prisma } from "../../db.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { parseIntegerParam } from "../../utils/request.js";
 import { HttpError } from "../../utils/httpError.js";
 import { billSchema } from "../../validators/index.js";
 import { requireAdmin } from "../../middleware/auth.js";
 import { writeAudit } from "../../middleware/audit.js";
-import { serializeBill, serializeOrder } from "../../utils/serializer.js";
+import { serializeBill } from "../../utils/serializer.js";
 import { buildBillText, buildBillHtml, buildBillPdf, BillData } from "../../utils/bill.js";
 import { AuthenticatedRequest } from "../../types.js";
 
@@ -62,7 +63,7 @@ router.get(
   "/orders/:id/bill",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "order id");
     const order = await prisma.order.findUnique({
       where: { id },
       include: { bill: true },
@@ -79,7 +80,7 @@ router.post(
   "/orders/:id/bill",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "order id");
     const body = billSchema.parse(req.body);
 
     const order = await prisma.order.findUnique({ where: { id }, include: { items: true, bill: true } });
@@ -121,7 +122,7 @@ router.put(
   "/orders/:id/bill",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "order id");
     const body = billSchema.parse(req.body);
 
     const existing = await prisma.bill.findUnique({ where: { orderId: id } });
@@ -156,7 +157,7 @@ router.get(
   "/orders/:id/bill/text",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "order id");
     const order = await loadOrderWithBill(id);
 const text = buildBillText(await toBillData(order, order.bill));
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -171,7 +172,7 @@ router.get(
   "/orders/:id/bill/html",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "order id");
     const order = await loadOrderWithBill(id);
 const html = buildBillHtml(await toBillData(order, order.bill));
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -185,7 +186,7 @@ router.get(
   "/orders/:id/bill/pdf",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "order id");
     const order = await loadOrderWithBill(id);
 const pdf = await buildBillPdf(await toBillData(order, order.bill));
     res.setHeader("Content-Type", "application/pdf");
@@ -194,17 +195,6 @@ const pdf = await buildBillPdf(await toBillData(order, order.bill));
       `attachment; filename="bill-${order.orderNumber}.pdf"`
     );
     res.send(pdf);
-  })
-);
-
-// Serializer for order + bill in a single response.
-router.get(
-  "/orders/:id",
-  requireAdmin,
-  asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
-    const order = await loadOrderWithBill(id);
-    res.json({ order: serializeOrder(order), bill: serializeBill(order.bill) });
   })
 );
 

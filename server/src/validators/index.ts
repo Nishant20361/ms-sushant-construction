@@ -12,8 +12,8 @@ export const createOrderSchema = z.object({
   items: z
     .array(
       z.object({
-        productId: z.number().int().positive(),
-        quantity: z.number().min(0.001, "Quantity must be at least 0.001").max(1000000),
+        productId: z.coerce.number().int().positive(),
+        quantity: z.coerce.number().min(0.001, "Quantity must be at least 0.001").max(1000000),
       })
     )
     .min(1, "Cart is empty")
@@ -38,8 +38,8 @@ export const changePasswordSchema = z.object({
 export const categorySchema = z.object({
   name: z.string().trim().min(2, "Category name is required").max(100),
   slug: z.string().trim().min(2).max(100).optional(),
-  displayOrder: z.number().int().min(0).max(9999).default(0),
-  isActive: z.boolean().default(true),
+  displayOrder: z.coerce.number().int().min(0).max(9999).default(0),
+  isActive: z.coerce.boolean().default(true),
 });
 
 // ------------------------- Admin products -------------------------
@@ -47,12 +47,12 @@ export const productSchema = z.object({
   name: z.string().trim().min(2, "Product name is required").max(200),
   description: z.string().trim().max(2000).optional().default(""),
   unit: z.string().trim().min(1, "Unit is required").max(50),
-  price: z.number().nonnegative("Price must be 0 or more"),
-  mrp: z.number().nonnegative("MRP must be 0 or more"),
-  stock: z.number().nonnegative("Stock must be 0 or more"),
-  categoryId: z.number().int().positive(),
-  isActive: z.boolean().default(true),
-  imageUrl: z.string().trim().max(500).optional().default(""),
+  price: z.coerce.number().nonnegative("Price must be 0 or more"),
+  mrp: z.coerce.number().nonnegative("MRP must be 0 or more"),
+  stock: z.coerce.number().nonnegative("Stock must be 0 or more"),
+  categoryId: z.coerce.number().int().positive(),
+  isActive: z.coerce.boolean().default(true),
+  imageUrl: z.string().trim().max(500).nullable().default(""),
 });
 
 // ------------------------- Admin settings -------------------------
@@ -99,7 +99,7 @@ export const settingsSchema = z.object({
   gstNumber: z.string().trim().max(50).optional().default(""),
   businessMobile: z.string().trim().max(30).optional().default(""),
   businessEmail: z.string().trim().max(120).optional().default(""),
-  businessLogoUrl: z.string().trim().max(500).optional().default(""),
+  businessLogoUrl: z.string().trim().max(500).nullable().transform((v) => v ?? ""),
 });
 
 // ------------------------- Admin order status -------------------------
@@ -134,7 +134,7 @@ export const orderTrackByMobileSchema = z.object({
 // ------------------------- Admin billing -----------------------------
 export const billSchema = z.object({
   discount: z
-    .number()
+    .coerce.number()
     .min(0, "Discount cannot be negative")
     .max(10_000_000, "Discount is too large")
     .default(0),
@@ -142,13 +142,13 @@ export const billSchema = z.object({
 
 // ------------------------- Admin notifications ------------------------
 export const notificationReadSchema = z.object({
-  ids: z.array(z.number().int().positive()).max(100).optional(),
-  all: z.boolean().optional(),
+  ids: z.array(z.coerce.number().int().positive()).max(100).optional(),
+  all: z.coerce.boolean().optional(),
 });
 
 // ------------------------- Admin profile ------------------------------
 export const adminProfileSchema = z.object({
-  lowStockThreshold: z.number().int().min(0).max(10000).default(10),
+  lowStockThreshold: z.coerce.number().int().min(0).max(10000).default(10),
 });
 
 // ------------------------- Admin notification email -------------------

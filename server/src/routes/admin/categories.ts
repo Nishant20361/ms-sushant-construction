@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../../db.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { parseIntegerParam } from "../../utils/request.js";
 import { HttpError } from "../../utils/httpError.js";
 import { categorySchema } from "../../validators/index.js";
 import { requireAdmin } from "../../middleware/auth.js";
@@ -65,7 +66,7 @@ router.put(
   "/categories/:id",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "category id");
     const body = categorySchema.parse(req.body);
     const existing = await prisma.category.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Category not found");
@@ -92,7 +93,7 @@ router.delete(
   "/categories/:id",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "category id");
     const existing = await prisma.category.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Category not found");
     const productCount = await prisma.product.count({ where: { categoryId: id } });

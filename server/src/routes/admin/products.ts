@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { prisma } from "../../db.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
-import { HttpError } from "../../utils/httpError.js";
+import { parseIntegerParam } from "../../utils/request.js";
 import { productSchema } from "../../validators/index.js";
 import { requireAdmin } from "../../middleware/auth.js";
 import { writeAudit } from "../../middleware/audit.js";
 import { serializeProduct } from "../../utils/serializer.js";
+import { HttpError } from "../../utils/httpError.js";
 import { AuthenticatedRequest } from "../../types.js";
 
 const router = Router();
@@ -47,7 +48,7 @@ router.get(
   "/products/:id",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "product id");
     const product = await prisma.product.findUnique({
       where: { id },
       include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
@@ -106,7 +107,7 @@ router.put(
   "/products/:id",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "product id");
     const body = productSchema.parse(req.body);
     const existing = await prisma.product.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Product not found");
@@ -159,7 +160,7 @@ router.patch(
   "/products/:id/toggle",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "product id");
     const product = await prisma.product.findUnique({ where: { id } });
     if (!product) throw new HttpError(404, "Product not found");
     const updated = await prisma.product.update({
@@ -181,7 +182,7 @@ router.delete(
   "/products/:id",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const id = Number(req.params.id);
+    const id = parseIntegerParam(req.params.id, "product id");
     const existing = await prisma.product.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Product not found");
     await prisma.$transaction([

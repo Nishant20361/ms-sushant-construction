@@ -27,8 +27,8 @@ cp .env.example .env
 # 3. Install dependencies
 npm install
 
-# 4. Run database migration
-npm run db:migrate
+# 4. Provision the local SQLite database
+npm run db:push
 
 # 5. Seed the database (creates categories, products, admin, settings)
 npm run db:seed
@@ -45,15 +45,14 @@ Backend API → http://localhost:5100
 
 ### 🐘 Switching to PostgreSQL (Production)
 
-**One file change:**
+**One environment change:**
 
-1. `server/prisma/schema.prisma` — line 5: change `provider = "sqlite"` to `provider = "postgresql"`
+1. `server/prisma/schema.prisma` — change `provider = "sqlite"` to `provider = "postgresql"`.
 2. `.env` — set `DATABASE_URL` to your PostgreSQL connection string, e.g.:
    ```
-   DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?schema=public"
+   DATABASE_URL="postgresql://user:pass@host:5432/dbname?schema=public"
    ```
 3. Run `npm run db:migrate && npm run db:seed`
-
 **No model changes needed.** The code is fully PostgreSQL-compatible.
 
 ---

@@ -28,6 +28,7 @@ export function issueCsrfToken(req: Request, res: Response): string {
     // Cross-origin (different subdomain) in production requires SameSite=None
     // so the browser sends the cookie with cross-origin fetch requests.
     sameSite,
+    domain: config.cookieDomain || undefined,
     path: "/",
     maxAge: 24 * 60 * 60 * 1000,
   });

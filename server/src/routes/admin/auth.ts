@@ -24,6 +24,7 @@ function setAdminCookie(res: Response, token: string): void {
     httpOnly: true,
     secure,
     sameSite,
+    domain: config.cookieDomain || undefined,
     path: "/",
     maxAge: 24 * 60 * 60 * 1000,
   });
@@ -31,6 +32,7 @@ function setAdminCookie(res: Response, token: string): void {
 
 function clearAdminCookie(res: Response): void {
   res.clearCookie(config.cookieName, {
+    domain: config.cookieDomain || undefined,
     path: "/",
     sameSite: config.isProd ? "none" : "strict",
   });

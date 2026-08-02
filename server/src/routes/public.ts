@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { parseIntegerParam } from "../utils/request.js";
 import { HttpError } from "../utils/httpError.js";
 import { createOrderSchema, orderTrackSchema, orderTrackByMobileSchema } from "../validators/index.js";
 import { generateOrderNumber } from "../utils/orderNumber.js";
@@ -72,8 +73,7 @@ router.get(
 router.get(
   "/products/:id",
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, "Invalid product id");
+    const id = parseIntegerParam(req.params.id, "product id");
     const product = await prisma.product.findFirst({
       where: { id, isActive: true },
       include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
@@ -149,7 +149,7 @@ router.post(
         }
         const available = Number(product.stock);
         if (available < li.quantity) {
-          throw new HttpError(400, `Only ${available} units available. Please reduce quantity.`);
+          throw new HttpError(400, `Only ${available} units in stock. Please reduce quantity.`);
         }
         const price = Number(product.price);
         const total = Math.round(price * li.quantity * 100) / 100;
