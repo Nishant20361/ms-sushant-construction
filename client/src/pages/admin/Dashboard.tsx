@@ -26,17 +26,20 @@ export default function Dashboard() {
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!data) return null;
 
-  const stats = data.stats;
+const stats = data.stats;
   const cards = [
-    { label: "Total Products", value: stats.totalProducts, icon: "🧱", color: "bg-blue-100 text-blue-700" },
-    { label: "Total Orders", value: stats.totalOrders, icon: "📦", color: "bg-green-100 text-green-700" },
-    { label: "Pending Orders", value: stats.pendingOrders, icon: "⏳", color: "bg-amber-100 text-amber-700" },
+    { label: "Total Orders", value: stats.totalOrders, icon: "📦", color: "bg-blue-100 text-blue-700" },
+    { label: "Pending", value: stats.pendingOrders, icon: "⏳", color: "bg-amber-100 text-amber-700" },
+    { label: "Confirmed", value: stats.confirmedOrders, icon: "✅", color: "bg-green-100 text-green-700" },
+    { label: "Delivered", value: stats.deliveredOrders, icon: "🎉", color: "bg-emerald-100 text-emerald-700" },
+    { label: "Cancelled", value: stats.cancelledOrders, icon: "❌", color: "bg-red-100 text-red-700" },
+    { label: "Total Revenue", value: formatINR(stats.totalRevenue), icon: "💰", color: "bg-purple-100 text-purple-700" },
     { label: "Low Stock", value: stats.lowStockCount, icon: "⚠️", color: "bg-red-100 text-red-700" },
   ];
 
   return (
-    <div className="space-y-8">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+<div className="space-y-8">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
         {cards.map((c) => (
           <div key={c.label} className="card flex items-center gap-4 p-5">
             <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl ${c.color}`}>

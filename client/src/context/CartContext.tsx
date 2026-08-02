@@ -75,7 +75,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       };
       return [...prev, item];
     });
-    setIsOpen(true);
+    // Do NOT automatically open the cart when adding items so customers
+    // can continue adding multiple products uninterrupted.
+    // The cart opens only when the user clicks the cart icon / View Cart.
   }, []);
 
   const removeItem = useCallback((productId: number) => {
@@ -84,11 +86,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const setQuantity = useCallback((productId: number, quantity: number) => {
     setItems((prev) =>
-      prev.map((it) =>
-        it.productId === productId
-          ? { ...it, quantity: Math.max(1, Math.min(quantity, it.maxStock)) }
-          : it
-      )
+      prev.map((it) => {
+        if (it.productId !== productId) return it;
+        const unit = (it.unit || "").toLowerCase();
+        const requiresInteger = unit === "bag" || unit === "piece";
+        let q = quantity;
+        if (requiresInteger) q = Math.max(1, Math.floor(q));
+        else q = Math.max(0.001, Math.round(q * 1000) / 1000);
+        // Clamp to available stock
+        q = Math.min(q, it.maxStock);
+        return { ...it, quantity: q };
+      })
     );
   }, []);
 

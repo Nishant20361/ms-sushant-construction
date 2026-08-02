@@ -60,22 +60,34 @@ export default function CartDrawer() {
                         </button>
                       </div>
                       <div className="mt-2 flex items-center justify-between">
-                        <div className="flex items-center rounded-md border border-slate-300">
-                          <button
-                            onClick={() => setQuantity(it.productId, it.quantity - 1)}
-                            className="px-2 py-1 text-slate-600 hover:bg-slate-100"
-                            aria-label="Decrease quantity"
-                          >
-                            −
-                          </button>
-                          <span className="w-8 text-center text-sm font-semibold">{it.quantity}</span>
-                          <button
-                            onClick={() => setQuantity(it.productId, it.quantity + 1)}
-                            className="px-2 py-1 text-slate-600 hover:bg-slate-100"
-                            aria-label="Increase quantity"
-                          >
-                            +
-                          </button>
+                        <div className="flex items-center gap-2">
+                          {/* Quantity input — unit-aware. For bag/piece enforce whole numbers. For others allow decimals. */}
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={it.quantity}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const parsed = Number(raw);
+                              if (Number.isNaN(parsed)) return;
+                              // Determine if unit requires whole numbers
+                              const unit = (it.unit || "").toLowerCase();
+                              const requiresInteger = unit === "bag" || unit === "piece";
+                              let newQ = parsed;
+                              if (requiresInteger) {
+                                newQ = Math.max(1, Math.floor(newQ));
+                              } else {
+                                // allow up to 3 decimal places to avoid floating noise
+                                newQ = Math.max(0.001, Math.round(newQ * 1000) / 1000);
+                              }
+                              setQuantity(it.productId, newQ);
+                            }}
+                            className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                            step={(it.unit || "").toLowerCase() === "bag" || (it.unit || "").toLowerCase() === "piece" ? "1" : "0.1"}
+                            min={((it.unit || "").toLowerCase() === "bag" || (it.unit || "").toLowerCase() === "piece") ? "1" : "0.001"}
+                            aria-label={`Quantity for ${it.name}`}
+                          />
+                          <div className="text-sm text-slate-600">{it.unit}</div>
                         </div>
                         <p className="text-sm font-bold text-slate-900">{formatINR(it.price * it.quantity)}</p>
                       </div>

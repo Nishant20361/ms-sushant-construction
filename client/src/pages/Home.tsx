@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSettings } from "../context/SettingsContext";
 import { useCart } from "../context/CartContext";
 import { publicApi } from "../lib/api";
-import type { Category, Product } from "../types";
-import { formatINR, resolveImageUrl } from "../lib/format";
+import type { Category, Product, TrackedOrder, TrackedOrderSummary } from "../types";
+import { formatINR, formatOrderStatus, resolveImageUrl } from "../lib/format";
 import { EmptyState, ErrorState, LoadingState } from "../components/Loading";
 import { useToast } from "../components/Toast";
 
@@ -23,6 +23,81 @@ export default function Home() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+// ----- Order tracking state -----
+const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
+  const [trackOrderNumber, setTrackOrderNumber] = useState("");
+  const [trackMobile, setTrackMobile] = useState("");
+  const [tracking, setTracking] = useState(false);
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const [trackedOrder, setTrackedOrder] = useState<TrackedOrder | null>(null);
+  const [trackedOrders, setTrackedOrders] = useState<TrackedOrderSummary[]>([]);
+  const [selectedTrackedOrder, setSelectedTrackedOrder] = useState<TrackedOrder | null>(null);
+
+  const handleTrackById = async () => {
+    if (!trackOrderNumber.trim() || !trackMobile.trim()) {
+      setTrackError("Please enter both your Order ID and mobile number.");
+      setTrackedOrder(null);
+      return;
+    }
+    setTracking(true);
+    setTrackError(null);
+    setTrackedOrders([]);
+    setSelectedTrackedOrder(null);
+    try {
+      const { order } = await publicApi.trackOrder(
+        trackOrderNumber.trim(),
+        trackMobile.trim()
+      );
+      setTrackedOrder(order);
+    } catch (e: any) {
+      setTrackedOrder(null);
+      setTrackError(e?.message ?? "Could not find your order. Please check the details and try again.");
+    } finally {
+      setTracking(false);
+    }
+  };
+
+  const handleTrackByMobile = async () => {
+    if (!trackMobile.trim()) {
+      setTrackError("Please enter your mobile number.");
+      setTrackedOrders([]);
+      setSelectedTrackedOrder(null);
+      return;
+    }
+    setTracking(true);
+    setTrackError(null);
+    setTrackedOrder(null);
+    try {
+      const { orders } = await publicApi.trackOrdersByMobile(trackMobile.trim());
+      if (orders.length === 0) {
+        setTrackError("No orders found for this mobile number.");
+        setTrackedOrders([]);
+      } else {
+        setTrackedOrders(orders);
+      }
+    } catch (e: any) {
+      setTrackedOrders([]);
+      setTrackError(e?.message ?? "Could not find orders. Please check the details and try again.");
+    } finally {
+      setTracking(false);
+    }
+  };
+
+  const handleSelectTrackedOrder = async (orderNumber: string) => {
+    if (!trackMobile.trim()) return;
+    setTracking(true);
+    setTrackError(null);
+    try {
+      const { order } = await publicApi.trackOrder(orderNumber, trackMobile.trim());
+      setSelectedTrackedOrder(order);
+    } catch (e: any) {
+      setSelectedTrackedOrder(null);
+      setTrackError(e?.message ?? "Could not load order details.");
+    } finally {
+      setTracking(false);
+    }
+  };
 
   useEffect(() => {
     publicApi
@@ -255,6 +330,123 @@ export default function Home() {
         </div>
       </section>
 
+{/* ============ TRACK ORDER ============ */}
+      <section id="track" className="bg-white py-16">
+        <div className="container-page max-w-3xl">
+          <div className="text-center">
+            <span className="badge bg-brand-100 text-brand-800">Order Tracking</span>
+            <h2 className="mt-3 text-3xl font-bold text-slate-900">Track Your Order</h2>
+            <p className="mx-auto mt-2 max-w-lg text-slate-600">
+              Enter your mobile number to find all your orders, or use Order ID + mobile for a specific order.
+            </p>
+          </div>
+
+          {/* Mode toggle */}
+          <div className="mt-6 flex justify-center gap-2">
+            <button
+              onClick={() => { setTrackMode("mobile"); setTrackedOrder(null); setTrackedOrders([]); setSelectedTrackedOrder(null); setTrackError(null); }}
+              className={`rounded-full px-5 py-2 text-sm font-medium transition ${trackMode === "mobile" ? "bg-brand-600 text-white" : "border border-slate-300 bg-white text-slate-600 hover:border-brand-400"}`}
+            >
+              📱 All Orders (by Mobile)
+            </button>
+            <button
+              onClick={() => { setTrackMode("id"); setTrackedOrder(null); setTrackedOrders([]); setSelectedTrackedOrder(null); setTrackError(null); }}
+              className={`rounded-full px-5 py-2 text-sm font-medium transition ${trackMode === "id" ? "bg-brand-600 text-white" : "border border-slate-300 bg-white text-slate-600 hover:border-brand-400"}`}
+            >
+              🔍 Specific Order
+            </button>
+          </div>
+
+          {/* Form: track by ID */}
+          {trackMode === "id" && (
+            <form
+              className="mt-6 flex flex-col gap-3 sm:flex-row"
+              onSubmit={(e) => { e.preventDefault(); handleTrackById(); }}
+            >
+              <input
+                type="text"
+                value={trackOrderNumber}
+                onChange={(e) => setTrackOrderNumber(e.target.value)}
+                placeholder="Order ID (e.g. MSC-20260802-0001)"
+                className="input flex-1"
+                aria-label="Order ID"
+              />
+              <input
+                type="tel"
+                value={trackMobile}
+                onChange={(e) => setTrackMobile(e.target.value)}
+                placeholder="Mobile number (10 digits)"
+                className="input flex-1"
+                aria-label="Mobile number"
+              />
+              <button type="submit" className="btn-primary" disabled={tracking}>
+                {tracking ? "Checking…" : "Track"}
+              </button>
+            </form>
+          )}
+
+{/* Form: track by mobile only (default) */}
+          {trackMode === "mobile" && (
+            <form
+              className="mt-6 flex flex-col gap-3 sm:flex-row"
+              onSubmit={(e) => { e.preventDefault(); handleTrackByMobile(); }}
+            >
+              <input
+                type="tel"
+                value={trackMobile}
+                onChange={(e) => setTrackMobile(e.target.value)}
+                placeholder="Enter your mobile number (10 digits)"
+                className="input flex-1"
+                aria-label="Mobile number"
+              />
+              <button type="submit" className="btn-primary" disabled={tracking}>
+                {tracking ? "Searching…" : "Find My Orders"}
+              </button>
+            </form>
+          )}
+
+          {trackError && (
+            <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{trackError}</p>
+          )}
+
+          {/* Order list (when tracking by mobile) */}
+          {trackedOrders.length > 0 && !selectedTrackedOrder && (
+            <div className="card mt-6 p-6">
+              <h3 className="text-lg font-bold text-slate-900">Your Orders</h3>
+              <p className="mt-1 text-sm text-slate-500">Click on an order to see details.</p>
+              <ul className="mt-4 divide-y divide-slate-100">
+                {trackedOrders.map((o) => (
+                  <li key={o.id}>
+                    <button
+                      onClick={() => handleSelectTrackedOrder(o.orderNumber)}
+                      className="flex w-full items-center justify-between gap-2 px-2 py-3 text-left transition hover:bg-slate-50"
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-900">{o.orderNumber}</p>
+                        <p className="text-xs text-slate-500">
+                          {new Date(o.createdAt).toLocaleString("en-IN")} · {o.items.length} item(s)
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="badge bg-brand-100 text-brand-800">
+                          {formatOrderStatus(o.status)}
+                        </span>
+                        <p className="mt-1 text-xs font-semibold text-slate-700">{formatINR(o.subtotal)}</p>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Single tracked order detail */}
+          {(trackedOrder || selectedTrackedOrder) && !trackError && (
+            <OrderDetailCard order={trackedOrder || selectedTrackedOrder!} />
+          )}
+        </div>
+      </section>
+
       {/* ============ CONTACT ============ */}
       <section id="contact" className="bg-white py-16">
         <div className="container-page">
@@ -407,6 +599,134 @@ function ProductCard({ product: p, onAdd }: { product: Product; onAdd: () => voi
         </button>
       </div>
     </article>
+  );
+}
+
+const ORDER_FLOW = [
+  { key: "PENDING", label: "Received" },
+  { key: "CONFIRMED", label: "Confirmed" },
+  { key: "PROCESSING", label: "Processing" },
+  { key: "OUT_FOR_DELIVERY", label: "Out for Delivery" },
+  { key: "DELIVERED", label: "Delivered" },
+] as const;
+
+function OrderTimeline({ status }: { status: TrackedOrder["status"] }) {
+  const current = status === "CANCELLED" ? -1 : ORDER_FLOW.findIndex((s) => s.key === status);
+
+  if (status === "CANCELLED") {
+    return (
+      <div className="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+        This order was cancelled.
+      </div>
+    );
+  }
+
+  return (
+    <ol className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
+      {ORDER_FLOW.map((step, idx) => {
+        const done = idx <= current;
+        return (
+          <li key={step.key} className="flex flex-1 items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
+                  done ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-400"
+                }`}
+              >
+                {done ? "✓" : idx + 1}
+              </span>
+              <span
+                className={`text-xs font-medium ${
+                  done ? "text-slate-800" : "text-slate-400"
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+            {idx < ORDER_FLOW.length - 1 && (
+              <div
+                className={`mx-2 hidden h-0.5 flex-1 rounded sm:block ${
+                  idx < current ? "bg-brand-600" : "bg-slate-200"
+                }`}
+              />
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Order detail card shown to the customer after tracking. */
+function OrderDetailCard({ order }: { order: TrackedOrder }) {
+  return (
+    <div className="card mt-6 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-lg font-bold text-slate-900">{order.orderNumber}</h3>
+          <p className="text-sm text-slate-500">
+            {order.customerName} · {new Date(order.createdAt).toLocaleString("en-IN")}
+          </p>
+        </div>
+        <span className="badge bg-brand-100 text-brand-800">
+          {formatOrderStatus(order.status)}
+        </span>
+      </div>
+
+      {/* Status timeline */}
+      <div className="mt-6">
+        <OrderTimeline status={order.status} />
+      </div>
+
+      {/* Items */}
+      <div className="mt-6">
+        <h4 className="font-semibold text-slate-800">Items</h4>
+        <ul className="mt-2 divide-y divide-slate-100 text-sm">
+          {order.items.map((it, idx) => (
+            <li key={idx} className="flex items-center justify-between py-2">
+              <span className="text-slate-700">
+                {it.productName} × {it.quantity} {it.unit}
+              </span>
+              <span className="font-medium text-slate-900">{formatINR(it.total)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Totals with optional bill info */}
+      <div className="mt-4 space-y-1 border-t border-slate-100 pt-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-500">Subtotal</span>
+          <span className="font-semibold text-slate-900">{formatINR(order.subtotal)}</span>
+        </div>
+        {order.bill && order.bill.discount > 0 && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-500">Discount</span>
+            <span className="font-semibold text-red-600">-{formatINR(order.bill.discount)}</span>
+          </div>
+        )}
+        {order.bill && (
+          <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+            <span className="text-sm font-semibold text-slate-700">Final Amount</span>
+            <span className="text-lg font-bold text-brand-600">{formatINR(order.bill.finalAmount)}</span>
+          </div>
+        )}
+        {!order.bill && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-500">Total</span>
+            <span className="text-lg font-bold text-brand-600">{formatINR(order.subtotal)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Delivery address */}
+      {order.deliveryAddress && (
+        <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm">
+          <span className="font-medium text-slate-600">Delivery Address:</span>
+          <p className="mt-1 text-slate-700">{order.deliveryAddress}</p>
+        </div>
+      )}
+    </div>
   );
 }
 

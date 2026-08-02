@@ -21,7 +21,7 @@ export default function Checkout() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [placedOrder, setPlacedOrder] = useState<{ orderNumber: string; subtotal: number } | null>(null);
 
-  const validate = (): boolean => {
+const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!form.customerName.trim() || form.customerName.trim().length < 2) {
       errs.customerName = "Please enter your full name";
@@ -29,9 +29,6 @@ export default function Checkout() {
     const digits = form.customerMobile.replace(/\D/g, "").replace(/^(0|91)/, "");
     if (!/^[6-9]\d{9}$/.test(digits)) {
       errs.customerMobile = "Enter a valid 10-digit Indian mobile number";
-    }
-    if (!form.deliveryAddress.trim() || form.deliveryAddress.trim().length < 10) {
-      errs.deliveryAddress = "Please enter a complete delivery address";
     }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -162,8 +159,8 @@ export default function Checkout() {
                 )}
               </div>
 
-              <div>
-                <label className="label" htmlFor="deliveryAddress">Delivery Address *</label>
+<div>
+                <label className="label" htmlFor="deliveryAddress">Delivery Address <span className="text-slate-400">(optional)</span></label>
                 <textarea
                   id="deliveryAddress"
                   className="input min-h-[90px]"

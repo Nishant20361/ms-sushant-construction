@@ -37,10 +37,11 @@ export default function AdminProducts() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [lowStockThreshold, setLowStockThreshold] = useState(10);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -53,12 +54,14 @@ export default function AdminProducts() {
     Promise.all([
       adminApi.getProducts({ page, limit: 10, search: search || undefined }),
       adminApi.getCategories(),
+      adminApi.getProfile().catch(() => null),
     ])
-      .then(([p, c]) => {
+      .then(([p, c, profile]) => {
         setProducts(p.products);
         setPages(p.pages);
         setTotal(p.total);
         setCategories(c.categories);
+        if (profile) setLowStockThreshold(profile.profile.lowStockThreshold);
       })
       .catch(() => setLoadError("Failed to load products"))
       .finally(() => setLoading(false));
@@ -229,8 +232,10 @@ export default function AdminProducts() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {products.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
+{products.map((p) => {
+                const isLowStock = p.stock <= lowStockThreshold;
+                return (
+                <tr key={p.id} className={`hover:bg-slate-50 ${isLowStock ? "bg-red-50" : ""}`}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 overflow-hidden rounded-md bg-slate-100">
@@ -254,7 +259,8 @@ export default function AdminProducts() {
                   <td className="px-4 py-3 font-semibold text-slate-900">{formatINR(p.price)}</td>
                   <td className="px-4 py-3 text-slate-500">{formatINR(p.mrp)}</td>
                   <td className="px-4 py-3">
-                    <span className={p.stock < 10 ? "font-semibold text-red-600" : "text-slate-700"}>
+                    <span className={p.stock <= lowStockThreshold ? "flex items-center gap-1 font-semibold text-red-600" : "text-slate-700"}>
+                      {p.stock <= lowStockThreshold && <span title="Low stock">⚠️</span>}
                       {p.stock}
                     </span>
                   </td>
@@ -277,7 +283,8 @@ export default function AdminProducts() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

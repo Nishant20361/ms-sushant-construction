@@ -9,6 +9,7 @@ import AdminCategories from "./AdminCategories";
 import AdminOrders from "./AdminOrders";
 import AdminSettings from "./AdminSettings";
 import ChangePassword from "./ChangePassword";
+import AdminBilling from "./AdminBilling";
 
 function Protected() {
   const { user, loading } = useAdminAuth();
@@ -33,6 +34,7 @@ export function AdminRoutes() {
           <Route path="products" element={<AdminProducts />} />
           <Route path="categories" element={<AdminCategories />} />
           <Route path="orders" element={<AdminOrders />} />
+          <Route path="billing" element={<AdminBilling />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="change-password" element={<ChangePassword />} />
         </Route>

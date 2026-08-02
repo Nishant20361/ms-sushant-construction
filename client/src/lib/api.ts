@@ -1,12 +1,17 @@
 import { API_BASE } from "../config";
 import type {
+  AdminProfile,
   ApiError,
+  Bill,
   Category,
   DashboardStats,
+  Notification,
   Order,
   OrderItemInput,
   Product,
   SiteSettings,
+  TrackedOrder,
+  TrackedOrderSummary,
 } from "../types";
 
 // ------------------------------------------------------------------
@@ -135,6 +140,19 @@ export const publicApi = {
       { csrf: true }
     );
   },
+  trackOrder(
+    orderNumber: string,
+    customerMobile: string
+  ): Promise<{ order: TrackedOrder }> {
+    const q = new URLSearchParams({ orderNumber, customerMobile });
+    return request(`/orders/track?${q.toString()}`);
+  },
+  trackOrdersByMobile(
+    customerMobile: string
+  ): Promise<{ orders: TrackedOrderSummary[] }> {
+    const q = new URLSearchParams({ customerMobile });
+    return request(`/orders/track-by-mobile?${q.toString()}`);
+  },
   health(): Promise<{ status: string; service: string; time: string }> {
     return request("/health");
   },
@@ -215,17 +233,27 @@ export const adminApi = {
     limit?: number;
     search?: string;
     status?: string;
+    from?: string;
+    to?: string;
   }): Promise<{ orders: Order[]; total: number; page: number; pages: number }> {
     const q = new URLSearchParams();
     if (params.page) q.set("page", String(params.page));
     if (params.limit) q.set("limit", String(params.limit));
     if (params.search) q.set("search", params.search);
     if (params.status) q.set("status", params.status);
+    if (params.from) q.set("from", params.from);
+    if (params.to) q.set("to", params.to);
     const qs = q.toString();
     return request(`/admin/orders${qs ? `?${qs}` : ""}`);
   },
   updateOrderStatus(id: number, status: string): Promise<{ order: Order }> {
     return request(`/admin/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }, { csrf: true });
+  },
+  getOrder(id: number): Promise<{ order: Order; bill?: Bill | null }> {
+    return request(`/admin/orders/${id}`);
+  },
+  editOrder(id: number, items: { productId: number; quantity: number }[]): Promise<{ order: Order }> {
+    return request(`/admin/orders/${id}/edit`, { method: "PATCH", body: JSON.stringify({ items }) }, { csrf: true });
   },
   getSettings(): Promise<{ settings: SiteSettings }> {
     return request("/admin/settings");
@@ -237,6 +265,70 @@ export const adminApi = {
     const form = new FormData();
     form.append("file", file);
     return request("/admin/uploads", { method: "POST", body: form }, { csrf: true });
+  },
+  getNotifications(limit = 20): Promise<{
+    notifications: Notification[];
+    total: number;
+    unreadCount: number;
+  }> {
+    return request(`/admin/notifications?limit=${limit}`);
+  },
+  markNotificationsRead(ids: number[]): Promise<{ ok: boolean; unreadCount: number }> {
+    return request(
+      "/admin/notifications/read",
+      { method: "POST", body: JSON.stringify({ ids }) },
+      { csrf: true }
+    );
+  },
+  markAllNotificationsRead(): Promise<{ ok: boolean; unreadCount: number }> {
+    return request(
+      "/admin/notifications/read",
+      { method: "POST", body: JSON.stringify({ all: true }) },
+      { csrf: true }
+    );
+  },
+  getProfile(): Promise<{ profile: AdminProfile }> {
+    return request("/admin/profile");
+  },
+  updateProfile(data: { lowStockThreshold: number }): Promise<{ profile: AdminProfile }> {
+    return request(
+      "/admin/profile",
+      { method: "PUT", body: JSON.stringify(data) },
+      { csrf: true }
+    );
+  },
+  updateProfileEmail(email: string | null): Promise<{ email: string | null }> {
+    return request(
+      "/admin/profile/email",
+      { method: "PUT", body: JSON.stringify({ email }) },
+      { csrf: true }
+    );
+  },
+  getBill(orderId: number): Promise<{ bill: Bill | null }> {
+    return request(`/admin/orders/${orderId}/bill`);
+  },
+  saveBill(orderId: number, discount: number): Promise<{ bill: Bill }> {
+    return request(
+      `/admin/orders/${orderId}/bill`,
+      { method: "POST", body: JSON.stringify({ discount }) },
+      { csrf: true }
+    );
+  },
+  updateBill(orderId: number, discount: number): Promise<{ bill: Bill }> {
+    return request(
+      `/admin/orders/${orderId}/bill`,
+      { method: "PUT", body: JSON.stringify({ discount }) },
+      { csrf: true }
+    );
+  },
+  getBillTextUrl(orderId: number): string {
+    return `${API_BASE}/admin/orders/${orderId}/bill/text`;
+  },
+  getBillPdfUrl(orderId: number): string {
+    return `${API_BASE}/admin/orders/${orderId}/bill/pdf`;
+  },
+  getBillHtmlUrl(orderId: number): string {
+    return `${API_BASE}/admin/orders/${orderId}/bill/html`;
   },
 };
 

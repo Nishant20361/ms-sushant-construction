@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { adminApi, ApiRequestError } from "../../lib/api";
-import type { SiteSettings } from "../../types";
+import type { AdminProfile, SiteSettings } from "../../types";
 import { resolveImageUrl } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { useToast } from "../../components/Toast";
@@ -8,29 +8,50 @@ import { useToast } from "../../components/Toast";
 export default function AdminSettings() {
   const { success, error } = useToast();
   const [settings, setSettings] = useState<SiteSettings | null>(null);
+  const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [threshold, setThreshold] = useState(10);
 
-  const load = () => {
+const load = () => {
     setLoading(true);
     setLoadError(null);
-    adminApi
-      .getSettings()
-      .then(({ settings }) => setSettings(settings))
+    Promise.all([
+      adminApi.getSettings(),
+      adminApi.getProfile().catch(() => null),
+    ])
+      .then(([s, p]) => {
+        setSettings(s.settings);
+        if (p) {
+          setProfile(p.profile);
+          setThreshold(p.profile.lowStockThreshold);
+        }
+      })
       .catch(() => setLoadError("Failed to load settings"))
       .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
 
+  const handleSaveThreshold = async () => {
+    try {
+      const res = await adminApi.updateProfile({ lowStockThreshold: threshold });
+      setProfile(res.profile);
+      success("Low stock threshold saved");
+    } catch (e) {
+      if (e instanceof ApiRequestError) error(e.message);
+      else error("Save failed");
+    }
+  };
+
   const update = (key: keyof SiteSettings, value: string | null) => {
     if (!settings) return;
     setSettings({ ...settings, [key]: value ?? "" });
   };
 
-  const handleUpload = async (field: "logoUrl" | "heroBannerUrl", file: File) => {
+  const handleUpload = async (field: "logoUrl" | "heroBannerUrl" | "businessLogoUrl", file: File) => {
     setUploading(true);
     try {
       const res = await adminApi.uploadImage(file);
@@ -78,6 +99,15 @@ export default function AdminSettings() {
     { key: "instagramUrl", label: "Instagram URL", type: "url" },
     { key: "youtubeUrl", label: "YouTube URL", type: "url" },
   ];
+
+  const businessFields: { key: keyof SiteSettings; label: string; type: "text" | "textarea" | "phone" }[] = [
+    { key: "businessName", label: "Business Name", type: "text" },
+    { key: "businessAddress", label: "Business Address", type: "textarea" },
+    { key: "gstNumber", label: "GST Number", type: "text" },
+    { key: "businessMobile", label: "Business Mobile", type: "phone" },
+    { key: "businessEmail", label: "Business Email", type: "text" },
+  ];
+
 
   return (
     <div className="space-y-6">
@@ -192,6 +222,126 @@ export default function AdminSettings() {
             </div>
           ))}
         </div>
+      </div>
+
+{/* Business Invoice Details */}
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-slate-900">Business Invoice Details</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          These details appear on customer invoices, bills and PDF downloads.
+        </p>
+
+        <div className="mt-4">
+          <label className="label">Invoice Logo</label>
+          <div className="flex items-center gap-3">
+            <div className="h-16 w-16 overflow-hidden rounded-lg bg-slate-100">
+              {settings.businessLogoUrl ? (
+                <img
+                  src={resolveImageUrl(settings.businessLogoUrl) ?? ""}
+                  alt="Invoice Logo"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xl text-slate-400">B</div>
+              )}
+            </div>
+            <label className="btn-secondary cursor-pointer">
+              {uploading ? "Uploading…" : "Upload"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleUpload("businessLogoUrl", f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {settings.businessLogoUrl && (
+              <button onClick={() => update("businessLogoUrl", null)} className="text-xs font-semibold text-red-600 hover:underline">
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-5 sm:grid-cols-2">
+          {businessFields.map(({ key, label, type }) => (
+            <div key={key} className={type === "textarea" ? "sm:col-span-2" : ""}>
+              <label className="label" htmlFor={key}>
+                {label}
+              </label>
+              {type === "textarea" ? (
+                <textarea
+                  id={key}
+                  className="input min-h-[80px]"
+                  rows={3}
+                  value={settings[key] ?? ""}
+                  onChange={(e) => update(key, e.target.value)}
+                />
+              ) : (
+                <input
+                  id={key}
+                  className="input"
+                  type={type === "phone" ? "tel" : "text"}
+                  value={settings[key] ?? ""}
+                  onChange={(e) => update(key, e.target.value)}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+{/* Low Stock Threshold */}
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-slate-900">Low Stock Alerts</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Products with stock at or below this threshold will be highlighted.
+        </p>
+        <div className="mt-4 flex items-center gap-3">
+          <input
+            type="number"
+            min="1"
+            max="999"
+            value={threshold}
+            onChange={(e) => setThreshold(Number(e.target.value))}
+            className="input w-32"
+          />
+          <button onClick={handleSaveThreshold} className="btn-primary">
+            Save Threshold
+          </button>
+        </div>
+      </div>
+
+      {/* Notification Email (read-only from admin profile) */}
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-slate-900">Order Notification Email</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          New order emails are sent to the email address in your admin profile. Update it below.
+        </p>
+        <div className="mt-4 flex items-center gap-3">
+          <input
+            type="email"
+            value={profile?.email ?? ""}
+            onChange={async (e) => {
+              try {
+                const res = await adminApi.updateProfileEmail(e.target.value || null);
+                setProfile((prev) => prev ? { ...prev, email: res.email } : prev);
+                success("Notification email updated");
+              } catch (err) {
+                if (err instanceof ApiRequestError) error(err.message);
+                else error("Update failed");
+              }
+            }}
+            className="input flex-1"
+            placeholder="admin@example.com"
+          />
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          Leave blank to disable email notifications. Changes take effect immediately.
+        </p>
       </div>
 
       <div className="flex justify-end">

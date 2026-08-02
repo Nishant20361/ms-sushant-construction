@@ -1,4 +1,18 @@
 import { UPLOADS_BASE } from "../config";
+import type { OrderStatus } from "../types";
+
+const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  PENDING: "Pending",
+  CONFIRMED: "Confirmed",
+  PROCESSING: "Processing",
+  OUT_FOR_DELIVERY: "Out For Delivery",
+  DELIVERED: "Delivered",
+  CANCELLED: "Cancelled",
+};
+
+export function formatOrderStatus(status: OrderStatus | string): string {
+  return ORDER_STATUS_LABELS[status as OrderStatus] ?? status;
+}
 
 export function formatINR(value: number): string {
   return new Intl.NumberFormat("en-IN", {
