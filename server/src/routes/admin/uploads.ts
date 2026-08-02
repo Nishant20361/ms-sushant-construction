@@ -8,6 +8,8 @@ import { writeAudit } from "../../middleware/audit.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { HttpError } from "../../utils/httpError.js";
 import { AuthenticatedRequest } from "../../types.js";
+import cloudinary from "../../utils/cloudinary.js";
+
 
 const router = Router();
 
@@ -36,13 +38,21 @@ router.post(
       console.error("[upload] re-encode failed, keeping original", e);
       outPath = originalPath;
     }
-    const url = `/uploads/${path.basename(outPath)}`;
-    await writeAudit(req, {
-      action: "UPLOAD",
-      entity: "Upload",
-      details: url,
-    });
-    res.status(201).json({ url });
+    const result = await cloudinary.uploader.upload(outPath, {
+  folder: "ms-sushant-construction",
+});
+
+fs.unlinkSync(outPath);
+
+const url = result.secure_url;
+
+await writeAudit(req, {
+  action: "UPLOAD",
+  entity: "Upload",
+  details: url,
+});
+
+res.status(201).json({ url });
   })
 );
 
