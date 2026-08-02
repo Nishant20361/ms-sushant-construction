@@ -73,10 +73,9 @@ export default function Home() {
   const heroBg = useMemo(
     () => ({
       backgroundImage: settings?.heroBannerUrl
-        ? `linear-gradient(rgba(15,23,42,0.75), rgba(15,23,42,0.75)), url(${
-            resolveImageUrl(settings.heroBannerUrl) ??
-            "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1600&q=80"
-          })`
+        ? `linear-gradient(rgba(15,23,42,0.75), rgba(15,23,42,0.75)), url(${resolveImageUrl(settings.heroBannerUrl) ??
+        "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1600&q=80"
+        })`
         : "linear-gradient(rgba(15,23,42,0.8), rgba(15,23,42,0.8)), url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1600&q=80')",
       backgroundSize: "cover",
       backgroundPosition: "center",
@@ -185,11 +184,10 @@ export default function Home() {
           <div id="products" className="mt-8 flex flex-wrap gap-2">
             <button
               onClick={() => setActiveCategory(null)}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                activeCategory === null
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${activeCategory === null
                   ? "bg-brand-600 text-white"
                   : "border border-slate-300 bg-white text-slate-600 hover:border-brand-400"
-              }`}
+                }`}
             >
               All
             </button>
@@ -197,11 +195,10 @@ export default function Home() {
               <button
                 key={c.id}
                 onClick={() => setActiveCategory(c.slug)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                  activeCategory === c.slug
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${activeCategory === c.slug
                     ? "bg-brand-600 text-white"
                     : "border border-slate-300 bg-white text-slate-600 hover:border-brand-400"
-                }`}
+                  }`}
               >
                 {c.name}
               </button>
@@ -265,7 +262,18 @@ export default function Home() {
             <span className="badge bg-brand-100 text-brand-800">Contact Us</span>
             <h2 className="mt-3 text-3xl font-bold text-slate-900">Get In Touch</h2>
             <p className="mx-auto mt-2 max-w-lg text-slate-600">
-              Have questions about materials, prices or delivery? Reach out to us.
+              ### 🙏 आपका हार्दिक स्वागत है!
+
+              **निर्माण सामग्री, कीमत, गुणवत्ता या डिलीवरी से जुड़ा कोई भी सवाल है?**
+              बेझिझक हमसे संपर्क करें। हमारी अनुभवी टीम आपकी हर आवश्यकता के अनुसार सही सलाह और सबसे बेहतरीन समाधान देने के लिए हमेशा तैयार है।
+
+              📞 **उचित कीमत • उत्कृष्ट गुणवत्ता • समय पर डिलीवरी • भरोसेमंद सेवा**
+
+              **एक बार सेवा का अवसर अवश्य दें — आपका विश्वास ही हमारी सबसे बड़ी पहचान और प्रेरणा है।**
+
+              **🙏 पुनः आपका हार्दिक स्वागत है।
+              हम आपके उज्ज्वल एवं मजबूत निर्माण की कामना करते हैं।
+              धन्यवाद!**
             </p>
           </div>
 
