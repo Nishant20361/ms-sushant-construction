@@ -2,10 +2,24 @@ import multer from "multer";
 import path from "path";
 import crypto from "crypto";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import { Request } from "express";
 import { HttpError } from "../utils/httpError.js";
 
-const UPLOAD_DIR = path.resolve(process.cwd(), "uploads");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Uploads directory, resolved relative to this module so it works in both
+ * development (server/src/middleware) and after a TypeScript build
+ * (server/dist/middleware) — both resolve to <project>/server/uploads.
+ *
+ * Optional: set UPLOAD_DIR in the environment (e.g. a persistent disk mount
+ * on Render) to override the default location.
+ */
+export const UPLOAD_DIR = process.env.UPLOAD_DIR
+  ? path.resolve(process.env.UPLOAD_DIR)
+  : path.resolve(__dirname, "../../uploads");
+
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }

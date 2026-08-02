@@ -2,7 +2,7 @@ import { Router } from "express";
 import path from "path";
 import fs from "fs";
 import sharp from "sharp";
-import { upload } from "../../middleware/upload.js";
+import { upload, UPLOAD_DIR } from "../../middleware/upload.js";
 import { requireAdmin } from "../../middleware/auth.js";
 import { writeAudit } from "../../middleware/audit.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -10,8 +10,6 @@ import { HttpError } from "../../utils/httpError.js";
 import { AuthenticatedRequest } from "../../types.js";
 
 const router = Router();
-
-const UPLOAD_DIR = path.resolve(process.cwd(), "uploads");
 
 // POST /api/admin/uploads  (multipart field name: "file")
 router.post(

@@ -2,15 +2,13 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import path from "path";
-import fs from "fs";
 import { config } from "./config.js";
 import { generalLimiter } from "./middleware/rateLimit.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { csrfProtect, issueCsrfToken } from "./utils/csrf.js";
 import publicRoutes from "./routes/public.js";
 import adminRoutes from "./routes/admin/index.js";
-import { isUploadedFileSafe } from "./middleware/upload.js";
+import { isUploadedFileSafe, UPLOAD_DIR } from "./middleware/upload.js";
 
 export function createApp() {
   const app = express();
@@ -73,21 +71,18 @@ export function createApp() {
   });
 
   // ---------- Public static uploads (safe allowlist only) ----------
-  const uploadsDir = path.resolve(process.cwd(), "uploads");
-  if (fs.existsSync(uploadsDir)) {
-    app.use(
-      "/uploads",
-      (req, res, next) => {
-        const file = decodeURIComponent(req.path.slice(1));
-        if (!isUploadedFileSafe(file)) {
-          res.status(404).json({ error: "Not found" });
-          return;
-        }
-        next();
-      },
-      express.static(uploadsDir, { maxAge: "7d", immutable: false })
-    );
-  }
+  app.use(
+    "/uploads",
+    (req, res, next) => {
+      const file = decodeURIComponent(req.path.slice(1));
+      if (!isUploadedFileSafe(file)) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      next();
+    },
+    express.static(UPLOAD_DIR, { maxAge: "7d", immutable: false })
+  );
 
   // ---------- CSRF token issuance for the SPA ----------
   app.get("/api/csrf", (req, res) => {

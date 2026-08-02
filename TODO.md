@@ -1,5 +1,13 @@
 # Production Audit — M/S Sushant Construction
 
+## 🖼️ Production Uploads Serving Fix
+- [x] Update `server/src/middleware/upload.ts` → module-relative `UPLOAD_DIR` (exported, env-overridable)
+- [x] Update `server/src/routes/admin/uploads.ts` → use shared `UPLOAD_DIR` from middleware
+- [x] Update `server/src/app.ts` → always mount `express.static(UPLOAD_DIR)` at `/uploads`
+- [x] Run `npm run typecheck` (server + client)
+- [x] Run `npm run build` (server + client)
+- [x] Verified built `UPLOAD_DIR` resolves to `server/uploads` (exists) — `express.static` mounted at `/uploads`
+
 ## ✅ CORS Fix (Completed)
 - [x] Root cause: CORS allowlist in `server/src/app.ts` only allowed
   `http://localhost:5173` (from `CLIENT_URL`). Opening via `http://127.0.0.1:5173`
