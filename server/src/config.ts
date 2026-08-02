@@ -37,5 +37,12 @@ export const config = {
     email: process.env.INITIAL_ADMIN_EMAIL || "",
   },
   cookieName: "ms_sushant_admin_token",
+  smtp: {
+    host: process.env.SMTP_HOST || "",
+    port: Number(process.env.SMTP_PORT) || 587,
+    user: process.env.SMTP_USER || "",
+    pass: process.env.SMTP_PASS || "",
+    from: process.env.SMTP_FROM || "",
+  },
 };
 

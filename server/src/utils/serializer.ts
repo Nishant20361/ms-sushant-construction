@@ -18,7 +18,7 @@ export function serializeProduct(p: any) {
     unit: p.unit,
     price: toNumber(p.price),
     mrp: toNumber(p.mrp),
-    stock: p.stock,
+    stock: toNumber(p.stock),
     isActive: p.isActive,
     categoryId: p.categoryId,
     category: p.category
@@ -73,6 +73,79 @@ export function serializeOrder(o: any) {
   };
 }
 
+/**
+ * Safe public view of an order for the tracking endpoint. NEVER exposes
+ * admin-only data (notes, deliveryAddress, customerMobile are intentionally
+ * included only where the customer already knows them: mobile is used for
+ * verification and address is the customer's own address).
+ */
+export function serializeOrderForTracking(o: any) {
+  return {
+    orderNumber: o.orderNumber,
+    status: o.status,
+    createdAt: o.createdAt,
+    subtotal: toNumber(o.subtotal),
+    customerName: o.customerName,
+    deliveryAddress: o.deliveryAddress,
+    items: (o.items ?? []).map((it: any) => ({
+      productName: it.productName,
+      quantity: it.quantity,
+      unit: it.unit,
+      price: toNumber(it.price),
+      total: toNumber(it.total),
+    })),
+    bill: serializeBillForTracking(o.bill),
+  };
+}
+
+/**
+ * Public summary list of a customer's orders (used when tracking by mobile
+ * number only). Exposes only what the customer needs to pick an order.
+ */
+export function serializeOrderListForTracking(o: any) {
+  return {
+    id: o.id,
+    orderNumber: o.orderNumber,
+    status: o.status,
+    createdAt: o.createdAt,
+    subtotal: toNumber(o.subtotal),
+    customerName: o.customerName,
+    items: (o.items ?? []).map((it: any) => ({
+      productName: it.productName,
+      quantity: it.quantity,
+      unit: it.unit,
+      price: toNumber(it.price),
+      total: toNumber(it.total),
+    })),
+    bill: serializeBillForTracking(o.bill),
+  };
+}
+
+/** Safe public bill view (no admin fields). */
+export function serializeBillForTracking(b: any) {
+  if (!b) return null;
+  return {
+    discount: toNumber(b.discount),
+    finalAmount: toNumber(b.finalAmount),
+    createdAt: b.createdAt,
+    updatedAt: b.updatedAt,
+  };
+}
+
+/** Admin bill view. */
+export function serializeBill(b: any) {
+  if (!b) return null;
+  return {
+    id: b.id,
+    orderId: b.orderId,
+    subtotal: toNumber(b.subtotal),
+    discount: toNumber(b.discount),
+    finalAmount: toNumber(b.finalAmount),
+    createdAt: b.createdAt,
+    updatedAt: b.updatedAt,
+  };
+}
+
 export function serializeSettings(s: any) {
   if (!s) return null;
   return {
@@ -91,6 +164,13 @@ export function serializeSettings(s: any) {
     facebookUrl: s.facebookUrl,
     instagramUrl: s.instagramUrl,
     youtubeUrl: s.youtubeUrl,
+    // Business invoice fields
+    businessName: s.businessName ?? "",
+    businessAddress: s.businessAddress ?? "",
+    gstNumber: s.gstNumber ?? "",
+    businessMobile: s.businessMobile ?? "",
+    businessEmail: s.businessEmail ?? "",
+    businessLogoUrl: s.businessLogoUrl ?? "",
     updatedAt: s.updatedAt,
   };
 }

@@ -31,6 +31,36 @@ model Admin {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   auditLogs    AdminAuditLog[]
+  profile      AdminProfile?
+  notifications Notification[]
+}
+
+// ------------------------- AdminProfile ------------------------------
+model AdminProfile {
+  id               Int     @id @default(autoincrement())
+  adminId          Int     @unique
+  admin            Admin   @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  lowStockThreshold Int    @default(10)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([adminId])
+}
+
+// -------------------------- Notification -----------------------------
+model Notification {
+  id            Int      @id @default(autoincrement())
+  adminId       Int
+  admin         Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  orderId       Int
+  orderNumber   String
+  customerName  String
+  status        String   @default("PENDING")
+  read          Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([adminId, read])
+  @@index([adminId, createdAt])
 }
 
 // --------------------------- Category --------------------------------
@@ -56,7 +86,7 @@ model Product {
   unit        String         @default("bag")
   price       Float
   mrp         Float
-  stock       Int            @default(0)
+  stock       Float          @default(0)
   isActive    Boolean        @default(true)
   categoryId  Int
   category    Category       @relation(fields: [categoryId], references: [id])
@@ -92,17 +122,35 @@ model Order {
   orderNumber     String      @unique
   customerName    String
   customerMobile  String
-  deliveryAddress String
+  deliveryAddress String?
   notes           String?
   subtotal        Float
   status          String      @default("PENDING")
   items           OrderItem[]
+  bill            Bill?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   @@index([status])
   @@index([createdAt])
   @@index([customerMobile])
+}
+
+// ----------------------------- Bill ----------------------------------
+// Billing system connected to an Order (one-to-one). The admin can add a
+// manual discount at any time before the final bill. finalAmount is always
+// subtotal - discount.
+model Bill {
+  id          Int      @id @default(autoincrement())
+  orderId     Int      @unique
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  subtotal    Float
+  discount    Float    @default(0)
+  finalAmount Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
 }
 
 model OrderItem {
@@ -114,7 +162,7 @@ model OrderItem {
   productName String // snapshot at order time
   unit       String  // snapshot at order time
   price      Float   // unit price at order time (server-verified)
-  quantity   Int
+  quantity   Float
   total      Float
 
   @@index([orderId])
@@ -139,6 +187,13 @@ model SiteSetting {
   facebookUrl String   @default("")
   instagramUrl String  @default("")
   youtubeUrl  String   @default("")
+  // Business invoice fields
+  businessName    String? @default("")
+  businessAddress String? @default("")
+  gstNumber       String? @default("")
+  businessMobile  String? @default("")
+  businessEmail   String? @default("")
+  businessLogoUrl String? @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

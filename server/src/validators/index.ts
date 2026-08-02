@@ -7,13 +7,13 @@ export const createOrderSchema = z.object({
     .string()
     .trim()
     .regex(/^(?:\+91|91|0)?[6-9]\d{9}$/, "Please enter a valid 10-digit Indian mobile number"),
-  deliveryAddress: z.string().trim().min(10, "Please enter a complete delivery address").max(500),
+  deliveryAddress: z.string().trim().max(500).optional().default(""),
   notes: z.string().trim().max(1000).optional().default(""),
   items: z
     .array(
       z.object({
         productId: z.number().int().positive(),
-        quantity: z.number().int().min(1, "Quantity must be at least 1").max(999),
+        quantity: z.number().min(0.001, "Quantity must be at least 0.001").max(1000000),
       })
     )
     .min(1, "Cart is empty")
@@ -49,7 +49,7 @@ export const productSchema = z.object({
   unit: z.string().trim().min(1, "Unit is required").max(50),
   price: z.number().nonnegative("Price must be 0 or more"),
   mrp: z.number().nonnegative("MRP must be 0 or more"),
-  stock: z.number().int().nonnegative("Stock must be 0 or more"),
+  stock: z.number().nonnegative("Stock must be 0 or more"),
   categoryId: z.number().int().positive(),
   isActive: z.boolean().default(true),
   imageUrl: z.string().trim().max(500).optional().default(""),
@@ -93,10 +93,73 @@ export const settingsSchema = z.object({
   facebookUrl: safeHttpUrl,
   instagramUrl: safeHttpUrl,
   youtubeUrl: safeHttpUrl,
+  // Business invoice fields
+  businessName: z.string().trim().max(120).optional().default(""),
+  businessAddress: z.string().trim().max(500).optional().default(""),
+  gstNumber: z.string().trim().max(50).optional().default(""),
+  businessMobile: z.string().trim().max(30).optional().default(""),
+  businessEmail: z.string().trim().max(120).optional().default(""),
+  businessLogoUrl: z.string().trim().max(500).optional().default(""),
 });
 
 // ------------------------- Admin order status -------------------------
 export const orderStatusSchema = z.object({
-  status: z.enum(["PENDING", "CONFIRMED", "PROCESSING", "DELIVERED", "CANCELLED"]),
+  status: z.enum([
+    "PENDING",
+    "CONFIRMED",
+    "PROCESSING",
+    "OUT_FOR_DELIVERY",
+    "DELIVERED",
+    "CANCELLED",
+  ]),
+});
+
+// ------------------------- Public order tracking ---------------------
+export const orderTrackSchema = z.object({
+  orderNumber: z.string().trim().min(3, "Order ID is required").max(50),
+  customerMobile: z
+    .string()
+    .trim()
+    .regex(/^(?:\+91|91|0)?[6-9]\d{9}$/, "Please enter a valid 10-digit Indian mobile number"),
+});
+
+// Track orders by mobile number only (customer may forget Order ID).
+export const orderTrackByMobileSchema = z.object({
+  customerMobile: z
+    .string()
+    .trim()
+    .regex(/^(?:\+91|91|0)?[6-9]\d{9}$/, "Please enter a valid 10-digit Indian mobile number"),
+});
+
+// ------------------------- Admin billing -----------------------------
+export const billSchema = z.object({
+  discount: z
+    .number()
+    .min(0, "Discount cannot be negative")
+    .max(10_000_000, "Discount is too large")
+    .default(0),
+});
+
+// ------------------------- Admin notifications ------------------------
+export const notificationReadSchema = z.object({
+  ids: z.array(z.number().int().positive()).max(100).optional(),
+  all: z.boolean().optional(),
+});
+
+// ------------------------- Admin profile ------------------------------
+export const adminProfileSchema = z.object({
+  lowStockThreshold: z.number().int().min(0).max(10000).default(10),
+});
+
+// ------------------------- Admin notification email -------------------
+export const adminEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email("A valid admin email is required")
+    .max(200)
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null)),
 });
 

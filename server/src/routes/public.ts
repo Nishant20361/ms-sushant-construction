@@ -2,11 +2,12 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { HttpError } from "../utils/httpError.js";
-import { createOrderSchema } from "../validators/index.js";
+import { createOrderSchema, orderTrackSchema, orderTrackByMobileSchema } from "../validators/index.js";
 import { generateOrderNumber } from "../utils/orderNumber.js";
 import { normalizeIndianMobile } from "../utils/validatePhone.js";
-import { serializeProduct, serializeCategory, serializeSettings } from "../utils/serializer.js";
-import { orderLimiter } from "../middleware/rateLimit.js";
+import { serializeProduct, serializeCategory, serializeSettings, serializeOrderForTracking, serializeOrderListForTracking } from "../utils/serializer.js";
+import { orderLimiter, trackLimiter } from "../middleware/rateLimit.js";
+import { sendAdminNewOrderEmail } from "../utils/email.js";
 
 const router = Router();
 
@@ -140,11 +141,15 @@ router.post(
         const product = products.find((p) => p.id === li.productId);
         if (!product) throw new HttpError(400, "Invalid product in order.");
         if (!product.isActive) throw new HttpError(400, `"${product.name}" is not available.`);
-        if (product.stock < li.quantity) {
-          throw new HttpError(
-            400,
-            `Only ${product.stock} unit(s) of "${product.name}" are in stock.`
-          );
+        // Unit-based validation: bag and piece must be whole numbers.
+        const unit = (product.unit || "").toLowerCase();
+        const requiresInteger = unit === "bag" || unit === "piece";
+        if (requiresInteger && !Number.isInteger(li.quantity)) {
+          throw new HttpError(400, `Quantity for "${product.name}" must be a whole number (${product.unit}).`);
+        }
+        const available = Number(product.stock);
+        if (available < li.quantity) {
+          throw new HttpError(400, `Only ${available} units available. Please reduce quantity.`);
         }
         const price = Number(product.price);
         const total = Math.round(price * li.quantity * 100) / 100;
@@ -175,12 +180,12 @@ router.post(
 
       subtotal = Math.round(subtotal * 100) / 100;
 
-      return tx.order.create({
+return tx.order.create({
         data: {
           orderNumber: generateOrderNumber(),
           customerName: body.customerName,
           customerMobile: mobile,
-          deliveryAddress: body.deliveryAddress,
+          deliveryAddress: body.deliveryAddress || null,
           notes: body.notes || null,
           subtotal,
           items: { create: orderItems },
@@ -188,6 +193,54 @@ router.post(
         include: { items: true },
       });
     });
+
+    // ----- Fire-and-forget: notify the admin (email + in-app bell) -----
+    // The order is already committed; email/notification failures must never
+    // fail the request or lose the order.
+    (async () => {
+      try {
+        // Always use the admin email stored in the database (fully dynamic).
+        // Never fall back to an environment variable — the DB is the source of truth.
+        const admin = await prisma.admin.findFirst({
+          where: { isActive: true },
+          orderBy: { id: "asc" },
+        });
+        const to = admin?.email || "";
+
+        const orderItems = order.items ?? [];
+        await sendAdminNewOrderEmail(to, {
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          customerMobile: order.customerMobile,
+          deliveryAddress: order.deliveryAddress,
+          subtotal: order.subtotal,
+          status: order.status,
+          createdAt: order.createdAt,
+          items: orderItems.map((it) => ({
+            productName: it.productName,
+            quantity: it.quantity,
+            price: Number(it.price),
+            total: Number(it.total),
+            unit: it.unit,
+          })),
+        });
+
+        if (admin) {
+          await prisma.notification.create({
+            data: {
+              adminId: admin.id,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              customerName: order.customerName,
+              status: order.status,
+            },
+          });
+        }
+      } catch (err) {
+        // Never crash the server because admin notification failed.
+        console.error("[order] Admin notification failed:", err);
+      }
+    })();
 
     res.status(201).json({
       message: "Order placed successfully",
@@ -200,6 +253,57 @@ router.post(
         createdAt: order.createdAt,
       },
     });
+  })
+);
+
+// GET /api/orders/track?orderNumber=&customerMobile=
+// Public order tracking. Returns only the customer's own order details.
+router.get(
+  "/orders/track",
+  trackLimiter,
+  asyncHandler(async (req, res) => {
+    const parsed = orderTrackSchema.parse({
+      orderNumber: req.query.orderNumber ?? "",
+      customerMobile: req.query.customerMobile ?? "",
+    });
+    const mobile = normalizeIndianMobile(parsed.customerMobile);
+    if (!mobile) throw new HttpError(400, "Invalid mobile number");
+
+    const order = await prisma.order.findUnique({
+      where: { orderNumber: parsed.orderNumber },
+      include: { items: true, bill: true },
+    });
+    if (!order) throw new HttpError(404, "Order not found");
+
+    // Verify the mobile number matches the order (privacy).
+    if (order.customerMobile !== mobile) {
+      throw new HttpError(404, "Order not found");
+    }
+
+    res.json({ order: serializeOrderForTracking(order) });
+  })
+);
+
+// GET /api/orders/track-by-mobile?customerMobile=
+// Public order tracking using ONLY the mobile number. Returns a safe list of
+// all orders linked to that mobile so the customer can pick the right one.
+router.get(
+  "/orders/track-by-mobile",
+  trackLimiter,
+  asyncHandler(async (req, res) => {
+    const parsed = orderTrackByMobileSchema.parse({
+      customerMobile: req.query.customerMobile ?? "",
+    });
+    const mobile = normalizeIndianMobile(parsed.customerMobile);
+    if (!mobile) throw new HttpError(400, "Invalid mobile number");
+
+    const orders = await prisma.order.findMany({
+      where: { customerMobile: mobile },
+      include: { items: true, bill: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({ orders: orders.map(serializeOrderListForTracking) });
   })
 );
 

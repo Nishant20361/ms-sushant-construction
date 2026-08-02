@@ -35,3 +35,12 @@ export const orderLimiter = rateLimit({
   message: { error: "Too many orders placed. Please try again later." },
 });
 
+/** Limiter for the public order-tracking endpoint. */
+export const trackLimiter = rateLimit({
+  windowMs: 15 * minute,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many tracking requests. Please try again later." },
+});
+
