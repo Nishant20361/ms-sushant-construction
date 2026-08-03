@@ -217,13 +217,29 @@ router.delete(
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const id = parseIntegerParam(req.params.id, "product id");
-    const existing = await prisma.product.findUnique({ where: { id } });
+    const existing = await prisma.product.findUnique({
+      where: { id },
+      include: { _count: { select: { orderItems: true } } },
+    });
     if (!existing) throw new HttpError(404, "Product not found");
-    await prisma.$transaction([
-      prisma.productImage.deleteMany({ where: { productId: id } }),
-      prisma.orderItem.deleteMany({ where: { productId: id } }),
-      prisma.product.delete({ where: { id } }),
-    ]);
+
+    // A product that is referenced by existing orders must not be deleted,
+    // otherwise order history would be broken. Return a clean, human-readable
+    // error instead of leaking a Prisma foreign-key error to the client.
+    if (existing._count.orderItems > 0) {
+      throw new HttpError(400, "Unable to delete product");
+    }
+
+    try {
+      await prisma.$transaction([
+        prisma.productImage.deleteMany({ where: { productId: id } }),
+        prisma.product.delete({ where: { id } }),
+      ]);
+    } catch {
+      // Never surface a raw Prisma error to the frontend.
+      throw new HttpError(400, "Unable to delete product");
+    }
+
     await writeAudit(req, {
       action: "PRODUCT_DELETE",
       entity: "Product",
