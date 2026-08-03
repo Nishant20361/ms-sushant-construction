@@ -9,6 +9,28 @@ import { serializeProduct } from "../../utils/serializer.js";
 import { HttpError } from "../../utils/httpError.js";
 import { AuthenticatedRequest } from "../../types.js";
 
+/**
+ * Round to a fixed number of decimal places.
+ *
+ * A naive `Math.round(n * factor) / factor` can produce artifacts such as
+ * `Math.round(212.49999999999997 * 100)` -> `21249` -> `212.49` instead of
+ * `212.50`. Adding `Number.EPSILON` before rounding absorbs tiny binary
+ * floating-point noise so construction prices like `85 × 2.5 = ₹212.50`
+ * display correctly.
+ */
+function roundTo(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+}
+
+function normalizeCurrency(value: number) {
+  return roundTo(value, 2);
+}
+
+function normalizeStock(value: number) {
+  return roundTo(value, 3);
+}
+
 const router = Router();
 
 // GET /api/admin/products?search=&categoryId=&active=&page=&limit=
@@ -67,15 +89,19 @@ router.post(
     const category = await prisma.category.findUnique({ where: { id: body.categoryId } });
     if (!category) throw new HttpError(400, "Category not found");
 
+    const price = normalizeCurrency(body.price);
+    const mrp = normalizeCurrency(body.mrp);
+    const stock = normalizeStock(body.stock);
+
     const product = await prisma.$transaction(async (tx) => {
       const created = await tx.product.create({
         data: {
           name: body.name,
           description: body.description || null,
           unit: body.unit,
-          price: body.price,
-          mrp: body.mrp,
-          stock: body.stock,
+          price,
+          mrp,
+          stock,
           isActive: body.isActive,
           categoryId: body.categoryId,
         },
@@ -112,6 +138,10 @@ router.put(
     const existing = await prisma.product.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "Product not found");
 
+    const price = normalizeCurrency(body.price);
+    const mrp = normalizeCurrency(body.mrp);
+    const stock = normalizeStock(body.stock);
+
     const product = await prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id },
@@ -119,9 +149,9 @@ router.put(
           name: body.name,
           description: body.description || null,
           unit: body.unit,
-          price: body.price,
-          mrp: body.mrp,
-          stock: body.stock,
+          price,
+          mrp,
+          stock,
           isActive: body.isActive,
           categoryId: body.categoryId,
         },
@@ -138,6 +168,10 @@ router.put(
             data: { productId: id, url: body.imageUrl, isPrimary: true },
           });
         }
+      } else {
+        // Admin cleared the image in the edit form -> remove it so the
+        // frontend reflects the latest DB value (no stale image remains).
+        await tx.productImage.deleteMany({ where: { productId: id } });
       }
       return tx.product.findUniqueOrThrow({
         where: { id },

@@ -65,9 +65,14 @@ export function createApp() {
   // ---------- Rate limiting (general) ----------
   app.use("/api", generalLimiter);
 
+  // ---------- Root status ----------
+  app.get("/", (_req, res) => {
+    res.json({ success: true, message: "M/S Sushant Construction API running" });
+  });
+
   // ---------- Health (no secrets) ----------
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", service: "ms-sushant-construction", time: new Date().toISOString() });
+    res.json({ success: true, status: "ok", service: "ms-sushant-construction", time: new Date().toISOString() });
   });
 
   // ---------- Public static uploads (safe allowlist only) ----------
@@ -94,7 +99,11 @@ export function createApp() {
   app.use("/api", csrfProtect);
 
   // ---------- Routes ----------
+  // Public routes are available at BOTH /api/* and /api/public/*.
+  // The /api/public alias is a stable mount point; the existing /api/* paths
+  // are kept so the SPA and tests keep working unchanged.
   app.use("/api", publicRoutes);
+  app.use("/api/public", publicRoutes);
   app.use("/api/admin", adminRoutes);
 
   // ---------- Errors ----------

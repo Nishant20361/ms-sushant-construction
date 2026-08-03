@@ -8,9 +8,17 @@ import { writeAudit } from "../../middleware/audit.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { HttpError } from "../../utils/httpError.js";
 import { AuthenticatedRequest } from "../../types.js";
-import cloudinary from "../../utils/cloudinary.js";
+import cloudinary, { isCloudinaryConfigured } from "../../utils/cloudinary.js";
 
 const router = Router();
+
+/**
+ * Remove a temp file if it exists (best-effort cleanup).
+ */
+function removeFile(p: string | undefined) {
+  if (!p) return;
+  fs.unlink(p, () => {});
+}
 
 // POST /api/admin/uploads  (multipart field name: "file")
 router.post(
@@ -20,39 +28,49 @@ router.post(
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     if (!req.file) throw new HttpError(400, "No file uploaded");
     const originalPath = req.file.path;
-    const ext = path.extname(req.file.filename).toLowerCase();
-    let outPath = originalPath;
+    const originalFilename = req.file.filename;
+    const ext = path.extname(originalFilename).toLowerCase();
+    const baseName = path.basename(originalFilename, ext);
+    const webpPath = path.join(UPLOAD_DIR, `${baseName}.webp`);
+    let optimizedPath = originalPath;
+
     try {
       // Re-encode safely with Sharp (always to WebP when possible).
-      const webpPath = path.join(UPLOAD_DIR, `${path.basename(originalPath, ext)}.webp`);
       await sharp(originalPath)
         .rotate()
         .resize({ width: 1200, withoutEnlargement: true })
         .webp({ quality: 82 })
         .toFile(webpPath);
-      fs.unlinkSync(originalPath);
-      outPath = webpPath;
+      optimizedPath = webpPath;
     } catch (e) {
       // If re-encode fails, keep the original (already validated jpeg/png/webp).
       console.error("[upload] re-encode failed, keeping original", e);
-      outPath = originalPath;
     }
 
-    // Upload to Cloudinary BEFORE deleting the local file.
-    // If the upload fails, the local file is preserved so the request can
-    // still be retried or logged.
-    const result = await cloudinary.uploader.upload(outPath, {
-      folder: "ms-sushant-construction",
-    });
+    let url: string;
 
-    // Only delete the local file after Cloudinary confirms success.
-    try {
-      fs.unlinkSync(outPath);
-    } catch {
-      // Non-fatal: the temp file will be cleaned up eventually.
+    if (isCloudinaryConfigured()) {
+      // Upload the optimized image to Cloudinary and return its secure URL.
+      const result = await cloudinary.uploader.upload(optimizedPath, {
+        folder: "ms-sushant-construction/products",
+        use_filename: true,
+        unique_filename: true,
+        overwrite: false,
+        resource_type: "image",
+      });
+      url = result.secure_url || result.url;
+    } else {
+      // Fallback: serve from local disk (same behaviour as before).
+      const finalFilename = `${baseName}.webp`;
+      const finalPath = path.join(UPLOAD_DIR, "products", finalFilename);
+      fs.mkdirSync(path.dirname(finalPath), { recursive: true });
+      fs.copyFileSync(optimizedPath, finalPath);
+      url = `/uploads/products/${finalFilename}`;
     }
 
-    const url = result.secure_url;
+    // Clean up temp files (original + optimized) after a successful upload.
+    removeFile(originalPath);
+    if (optimizedPath !== originalPath) removeFile(optimizedPath);
 
     await writeAudit(req, {
       action: "UPLOAD",

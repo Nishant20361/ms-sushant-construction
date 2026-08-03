@@ -29,8 +29,8 @@ const settings = await prisma.siteSetting.findFirst();
   const biz = (settings ?? {}) as any;
 
   return {
-    companyName: "M/S Sushant Construction",
-    tagline: "Your trusted partner",
+    companyName: settings?.companyName || "M/S Sushant Construction",
+    tagline: settings?.tagline || "Your trusted partner",
     orderNumber: order.orderNumber,
     customerName: order.customerName,
     customerMobile: order.customerMobile,

@@ -216,6 +216,9 @@ export const adminApi = {
   deleteProduct(id: number): Promise<{ message: string }> {
     return request(`/admin/products/${id}`, { method: "DELETE" }, { csrf: true });
   },
+  toggleProduct(id: number): Promise<{ product: Product }> {
+    return request(`/admin/products/${id}/toggle`, { method: "PATCH" }, { csrf: true });
+  },
   getCategories(): Promise<{ categories: Category[] }> {
     return request("/admin/categories");
   },

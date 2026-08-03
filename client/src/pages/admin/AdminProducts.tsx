@@ -115,13 +115,16 @@ const [search, setSearch] = useState("");
 
   const handleSave = async () => {
     setFormError(null);
+    const price = Math.round(Number(form.price) * 100) / 100;
+    const mrp = Math.round(Number(form.mrp) * 100) / 100;
+    const stock = Math.round(Number(form.stock) * 1000) / 1000;
     const payload: ProductPayload = {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
       unit: form.unit.trim() || "bag",
-      price: Number(form.price),
-      mrp: Number(form.mrp),
-      stock: Number(form.stock),
+      price,
+      mrp,
+      stock,
       isActive: form.isActive,
       categoryId: Number(form.categoryId),
       imageUrl: form.imageUrl,
@@ -135,7 +138,10 @@ const [search, setSearch] = useState("");
     setSaving(true);
     try {
       if (form.id) {
-        await adminApi.updateProduct(form.id, payload);
+        const result = await adminApi.updateProduct(form.id, payload);
+        setProducts((current) =>
+          current.map((product) => (product.id === result.product.id ? result.product : product))
+        );
         success("Product updated");
       } else {
         await adminApi.createProduct(payload);
@@ -165,17 +171,10 @@ const [search, setSearch] = useState("");
 
   const handleToggle = async (p: Product) => {
     try {
-      await adminApi.updateProduct(p.id, {
-        name: p.name,
-        description: p.description ?? undefined,
-        unit: p.unit,
-        price: p.price,
-        mrp: p.mrp,
-        stock: p.stock,
-        isActive: !p.isActive,
-        categoryId: p.categoryId,
-        imageUrl: p.imageUrl,
-      });
+      const result = await adminApi.toggleProduct(p.id);
+      setProducts((current) =>
+        current.map((product) => (product.id === result.product.id ? result.product : product))
+      );
       success(p.isActive ? "Product deactivated" : "Product activated");
       load();
     } catch (e) {
@@ -346,15 +345,15 @@ const [search, setSearch] = useState("");
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="label">Price (₹) *</label>
-                  <input className="input" type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+                  <input className="input" type="number" min="0" step="any" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
                 </div>
                 <div>
                   <label className="label">MRP (₹) *</label>
-                  <input className="input" type="number" min="0" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: e.target.value })} />
+                  <input className="input" type="number" min="0" step="any" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: e.target.value })} />
                 </div>
                 <div>
                   <label className="label">Stock *</label>
-                  <input className="input" type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+                  <input className="input" type="number" min="0" step="any" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
                 </div>
               </div>
 

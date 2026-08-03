@@ -79,7 +79,7 @@ router.get(
       lowStockProducts: lowStock.map((p) => ({
         id: p.id,
         name: p.name,
-        stock: p.stock,
+        stock: Number(p.stock),
         unit: p.unit,
         imageUrl: p.images?.[0]?.url ?? null,
       })),

@@ -83,15 +83,54 @@ router.get(
 );
 
 // PATCH /api/admin/orders/:id/status
+// Changes the order status. Cancelling an order restores the stock that was
+// reserved when the order was placed (or re-decrements it when an order that
+// was cancelled is re-activated). Stock changes are transactional so the
+// inventory always stays in sync with order state.
 router.patch(
   "/orders/:id/status",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const id = parseIntegerParam(req.params.id, "order id");
     const body = orderStatusSchema.parse(req.body);
-    const existing = await prisma.order.findUnique({ where: { id } });
+    const existing = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    });
     if (!existing) throw new HttpError(404, "Order not found");
-    const order = await prisma.order.update({ where: { id }, data: { status: body.status } });
+    const wasCancelled = existing.status === "CANCELLED";
+    const nowCancelled = body.status === "CANCELLED";
+
+    const order = await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id },
+        data: { status: body.status },
+      });
+
+      if (wasCancelled !== nowCancelled) {
+        // Either cancelling (return stock) or re-activating (re-reserve).
+        const delta = nowCancelled ? 1 : -1; // +1 restores, -1 re-decrements
+        for (const item of existing.items) {
+          const qty = Number(item.quantity);
+          if (!qty || qty <= 0) continue;
+          const prod = await tx.product.findUnique({ where: { id: item.productId } });
+          if (!prod) continue;
+          if (delta < 0 && Number(prod.stock) < qty) {
+            throw new HttpError(
+              400,
+              `Only ${prod.stock} units of "${item.productName}" in stock. Cannot re-activate this order.`
+            );
+          }
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: delta * qty } },
+          });
+        }
+      }
+
+      return tx.order.findUniqueOrThrow({ where: { id } });
+    });
+
     await writeAudit(req, {
       action: "ORDER_STATUS",
       entity: "Order",

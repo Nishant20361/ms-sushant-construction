@@ -122,6 +122,170 @@ describe("Admin authentication", () => {
   });
 });
 
+describe("Admin product management", () => {
+  it("updates product stock and price with decimal values", async () => {
+    const { agent, token } = await getCsrf();
+    const login = await agent
+      .post("/api/admin/auth/login")
+      .set("X-CSRF-Token", token)
+      .send({ username: "testadmin", password: TEST_PASSWORD });
+    expect(login.status).toBe(200);
+
+    const product = await prisma.product.findFirst({ where: { name: "Test Product" } });
+    expect(product).toBeDefined();
+
+    const update = await agent
+      .put(`/api/admin/products/${product!.id}`)
+      .set("X-CSRF-Token", token)
+      .send({
+        name: product!.name,
+        description: "Updated stock test",
+        unit: product!.unit,
+        price: 212.5,
+        mrp: 240.75,
+        stock: 2.5,
+        isActive: product!.isActive,
+        categoryId: product!.categoryId,
+        imageUrl: null,
+      });
+
+    expect(update.status).toBe(200);
+    expect(update.body.product.stock).toBe(2.5);
+    expect(update.body.product.price).toBe(212.5);
+
+    const list = await agent.get("/api/admin/products?page=1&limit=10");
+    expect(list.status).toBe(200);
+    const found = list.body.products.find((p: any) => p.id === product!.id);
+    expect(found).toBeDefined();
+    expect(found.stock).toBe(2.5);
+    expect(found.price).toBe(212.5);
+  });
+
+  it("calculates decimal totals without floating-point drift (85 x 2.5 = 212.5)", async () => {
+    const { agent, token } = await getCsrf();
+    const login = await agent
+      .post("/api/admin/auth/login")
+      .set("X-CSRF-Token", token)
+      .send({ username: "testadmin", password: TEST_PASSWORD });
+    expect(login.status).toBe(200);
+
+    // Create a product priced per-kg.
+    const cat = await prisma.category.findFirst({ where: { slug: "test-category" } });
+    const create = await agent
+      .post("/api/admin/products")
+      .set("X-CSRF-Token", token)
+      .send({
+        name: "Iron Nail 1.5 Inch",
+        description: "Per-kg pricing",
+        unit: "kg",
+        price: 85,
+        mrp: 100,
+        stock: 10,
+        isActive: true,
+        categoryId: cat!.id,
+        imageUrl: null,
+      });
+    expect(create.status).toBe(201);
+    const productId = create.body.product.id;
+
+    // Place an order for 2.5 kg.
+    const order = await agent
+      .post("/api/orders")
+      .set("X-CSRF-Token", token)
+      .send({
+        customerName: "Decimal Test",
+        customerMobile: "9876543210",
+        deliveryAddress: "123, Test Street, City, State 123456",
+        items: [{ productId, quantity: 2.5 }],
+      });
+    expect(order.status).toBe(201);
+    expect(order.body.order.subtotal).toBe(212.5);
+
+    // Stock should have decreased by 2.5.
+    const dbProduct = await prisma.product.findUnique({ where: { id: productId } });
+    expect(Number(dbProduct!.stock)).toBe(7.5);
+  });
+
+  it("restores stock when an order is cancelled", async () => {
+    const { agent, token } = await getCsrf();
+    const login = await agent
+      .post("/api/admin/auth/login")
+      .set("X-CSRF-Token", token)
+      .send({ username: "testadmin", password: TEST_PASSWORD });
+    expect(login.status).toBe(200);
+
+    // Create a fresh product so stock is predictable.
+    const cat = await prisma.category.findFirst({ where: { slug: "test-category" } });
+    const create = await agent
+      .post("/api/admin/products")
+      .set("X-CSRF-Token", token)
+      .send({
+        name: "Cancel Restore Product",
+        description: "Stock restore test",
+        unit: "kg",
+        price: 50,
+        mrp: 60,
+        stock: 5,
+        isActive: true,
+        categoryId: cat!.id,
+        imageUrl: null,
+      });
+    expect(create.status).toBe(201);
+    const productId = create.body.product.id;
+
+    const order = await agent
+      .post("/api/orders")
+      .set("X-CSRF-Token", token)
+      .send({
+        customerName: "Cancel Test",
+        customerMobile: "9876543210",
+        deliveryAddress: "123, Test Street, City, State 123456",
+        items: [{ productId, quantity: 1.5 }],
+      });
+    expect(order.status).toBe(201);
+
+    let dbProduct = await prisma.product.findUnique({ where: { id: productId } });
+    expect(Number(dbProduct!.stock)).toBe(3.5);
+
+    // Cancel the order -> stock should be restored to 5.
+    const cancel = await agent
+      .patch(`/api/admin/orders/${order.body.order.id}/status`)
+      .set("X-CSRF-Token", token)
+      .send({ status: "CANCELLED" });
+    expect(cancel.status).toBe(200);
+
+    dbProduct = await prisma.product.findUnique({ where: { id: productId } });
+    expect(Number(dbProduct!.stock)).toBe(5);
+  });
+
+  it("toggles product active state via the dedicated endpoint", async () => {
+    const { agent, token } = await getCsrf();
+    const login = await agent
+      .post("/api/admin/auth/login")
+      .set("X-CSRF-Token", token)
+      .send({ username: "testadmin", password: TEST_PASSWORD });
+    expect(login.status).toBe(200);
+
+    const product = await prisma.product.findFirst({ where: { name: "Inactive Product" } });
+    expect(product).toBeDefined();
+
+    // Activate it.
+    const toggle = await agent
+      .patch(`/api/admin/products/${product!.id}/toggle`)
+      .set("X-CSRF-Token", token);
+    expect(toggle.status).toBe(200);
+    expect(toggle.body.product.isActive).toBe(true);
+    expect(toggle.body.product.stock).toBe(5);
+
+    // Toggle back.
+    const toggle2 = await agent
+      .patch(`/api/admin/products/${product!.id}/toggle`)
+      .set("X-CSRF-Token", token);
+    expect(toggle2.status).toBe(200);
+    expect(toggle2.body.product.isActive).toBe(false);
+  });
+});
+
 describe("CSRF protection", () => {
   it("returns 403 for a write request without a CSRF token", async () => {
     const res = await supertest(app)

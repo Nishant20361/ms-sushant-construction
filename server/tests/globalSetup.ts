@@ -1,39 +1,42 @@
 /**
  * Vitest global setup.
  *
- * Runs BEFORE the test workers start. It provisions an isolated SQLite
- * database (server/prisma/test.db) using Prisma schema push, so the test
- * suite never touches the dev database (server/prisma/dev.db).
+ * Runs BEFORE the test workers start. It provisions an isolated PostgreSQL
+ * database (ms_sushant_test) using Prisma db push, so the test suite never
+ * touches the dev or production (Render) database.
  */
-import { execSync } from "child_process";
-import fs from "fs";
+import dotenv from "dotenv";
 import path from "path";
+import { execSync } from "child_process";
+import { fileURLToPath } from "url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const serverDir = path.resolve(__dirname, "..");
-const prismaDir = path.join(serverDir, "prisma");
 
-const TEST_DB_URL = "file:./test.db";
-const TEST_DB_FILES = ["test.db", "test.db-journal"];
+// Load server/.env and server/.env.test so TEST_DATABASE_URL is available.
+// (vitest.config.ts already loads them, but globalSetup runs in a separate
+// process scope, so load them again here to be safe.)
+dotenv.config({ path: path.join(serverDir, ".env") });
+dotenv.config({ path: path.join(serverDir, ".env.test") });
 
-function removeTestDb() {
-  for (const f of TEST_DB_FILES) {
-    const p = path.join(prismaDir, f);
-    if (fs.existsSync(p)) fs.rmSync(p, { force: true });
-  }
-}
+// PostgreSQL test database (isolated from dev/prod). Overridable via env so
+// CI can point at its own Postgres instance. NOTE: the username MUST be part
+// of the URL — an empty user causes PrismaClientInitializationError P1010.
+const TEST_DATABASE_URL =
+  process.env.TEST_DATABASE_URL ||
+  process.env.DATABASE_URL ||
+  "postgresql://nishantkumar@localhost:5432/ms_sushant_test?schema=public";
 
 export default function setup(): () => void {
-  // Start from a clean isolated test database.
-  removeTestDb();
-
-  execSync("npx prisma db push --accept-data-loss", {
+  // Provision schema via Prisma db push against the isolated test database.
+  execSync("npx prisma db push --accept-data-loss --skip-generate", {
     cwd: serverDir,
-    env: { ...process.env, DATABASE_URL: TEST_DB_URL },
+    env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL },
     stdio: "inherit",
   });
 
   return () => {
-    removeTestDb();
+    // Nothing to clean up for Postgres; tests delete their own rows.
   };
 }
 

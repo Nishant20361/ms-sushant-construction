@@ -10,15 +10,22 @@ function toNumber(v: DecimalLike): number {
   return Number(v);
 }
 
+function roundNumber(v: DecimalLike, decimals: number): number {
+  const n = Number(v);
+  if (Number.isNaN(n)) return 0;
+  const factor = 10 ** decimals;
+  return Math.round(n * factor) / factor;
+}
+
 export function serializeProduct(p: any) {
   return {
     id: p.id,
     name: p.name,
     description: p.description,
     unit: p.unit,
-    price: toNumber(p.price),
-    mrp: toNumber(p.mrp),
-    stock: toNumber(p.stock),
+    price: roundNumber(p.price, 2),
+    mrp: roundNumber(p.mrp, 2),
+    stock: roundNumber(p.stock, 3),
     isActive: p.isActive,
     categoryId: p.categoryId,
     category: p.category

@@ -20,8 +20,16 @@ export const UPLOAD_DIR = process.env.UPLOAD_DIR
   ? path.resolve(process.env.UPLOAD_DIR)
   : path.resolve(__dirname, "../../uploads");
 
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+/**
+ * Subdirectory that product images are saved into. Uploaded product images
+ * live in <UPLOAD_DIR>/products.
+ */
+export const PRODUCTS_DIR = path.join(UPLOAD_DIR, "products");
+
+for (const dir of [UPLOAD_DIR, PRODUCTS_DIR]) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 }
 
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -36,7 +44,7 @@ function mimeFromExt(filename: string): string {
 }
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  destination: (_req, _file, cb) => cb(null, PRODUCTS_DIR),
   filename: (_req, file, cb) => {
     const safeExt = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, "");
     const name = `${Date.now()}_${crypto.randomBytes(8).toString("hex")}${safeExt}`;
@@ -61,8 +69,16 @@ export const upload = multer({
 });
 
 export function isUploadedFileSafe(filepath: string): boolean {
-  const base = path.basename(filepath);
-  // Only serve files with an allowlisted extension from the uploads dir.
+  // Normalize to a POSIX relative path so `../` or backslashes can't escape
+  // the uploads tree ("products/../../etc/passwd" would normalize away from
+  // the allowed products/ prefix and be rejected here).
+  const normalized = path.posix.normalize(filepath);
+  // Only allow files inside the products subdirectory.
+  if (!normalized.startsWith("products/") && normalized !== "products") {
+    return false;
+  }
+  const base = path.posix.basename(normalized);
+  // Only serve files with an allowlisted extension.
   return /^[a-zA-Z0-9._-]+\.(jpe?g|png|webp)$/.test(base);
 }
 
