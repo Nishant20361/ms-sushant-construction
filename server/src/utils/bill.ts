@@ -10,7 +10,7 @@
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 export interface BillLineItem {
   productName: string;
@@ -308,24 +308,150 @@ export function buildBillHtml(bill: BillData): string {
  *
  * Uses Puppeteer to render the existing HTML invoice so Hindi/Devanagari
  * text and the Indian Rupee symbol (₹) are preserved in the PDF.
+ *
+ * Production hardening: the Puppeteer Chromium browser is often not present on
+ * a server (the download is skipped during `npm install`). We therefore:
+ *   1. Auto-detect a usable Chrome/Chromium binary (env override → Puppeteer's
+ *      own cached browser → common system install paths).
+ *   2. Reuse a single browser instance across requests (lazy singleton) so we
+ *      don't pay the launch cost on every download.
+ *   3. Fail with a clear, actionable message instead of a masked 500 if no
+ *      browser can be found.
+ */
+
+// ---------------------------------------------------------------------------
+// Browser discovery
+// ---------------------------------------------------------------------------
+
+/** Common system Chrome/Chromium install paths (macOS, Linux, Windows). */
+const SYSTEM_BROWSER_CANDIDATES: string[] = [
+  // Env override wins (admins can point at any custom binary).
+  ...(process.env.PUPPETEER_EXECUTABLE_PATH
+    ? [process.env.PUPPETEER_EXECUTABLE_PATH]
+    : []),
+  // Common Linux locations.
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/chrome",
+  "/opt/google/chrome/chrome",
+  "/usr/local/bin/chrome",
+  "/usr/local/bin/chromium",
+  "/usr/local/bin/google-chrome",
+  // Common macOS locations.
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+  // Common Windows locations.
+  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+];
+
+function findSystemBrowser(): string | undefined {
+  for (const candidate of SYSTEM_BROWSER_CANDIDATES) {
+    try {
+      if (candidate && existsSync(candidate)) return candidate;
+    } catch {
+      // ignore per-candidate errors and keep scanning
+    }
+  }
+  return undefined;
+}
+
+let cachedExecutablePath: string | undefined;
+let resolvedExecutablePath: boolean = false;
+
+/**
+ * Resolve a usable Chrome/Chromium executable path, or undefined if none is
+ * available. The result is cached after the first (successful) discovery.
+ */
+async function resolveBrowserExecutablePath(): Promise<string | undefined> {
+  if (resolvedExecutablePath) return cachedExecutablePath;
+
+  // 1) Prefer Puppeteer's own cached browser (normally downloaded at install).
+  try {
+    const puppeteer = (await import("puppeteer")).default;
+    const bundled = await puppeteer.executablePath();
+    if (bundled && existsSync(bundled)) {
+      cachedExecutablePath = bundled;
+      resolvedExecutablePath = true;
+      return cachedExecutablePath;
+    }
+  } catch {
+    // puppeteer not resolvable here — fall through to system candidates
+  }
+
+  // 2) Fall back to a system-installed browser.
+  const system = findSystemBrowser();
+  if (system) {
+    cachedExecutablePath = system;
+    resolvedExecutablePath = true;
+    return cachedExecutablePath;
+  }
+
+  // 3) Nothing found. Cache the "not found" result so we don't re-scan every call.
+  resolvedExecutablePath = true;
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Reusable browser singleton
+// ---------------------------------------------------------------------------
+
+let browserPromise: Promise<any> | undefined;
+
+/**
+ * Lazily launch (once) and reuse a single Puppeteer browser instance.
+ * Closing per-request browsers was both slow and fragile on servers.
+ */
+async function getBrowser(): Promise<any> {
+  if (!browserPromise) {
+    const puppeteer = (await import("puppeteer")).default;
+    const executablePath = await resolveBrowserExecutablePath();
+
+    if (!executablePath) {
+      throw new Error(
+        "PDF browser engine is not available. " +
+          "Install Chromium on the server or set the PUPPETEER_EXECUTABLE_PATH environment variable " +
+          "to point at a Chrome/Chromium executable."
+      );
+    }
+
+    browserPromise = puppeteer.launch({
+      executablePath,
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
+    }).catch((err: unknown) => {
+      // Allow a retry on the next request if launch failed.
+      browserPromise = undefined;
+      throw err;
+    });
+  }
+  return browserPromise;
+}
+
+/**
+ * Generate a professional PDF buffer for an order bill.
+ *
+ * Renders the invoice HTML in a shared Chrome/Chromium instance so
+ * Devanagari/₹ text is preserved, then returns the PDF bytes.
  */
 export async function buildBillPdf(bill: BillData): Promise<Buffer> {
-  const puppeteer = (await import("puppeteer")).default;
   const html = buildBillHtml(bill);
+  const browser = await getBrowser();
 
-  const browser = await puppeteer.launch({
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-
+  const page = await browser.newPage();
   try {
-    const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load" });
     await page.evaluate(() => (globalThis as any).document?.fonts?.ready);
     await page.emulateMediaType("print");
     const pdf = await page.pdf({ format: "A4", printBackground: true });
     return Buffer.from(pdf);
   } finally {
-    await browser.close();
+    // Close each page but keep the shared browser alive for reuse.
+    await page.close().catch(() => undefined);
   }
 }
 
