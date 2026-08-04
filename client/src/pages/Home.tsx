@@ -158,13 +158,13 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
     [settings?.heroBannerUrl]
   );
 
-  const handleAdd = (p: Product) => {
+const handleAdd = (p: Product, quantity: number) => {
     if (p.stock <= 0) {
       toast("This product is out of stock", "error");
       return;
     }
-    addItem(p, 1);
-    toast(`${p.name} added to cart`, "success");
+    addItem(p, quantity);
+    toast(`${p.name} × ${quantity} ${p.unit} added to cart`, "success");
   };
 
   return (
@@ -298,8 +298,8 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
             ) : (
               <>
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {products.map((p) => (
-                    <ProductCard key={p.id} product={p} onAdd={() => handleAdd(p)} />
+{products.map((p) => (
+                    <ProductCard key={p.id} product={p} onAdd={(qty) => handleAdd(p, qty)} />
                   ))}
                 </div>
 
@@ -539,9 +539,31 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
   );
 }
 
-function ProductCard({ product: p, onAdd }: { product: Product; onAdd: () => void }) {
+function ProductCard({
+  product: p,
+  onAdd,
+}: {
+  product: Product;
+  onAdd: (quantity: number) => void;
+}) {
   const discount = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
   const outOfStock = p.stock <= 0;
+  const unit = (p.unit || "").toLowerCase();
+  const requiresInteger = unit === "bag" || unit === "piece";
+  const [quantity, setQuantity] = useState(1);
+
+  const handleQuantityChange = (raw: string) => {
+    const parsed = Number(raw);
+    if (Number.isNaN(parsed)) return;
+    let q = parsed;
+    if (requiresInteger) {
+      q = Math.max(1, Math.floor(q));
+    } else {
+      q = Math.max(0.001, Math.round(q * 1000) / 1000);
+    }
+    q = Math.min(Math.max(q, 0), p.stock);
+    setQuantity(q);
+  };
 
   return (
     <article className="card group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:shadow-xl">
@@ -590,10 +612,30 @@ function ProductCard({ product: p, onAdd }: { product: Product; onAdd: () => voi
           )}
         </div>
 
+<div className="mt-4 flex items-center gap-2">
+          <label htmlFor={`qty-${p.id}`} className="text-xs font-medium text-slate-500">
+            Qty
+          </label>
+          <input
+            id={`qty-${p.id}`}
+            type="number"
+            inputMode="decimal"
+            value={quantity}
+            min={requiresInteger ? "1" : "0.001"}
+            max={p.stock}
+            step={requiresInteger ? "1" : "0.1"}
+            disabled={outOfStock}
+            onChange={(e) => handleQuantityChange(e.target.value)}
+            className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={`Quantity for ${p.name}`}
+          />
+          <span className="text-sm text-slate-600">{p.unit}</span>
+        </div>
+
         <button
-          onClick={onAdd}
+          onClick={() => onAdd(quantity)}
           disabled={outOfStock}
-          className="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-50"
+          className="btn-primary mt-3 w-full disabled:cursor-not-allowed disabled:opacity-50"
         >
           {outOfStock ? "Out of Stock" : "Add to Cart"}
         </button>

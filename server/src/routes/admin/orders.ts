@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../db.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { parseIntegerParam } from "../../utils/request.js";
@@ -103,7 +104,7 @@ router.delete(
     if (!existing) throw new HttpError(404, "Order not found");
 
     try {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // 1) Delete related order items first (OrderItem.order has no cascade).
         await tx.orderItem.deleteMany({ where: { orderId: id } });
         // 2) Delete the related bill if one exists.
@@ -147,7 +148,7 @@ router.patch(
     const wasCancelled = existing.status === "CANCELLED";
     const nowCancelled = body.status === "CANCELLED";
 
-    const order = await prisma.$transaction(async (tx) => {
+    const order = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.order.update({
         where: { id },
         data: { status: body.status },
@@ -193,7 +194,7 @@ router.patch(
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const id = parseIntegerParam(req.params.id, "order id");
-    const body = req.body;
+    const body = req.body as { items: { productId: number; quantity: number }[] };
     // Basic validation: items array
     if (!body || !Array.isArray(body.items) || body.items.length === 0) {
       throw new HttpError(400, "Invalid items");
@@ -211,7 +212,7 @@ router.patch(
     if (!order) throw new HttpError(404, "Order not found");
 
     const productIds = Array.from(
-      new Set([...order.items.map((i) => i.productId), ...Array.from(incomingMap.keys())])
+      new Set([...order.items.map((i: { productId: number }) => i.productId), ...Array.from(incomingMap.keys())])
     );
 
     const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
@@ -219,7 +220,7 @@ router.patch(
 
     const newItems = new Map<number, { product: any; quantity: number }>();
     for (const [pid, qty] of incomingMap.entries()) {
-      const prod = products.find((p) => p.id === pid);
+      const prod = products.find((p: { id: number }) => p.id === pid);
       if (!prod) throw new HttpError(400, "Invalid product in items");
       if (!prod.isActive) throw new HttpError(400, `"${prod.name}" is not available.`);
       const unit = (prod.unit || "").toLowerCase();
@@ -232,12 +233,12 @@ router.patch(
 
     const deltas: Array<{ productId: number; delta: number }> = [];
     for (const pid of productIds) {
-      const oldItem = order.items.find((it) => it.productId === pid);
+      const oldItem = order.items.find((it: { productId: number }) => it.productId === pid);
       const oldQty = oldItem ? Number(oldItem.quantity) : 0;
       const newQty = newItems.get(pid)?.quantity ?? 0;
       const delta = Math.round((newQty - oldQty) * 1000) / 1000;
       if (delta > 0) {
-        const prod = products.find((p) => p.id === pid)!;
+        const prod = products.find((p: { id: number }) => p.id === pid)!;
         if (prod.stock < delta) {
           throw new HttpError(400, `Only ${prod.stock} units in stock. Please reduce quantity.`);
         }
@@ -265,7 +266,7 @@ router.patch(
     subtotal = Math.round(subtotal * 100) / 100;
 
     const result = await prisma.$transaction(
-      async (tx) => {
+      async (tx: Prisma.TransactionClient) => {
         for (const d of deltas) {
           if (d.delta === 0) continue;
           if (d.delta > 0) {
@@ -274,7 +275,7 @@ router.patch(
               data: { stock: { decrement: d.delta } },
             });
             if (updated.count === 0) {
-              const prod = products.find((p) => p.id === d.productId)!;
+              const prod = products.find((p: { id: number }) => p.id === d.productId)!;
               throw new HttpError(400, `Only ${prod.stock} units in stock. Please reduce quantity.`);
             }
           } else {
@@ -315,4 +316,3 @@ router.patch(
 );
 
 export default router;
-
