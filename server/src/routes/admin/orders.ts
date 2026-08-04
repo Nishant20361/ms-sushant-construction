@@ -82,6 +82,52 @@ router.get(
   })
 );
 
+// DELETE /api/admin/orders/:id
+// TEMPORARY admin-only cleanup helper. This is NOT part of the order status /
+// cancellation flow (which is intentionally left untouched). It permanently
+// deletes an order and all of its dependent records so admins can clean up
+// test data. It may be removed in a future release.
+//
+// Deletion is wrapped in a transaction and deletes child records first
+// (OrderItem -> Bill -> Order) to satisfy the FK constraints. Any failure is
+// surfaced as a clean error — never a Prisma/DB stack trace.
+router.delete(
+  "/orders/:id",
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const id = parseIntegerParam(req.params.id, "order id");
+    const existing = await prisma.order.findUnique({
+      where: { id },
+      include: { bill: true },
+    });
+    if (!existing) throw new HttpError(404, "Order not found");
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        // 1) Delete related order items first (OrderItem.order has no cascade).
+        await tx.orderItem.deleteMany({ where: { orderId: id } });
+        // 2) Delete the related bill if one exists.
+        if (existing.bill) {
+          await tx.bill.deleteMany({ where: { orderId: id } });
+        }
+        // 3) Finally delete the order itself.
+        await tx.order.delete({ where: { id } });
+      });
+    } catch {
+      // Never leak a raw Prisma/DB error to the frontend.
+      throw new HttpError(400, "Unable to delete order");
+    }
+
+    await writeAudit(req, {
+      action: "ORDER_DELETE",
+      entity: "Order",
+      entityId: id,
+      details: `${existing.orderNumber} permanently deleted`,
+    });
+    res.json({ success: true, message: "Order deleted" });
+  })
+);
+
 // PATCH /api/admin/orders/:id/status
 // Changes the order status. Cancelling an order restores the stock that was
 // reserved when the order was placed (or re-decrements it when an order that

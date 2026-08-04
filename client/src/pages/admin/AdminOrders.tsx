@@ -145,6 +145,24 @@ const [search, setSearch] = useState("");
     }
   };
 
+  // TEMPORARY admin-only cleanup: permanently deletes an order. This is NOT
+  // part of the order cancellation flow and may be removed in a future release.
+  const handleDelete = async (order: Order) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to permanently delete this order?"
+    );
+    if (!confirmed) return;
+    try {
+      await adminApi.deleteOrder(order.id);
+      success(`Order ${order.orderNumber} deleted`);
+      if (expandedOrder === order.id) setExpandedOrder(null);
+      load();
+    } catch (e) {
+      if (e instanceof ApiRequestError) error(e.message);
+      else error("Delete failed");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Edit Modal */}
@@ -346,6 +364,12 @@ const [search, setSearch] = useState("");
                       className="btn-secondary text-sm"
                     >
                       Edit Order
+                    </button>
+                    <button
+                      onClick={() => handleDelete(o)}
+                      className="btn-danger text-sm"
+                    >
+                      Delete Order
                     </button>
                   </div>
                 </div>

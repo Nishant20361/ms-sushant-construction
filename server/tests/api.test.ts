@@ -455,6 +455,84 @@ describe("Checkout security", () => {
   });
 });
 
+describe("Admin permanent order delete (temporary cleanup feature)", () => {
+  let agent: any;
+  let token: string;
+
+  beforeAll(async () => {
+    // Share a single authenticated agent for all tests in this block to avoid
+    // tripping the login rate limiter (10 logins / 15 min per IP).
+    const csrf = await getCsrf();
+    agent = csrf.agent;
+    token = csrf.token;
+    const login = await agent
+      .post("/api/admin/auth/login")
+      .set("X-CSRF-Token", token)
+      .send({ username: "testadmin", password: TEST_PASSWORD });
+    expect(login.status).toBe(200);
+  });
+
+  it("permanently deletes an order and its dependent records", async () => {
+    // Create a dummy order.
+    const products = await prisma.product.findMany({ where: { isActive: true } });
+    const order = await agent
+      .post("/api/orders")
+      .set("X-CSRF-Token", token)
+      .send({
+        customerName: "Delete Test",
+        customerMobile: "9876543210",
+        deliveryAddress: "123, Test Street, City, State 123456",
+        items: [{ productId: products[0].id, quantity: 1 }],
+      });
+    expect(order.status).toBe(201);
+    const orderId = order.body.order.id;
+
+    // Create a bill for the order.
+    const bill = await agent
+      .post(`/api/admin/orders/${orderId}/bill`)
+      .set("X-CSRF-Token", token)
+      .send({ discount: 0 });
+    expect(bill.status).toBe(201);
+
+    // Verify order + children exist before delete.
+    const beforeItems = await prisma.orderItem.count({ where: { orderId } });
+    const beforeBill = await prisma.bill.count({ where: { orderId } });
+    expect(beforeItems).toBe(1);
+    expect(beforeBill).toBe(1);
+
+    // Delete the order.
+    const del = await agent
+      .delete(`/api/admin/orders/${orderId}`)
+      .set("X-CSRF-Token", token);
+    expect(del.status).toBe(200);
+    expect(del.body.success).toBe(true);
+    expect(del.body.message).toBe("Order deleted");
+
+    // Verify all dependent records are gone.
+    const dbOrder = await prisma.order.findUnique({ where: { id: orderId } });
+    const dbItems = await prisma.orderItem.count({ where: { orderId } });
+    const dbBill = await prisma.bill.count({ where: { orderId } });
+    expect(dbOrder).toBeNull();
+    expect(dbItems).toBe(0);
+    expect(dbBill).toBe(0);
+  });
+
+  it("returns 404 when deleting a non-existent order", async () => {
+    const del = await agent
+      .delete("/api/admin/orders/99999999")
+      .set("X-CSRF-Token", token);
+    expect(del.status).toBe(404);
+    expect(del.body.error).toMatch(/not found/i);
+  });
+
+  it("returns 403 for unauthenticated delete request (CSRF gate runs first)", async () => {
+    const res = await supertest(app).delete("/api/admin/orders/1");
+    // CSRF middleware runs before auth, so an unauthenticated write without a
+    // CSRF token is rejected with 403 (never a raw auth error).
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("Public data exposure", () => {
   it("does not expose customer data in public API", async () => {
     const res = await supertest(app).get("/api/products");

@@ -258,6 +258,9 @@ export const adminApi = {
   editOrder(id: number, items: { productId: number; quantity: number }[]): Promise<{ order: Order }> {
     return request(`/admin/orders/${id}/edit`, { method: "PATCH", body: JSON.stringify({ items }) }, { csrf: true });
   },
+  deleteOrder(id: number): Promise<{ success: boolean; message: string }> {
+    return request(`/admin/orders/${id}`, { method: "DELETE" }, { csrf: true });
+  },
   getSettings(): Promise<{ settings: SiteSettings }> {
     return request("/admin/settings");
   },
