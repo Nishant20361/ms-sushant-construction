@@ -546,20 +546,22 @@ function ProductCard({
   product: Product;
   onAdd: (quantity: number) => void;
 }) {
-  const discount = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
+const discount = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
   const outOfStock = p.stock <= 0;
-  const unit = (p.unit || "").toLowerCase();
-  const requiresInteger = unit === "bag" || unit === "piece";
+  // Only "kg" (case-insensitive) permits decimal quantity. All other units are integer-only.
+  const isKg = (p.unit || "").trim().toLowerCase() === "kg";
   const [quantity, setQuantity] = useState(1);
 
   const handleQuantityChange = (raw: string) => {
     const parsed = Number(raw);
     if (Number.isNaN(parsed)) return;
     let q = parsed;
-    if (requiresInteger) {
-      q = Math.max(1, Math.floor(q));
+    if (isKg) {
+      // kg allows up to one decimal place
+      q = Math.max(0.1, Math.round(q * 10) / 10);
     } else {
-      q = Math.max(0.001, Math.round(q * 1000) / 1000);
+      // all other units: integer only
+      q = Math.max(1, Math.floor(q));
     }
     q = Math.min(Math.max(q, 0), p.stock);
     setQuantity(q);
@@ -619,11 +621,11 @@ function ProductCard({
           <input
             id={`qty-${p.id}`}
             type="number"
-            inputMode="decimal"
+            inputMode={isKg ? "decimal" : "numeric"}
             value={quantity}
-            min={requiresInteger ? "1" : "0.001"}
+            min={isKg ? "0.1" : "1"}
             max={p.stock}
-            step={requiresInteger ? "1" : "0.1"}
+            step={isKg ? "0.1" : "1"}
             disabled={outOfStock}
             onChange={(e) => handleQuantityChange(e.target.value)}
             className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
