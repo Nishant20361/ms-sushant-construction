@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AdminAuthProvider, useAdminAuth } from "./AdminAuthContext";
 import AdminLogin from "./AdminLogin";
+import ForgotPassword from "./ForgotPassword";
+import ResetPassword from "./ResetPassword";
 import AdminLayout from "./AdminLayout";
 import { LoadingState } from "../../components/Loading";
 import Dashboard from "./Dashboard";
@@ -29,6 +31,8 @@ export function AdminRoutes() {
     <AdminAuthProvider>
       <Routes>
         <Route path="login" element={<AdminLogin />} />
+        <Route path="forgot-password" element={<ForgotPassword />} />
+        <Route path="reset-password" element={<ResetPassword />} />
         <Route element={<Protected />}>
           <Route index element={<Dashboard />} />
           <Route path="products" element={<AdminProducts />} />

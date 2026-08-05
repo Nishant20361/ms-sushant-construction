@@ -98,3 +98,54 @@ export async function sendAdminNewOrderEmail(
   }
 }
 
+function buildPasswordResetEmailBody(resetUrl: string, expiresInMinutes: number): string {
+  const lines: string[] = [];
+  lines.push("You requested a password reset for your admin account.");
+  lines.push("");
+  lines.push(`Reset link (valid for ${expiresInMinutes} minutes):`);
+  lines.push(resetUrl);
+  lines.push("");
+  lines.push("If you did not request this, you can safely ignore this email.");
+  lines.push("Your password will not be changed unless you click the link above.");
+  lines.push("");
+  lines.push("M/S SUSHANT CONSTRUCTION");
+  return lines.join("\n");
+}
+
+/**
+ * Sends a password reset email containing a one-time reset link.
+ *
+ * NEVER sends the actual password. Unlike order emails, a silent failure here
+ * would leave the user without access, so this returns a boolean so the caller
+ * can decide how to respond. It still NEVER throws.
+ */
+export async function sendAdminPasswordResetEmail(
+  to: string,
+  resetUrl: string
+): Promise<boolean> {
+  const t = getTransporter();
+  if (!t) {
+    console.warn("[email] SMTP not configured - skipping password reset email.");
+    return false;
+  }
+  if (!to) {
+    console.warn("[email] No admin email to send password reset to.");
+    return false;
+  }
+  try {
+    const from = config.smtp.from || config.smtp.user;
+    await t.sendMail({
+      from,
+      to,
+      subject: "Admin Password Reset - M/S SUSHANT CONSTRUCTION",
+      text: buildPasswordResetEmailBody(resetUrl, 15),
+    });
+    console.log(`[email] Password reset email sent to ${to}`);
+    return true;
+  } catch (err) {
+    // Never crash the server because email failed.
+    console.error("[email] Failed to send password reset email:", err);
+    return false;
+  }
+}
+

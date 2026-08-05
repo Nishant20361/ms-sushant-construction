@@ -77,6 +77,19 @@ const mapsUrlSafe = z
     "Google Maps URL must be a valid Google Maps URL"
   );
 
+// Optional email field: accepts null/undefined/empty -> "" (cleared value),
+// but still requires a valid email format whenever a non-empty value is given.
+// This lets an admin remove an existing email and save without a validation
+// failure, while keeping email-format validation for real addresses.
+const optionalEmail = z.preprocess(
+  (v) => (v === null || v === undefined ? "" : v),
+  z
+    .string()
+    .trim()
+    .max(120)
+    .refine((v) => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "A valid email is required")
+);
+
 export const settingsSchema = z.object({
   companyName: z.string().trim().min(1).max(120),
   tagline: z.string().trim().max(200),
@@ -86,7 +99,7 @@ export const settingsSchema = z.object({
   heroBannerUrl: z.string().trim().max(500).nullable().transform((v) => v ?? ""),
   phone: z.string().trim().max(30),
   whatsappNumber: z.string().trim().max(20),
-  email: z.string().trim().max(120),
+  email: optionalEmail,
   address: z.string().trim().max(500),
   googleMapsUrl: mapsUrlSafe,
   aboutContent: z.string().trim().max(5000),
@@ -98,7 +111,7 @@ export const settingsSchema = z.object({
   businessAddress: z.string().trim().max(500).optional().default(""),
   gstNumber: z.string().trim().max(50).optional().default(""),
   businessMobile: z.string().trim().max(30).optional().default(""),
-  businessEmail: z.string().trim().max(120).optional().default(""),
+  businessEmail: optionalEmail.optional().default(""),
   businessLogoUrl: z.string().trim().max(500).nullable().transform((v) => v ?? ""),
 });
 
@@ -151,15 +164,31 @@ export const adminProfileSchema = z.object({
   lowStockThreshold: z.coerce.number().int().min(0).max(10000).default(10),
 });
 
-// ------------------------- Admin notification email -------------------
-export const adminEmailSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .email("A valid admin email is required")
-    .max(200)
-    .nullable()
-    .optional()
-    .transform((v) => (v ? v : null)),
+// ------------------------- Admin forgot/reset password -------------------
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().email("A valid email is required").max(200),
 });
 
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  newPassword: z
+    .string()
+    .min(12, "Password must be at least 12 characters")
+    .max(128, "Password too long"),
+});
+
+// ------------------------- Admin notification email -------------------
+// Accepts null/undefined/empty string -> null (disable notifications), but
+// still requires a valid email format whenever a non-empty value is given.
+export const adminEmailSchema = z.object({
+  email: z.preprocess(
+    (v) => (v === null || v === undefined || v === "" ? null : v),
+    z
+      .string()
+      .trim()
+      .email("A valid admin email is required")
+      .max(200)
+      .nullable()
+      .optional()
+  ),
+});

@@ -80,6 +80,12 @@ export default function AdminLogin() {
             </button>
           </form>
 
+          <p className="mt-3 text-center text-sm">
+            <Link to="/admin/forgot-password" className="text-brand-600 hover:underline">
+              Forgot Password?
+            </Link>
+          </p>
+
           <p className="mt-4 text-center text-xs text-slate-400">
             <Link to="/" className="text-brand-600 hover:underline">← Back to website</Link>
           </p>

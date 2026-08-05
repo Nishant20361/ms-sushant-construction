@@ -1,17 +1,25 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { HttpError } from "../../utils/httpError.js";
 import { hashPassword, verifyPassword, isStrongPassword } from "../../utils/password.js";
 import { signAdminToken } from "../../utils/token.js";
-import { adminLoginSchema, changePasswordSchema } from "../../validators/index.js";
-import { loginLimiter } from "../../middleware/rateLimit.js";
+import { adminLoginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema } from "../../validators/index.js";
+import { loginLimiter, forgotPasswordLimiter } from "../../middleware/rateLimit.js";
 import { requireAdmin } from "../../middleware/auth.js";
 import { writeAudit } from "../../middleware/audit.js";
 import { issueCsrfToken } from "../../utils/csrf.js";
+import { sendAdminPasswordResetEmail } from "../../utils/email.js";
 import { AuthenticatedRequest } from "../../types.js";
 import { Request, Response } from "express";
+
+const RESET_TOKEN_LIFETIME_MINUTES = 15;
+
+function hashResetToken(rawToken: string): string {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
 
 const router = Router();
 
@@ -117,5 +125,117 @@ router.post(
   })
 );
 
+// POST /api/admin/auth/forgot-password
+router.post(
+  "/auth/forgot-password",
+  forgotPasswordLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { email } = forgotPasswordSchema.parse(req.body);
+
+    // Find admin by email. Return generic success regardless to prevent enumeration.
+    const admin = await prisma.admin.findFirst({
+      where: { email: email.toLowerCase(), isActive: true },
+    });
+
+    if (admin) {
+      // Generate cryptographically secure random token
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      const tokenHash = hashResetToken(rawToken);
+      const expiresAt = new Date(Date.now() + RESET_TOKEN_LIFETIME_MINUTES * 60 * 1000);
+
+      // Invalidate any previous unused tokens for this admin
+      await prisma.adminPasswordResetToken.updateMany({
+        where: { adminId: admin.id, usedAt: null, expiresAt: { gt: new Date() } },
+        data: { expiresAt: new Date(0) },
+      });
+
+      // Store new token
+      await prisma.adminPasswordResetToken.create({
+        data: {
+          adminId: admin.id,
+          tokenHash,
+          expiresAt,
+        },
+      });
+
+      // Build reset link
+      const resetUrl = `${config.clientUrl}/admin/reset-password?token=${encodeURIComponent(rawToken)}`;
+
+      // Attempt to send email (never throws)
+      const sent = await sendAdminPasswordResetEmail(admin.email!, resetUrl);
+
+      await writeAudit(req as AuthenticatedRequest, {
+        action: sent ? "FORGOT_PASSWORD_EMAIL_SENT" : "FORGOT_PASSWORD_EMAIL_FAILED",
+        entity: "Admin",
+        entityId: admin.id,
+      });
+    }
+
+    // Always return the same message to prevent email enumeration
+    res.json({
+      message: "If an account with that email exists, a reset link has been sent.",
+    });
+  })
+);
+
+// POST /api/admin/auth/reset-password
+router.post(
+  "/auth/reset-password",
+  asyncHandler(async (req: Request, res: Response) => {
+    const { token, newPassword } = resetPasswordSchema.parse(req.body);
+
+    if (!isStrongPassword(newPassword)) {
+      throw new HttpError(400, "Password must be at least 12 characters.");
+    }
+
+    const tokenHash = hashResetToken(token);
+
+    // Find valid, unused token that hasn't expired
+    const tokenRecord = await prisma.adminPasswordResetToken.findFirst({
+      where: {
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (!tokenRecord) {
+      throw new HttpError(400, "Invalid or expired reset token.");
+    }
+
+    // Find admin
+    const admin = await prisma.admin.findUnique({
+      where: { id: tokenRecord.adminId, isActive: true },
+    });
+
+    if (!admin) {
+      throw new HttpError(400, "Invalid or expired reset token.");
+    }
+
+    // Hash new password and update
+    const passwordHash = await hashPassword(newPassword);
+    await prisma.admin.update({
+      where: { id: admin.id },
+      data: { passwordHash },
+    });
+
+    // Mark token as used (single-use)
+    await prisma.adminPasswordResetToken.update({
+      where: { id: tokenRecord.id },
+      data: { usedAt: new Date() },
+    });
+
+    await writeAudit(req as AuthenticatedRequest, {
+      action: "RESET_PASSWORD",
+      entity: "Admin",
+      entityId: admin.id,
+    });
+
+    res.json({ message: "Password has been reset successfully. You can now log in with your new password." });
+  })
+);
+
 export default router;
+
+
 

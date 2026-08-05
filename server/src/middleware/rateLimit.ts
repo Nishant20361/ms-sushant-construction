@@ -44,3 +44,12 @@ export const trackLimiter = rateLimit({
   message: { error: "Too many tracking requests. Please try again later." },
 });
 
+/** Strict limiter for the forgot-password endpoint. */
+export const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * minute,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many reset requests. Please try again after 15 minutes." },
+});
+

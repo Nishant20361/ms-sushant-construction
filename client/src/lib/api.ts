@@ -327,6 +327,20 @@ export const adminApi = {
       { csrf: true }
     );
   },
+  forgotPassword(email: string): Promise<{ message: string }> {
+    return request(
+      "/admin/auth/forgot-password",
+      { method: "POST", body: JSON.stringify({ email }) },
+      { csrf: true }
+    );
+  },
+  resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    return request(
+      "/admin/auth/reset-password",
+      { method: "POST", body: JSON.stringify({ token, newPassword }) },
+      { csrf: true }
+    );
+  },
   getBillTextUrl(orderId: number): string {
     return `${API_BASE}/admin/orders/${orderId}/bill/text`;
   },

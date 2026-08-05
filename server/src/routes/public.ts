@@ -125,74 +125,85 @@ router.post(
       quantity,
     }));
 
-    const order = await prisma.$transaction(async (tx) => {
-      const productIds = lineItems.map((l) => l.productId);
-      const products = await tx.product.findMany({
-        where: { id: { in: productIds } },
-        include: { category: true },
-      });
-
-      if (products.length !== productIds.length) {
-        throw new HttpError(400, "One or more products are no longer available.");
-      }
-
-      let subtotal = 0;
-      const orderItems = lineItems.map((li) => {
-        const product = products.find((p) => p.id === li.productId);
-        if (!product) throw new HttpError(400, "Invalid product in order.");
-        if (!product.isActive) throw new HttpError(400, `"${product.name}" is not available.`);
-        // Unit-based validation: bag and piece must be whole numbers.
-        const unit = (product.unit || "").toLowerCase();
-        const requiresInteger = unit === "bag" || unit === "piece";
-        if (requiresInteger && !Number.isInteger(li.quantity)) {
-          throw new HttpError(400, `Quantity for "${product.name}" must be a whole number (${product.unit}).`);
-        }
-        const available = Number(product.stock);
-        if (available < li.quantity) {
-          throw new HttpError(400, `Only ${available} units in stock. Please reduce quantity.`);
-        }
-        const price = Number(product.price);
-        const total = Math.round(price * li.quantity * 100) / 100;
-        subtotal += total;
-        return {
-          productId: product.id,
-          productName: product.name,
-          unit: product.unit,
-          price,
-          quantity: li.quantity,
-          total,
-        };
-      });
-
-      // Lock stock to prevent overselling.
-      for (const li of lineItems) {
-        await tx.product.updateMany({
-          where: { id: li.productId, stock: { gte: li.quantity } },
-          data: { stock: { decrement: li.quantity } },
+const order = await prisma.$transaction(
+      async (tx) => {
+        const productIds = lineItems.map((l) => l.productId);
+        const products = await tx.product.findMany({
+          where: { id: { in: productIds } },
+          include: { category: true },
         });
-      }
-      // Re-verify after decrement (in case of race).
-      const after = await tx.product.findMany({ where: { id: { in: productIds } } });
-      const soldOut = after.filter((p) => p.stock < 0);
-      if (soldOut.length) {
-        throw new HttpError(409, "Sorry, stock changed while placing the order. Please retry.");
-      }
 
-      subtotal = Math.round(subtotal * 100) / 100;
+        if (products.length !== productIds.length) {
+          throw new HttpError(400, "One or more products are no longer available.");
+        }
 
-return tx.order.create({
-        data: {
-          orderNumber: generateOrderNumber(),
-          customerName: body.customerName,
-          customerMobile: mobile,
-          deliveryAddress: body.deliveryAddress || null,
-          notes: body.notes || null,
-          subtotal,
-          items: { create: orderItems },
-        },
-        include: { items: true },
-      });
-    });
+        let subtotal = 0;
+        const orderItems = lineItems.map((li) => {
+          const product = products.find((p) => p.id === li.productId);
+          if (!product) throw new HttpError(400, "Invalid product in order.");
+          if (!product.isActive) throw new HttpError(400, `"${product.name}" is not available.`);
+          // Unit-based validation: bag and piece must be whole numbers.
+          const unit = (product.unit || "").toLowerCase();
+          const requiresInteger = unit === "bag" || unit === "piece";
+          if (requiresInteger && !Number.isInteger(li.quantity)) {
+            throw new HttpError(400, `Quantity for "${product.name}" must be a whole number (${product.unit}).`);
+          }
+          const available = Number(product.stock);
+          if (available < li.quantity) {
+            throw new HttpError(400, `Only ${available} units in stock. Please reduce quantity.`);
+          }
+          const price = Number(product.price);
+          const total = Math.round(price * li.quantity * 100) / 100;
+          subtotal += total;
+          return {
+            productId: product.id,
+            productName: product.name,
+            unit: product.unit,
+            price,
+            quantity: li.quantity,
+            total,
+          };
+        });
+
+        // Lock stock to prevent overselling.
+        for (const li of lineItems) {
+          await tx.product.updateMany({
+            where: { id: li.productId, stock: { gte: li.quantity } },
+            data: { stock: { decrement: li.quantity } },
+          });
+        }
+        // Re-verify after decrement (in case of race).
+        const after = await tx.product.findMany({ where: { id: { in: productIds } } });
+        const soldOut = after.filter((p) => p.stock < 0);
+        if (soldOut.length) {
+          throw new HttpError(409, "Sorry, stock changed while placing the order. Please retry.");
+        }
+
+        subtotal = Math.round(subtotal * 100) / 100;
+
+        return tx.order.create({
+          data: {
+            orderNumber: generateOrderNumber(),
+            customerName: body.customerName,
+            customerMobile: mobile,
+            deliveryAddress: body.deliveryAddress || null,
+            notes: body.notes || null,
+            subtotal,
+            items: { create: orderItems },
+          },
+          include: { items: true },
+        });
+      },
+      {
+        // Order placement does several sequential DB writes (fetch products,
+        // decrement stock per line item, re-verify, create order). The default
+        // interactive-transaction timeout of 5000ms can be exceeded under load
+        // or when the DB is slow, causing "Transaction already closed" errors.
+        // Raise it to a safe value (matches the admin edit-order transaction).
+        maxWait: 10000,
+        timeout: 30000,
+      }
+    );
 
     // ----- Fire-and-forget: notify the admin (email + in-app bell) -----
     // The order is already committed; email/notification failures must never
