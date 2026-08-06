@@ -4,15 +4,15 @@ import { prisma } from "../../db.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { parseIntegerParam } from "../../utils/request.js";
 import { HttpError } from "../../utils/httpError.js";
-import { orderStatusSchema } from "../../validators/index.js";
+import { orderStatusSchema, receivePaymentSchema, receiveCustomerPaymentSchema } from "../../validators/index.js";
 import { requireAdmin } from "../../middleware/auth.js";
 import { writeAudit } from "../../middleware/audit.js";
-import { serializeBill, serializeOrder } from "../../utils/serializer.js";
+import { serializeBill, serializeOrder, serializeOrderPayment } from "../../utils/serializer.js";
 import { AuthenticatedRequest } from "../../types.js";
 
 const router = Router();
 
-// GET /api/admin/orders?search=&status=&from=&to=&page=&limit=
+// GET /api/admin/orders?search=&status=&paymentStatus=&from=&to=&page=&limit=
 router.get(
   "/orders",
   requireAdmin,
@@ -22,6 +22,7 @@ router.get(
       status,
       from,
       to,
+      paymentStatus,
       page = "1",
       limit = "20",
     } = req.query as Record<string, string>;
@@ -34,6 +35,12 @@ router.get(
         { customerMobile: { contains: search } },
       ];
     }
+    // Payment status filter (foundation). The final status is derived from
+    // payments + bill, so we fetch the summary and post-filter in JS when a
+    // filter is requested. All orders are returned when no filter is passed.
+    const filterPaymentStatus = ["PAID", "PARTIALLY_PAID", "DUE"].includes(paymentStatus ?? "")
+      ? paymentStatus
+      : undefined;
     // Date range filter (from/to) — both optional; from is start-of-day,
     // to is end-of-day inclusive.
     if (from || to) {
@@ -55,18 +62,390 @@ router.get(
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
-        include: { items: true },
+        include: { items: true, bill: true, payments: true },
         orderBy: { createdAt: "desc" },
         skip,
         take: Number(limit),
       }),
       prisma.order.count({ where }),
     ]);
+    // Payment status is derived (not stored), so post-filter when requested.
+    let serialized = orders.map(serializeOrder);
+    if (filterPaymentStatus) {
+      serialized = serialized.filter((o: any) => o.paymentStatus === filterPaymentStatus);
+    }
     res.json({
-      orders: orders.map(serializeOrder),
+      orders: serialized,
       total,
       page: Number(page),
       pages: Math.max(1, Math.ceil(total / Number(limit))),
+    });
+  })
+);
+
+// GET /api/admin/orders/due-snapshot?search=&from=&to=&dateRange=&paymentStatus=
+// Customer due summary. Groups all non-cancelled orders by customer mobile and
+// returns each customer's totals (orders, purchase, paid, due) plus their
+// individually due orders. Supports search by name/mobile/order number, date
+// range filters (today/week/month/custom), and payment status filter.
+// MUST be declared before /orders/:id so it is not shadowed by the
+// parameterised route.
+router.get(
+  "/orders/due-snapshot",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { search, from, to, dateRange, paymentStatus } = req.query as Record<string, string>;
+
+    const where: any = { status: { not: "CANCELLED" } };
+
+    // Search by customer name, mobile, or order number.
+    if (search?.trim()) {
+      const term = search.trim();
+      where.OR = [
+        { customerName: { contains: term } },
+        { customerMobile: { contains: term } },
+        { orderNumber: { contains: term } },
+      ];
+    }
+
+    // Date filter: today / week / month (dateRange) OR a custom from/to range.
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    if (dateRange) {
+      if (dateRange === "today") {
+        where.createdAt = { gte: startOfToday, lte: endOfToday };
+      } else if (dateRange === "week") {
+        where.createdAt = { gte: new Date(startOfToday.getTime() - 6 * 86400000), lte: endOfToday };
+      } else if (dateRange === "month") {
+        where.createdAt = { gte: new Date(now.getFullYear(), now.getMonth(), 1), lte: endOfToday };
+      }
+    } else if (from || to) {
+      const dateFilter: any = {};
+      if (from) {
+        const d = new Date(from);
+        if (!Number.isNaN(d.getTime())) dateFilter.gte = d;
+      }
+      if (to) {
+        const d = new Date(to);
+        if (!Number.isNaN(d.getTime())) {
+          d.setHours(23, 59, 59, 999);
+          dateFilter.lte = d;
+        }
+      }
+      if (Object.keys(dateFilter).length) where.createdAt = dateFilter;
+    }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: { bill: true, payments: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const byMobile = new Map<string, any>();
+    for (const o of orders) {
+      const finalAmount = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
+      const cash = (o.payments ?? [])
+        .filter((p: any) => p.paymentMode === "CASH")
+        .reduce((s: number, p: any) => s + Number(p.amount), 0);
+      const online = (o.payments ?? [])
+        .filter((p: any) => p.paymentMode === "ONLINE")
+        .reduce((s: number, p: any) => s + Number(p.amount), 0);
+      const paid = Math.round((cash + online) * 100) / 100;
+      const due = Math.max(0, Math.round((finalAmount - paid) * 100) / 100);
+      const orderPaymentStatus = paid <= 0 ? "DUE" : due <= 0 ? "PAID" : "PARTIALLY_PAID";
+
+      // Apply the payment status filter at the order level.
+      if (
+        paymentStatus &&
+        ["PAID", "PARTIALLY_PAID", "DUE"].includes(paymentStatus) &&
+        orderPaymentStatus !== paymentStatus
+      ) {
+        continue;
+      }
+
+      const entry = {
+        id: o.id,
+        orderNumber: o.orderNumber,
+        finalAmount: Math.round(finalAmount * 100) / 100,
+        paid,
+        due,
+        paymentStatus: orderPaymentStatus,
+        createdAt: o.createdAt,
+      };
+
+      const customer = byMobile.get(o.customerMobile);
+      if (customer) {
+        customer.totalOrders += 1;
+        customer.totalPurchase += Math.round(finalAmount * 100) / 100;
+        customer.totalPaid += paid;
+        customer.totalDue += due;
+        customer.orders.push(entry);
+      } else {
+        byMobile.set(o.customerMobile, {
+          customerName: o.customerName,
+          customerMobile: o.customerMobile,
+          totalOrders: 1,
+          totalPurchase: Math.round(finalAmount * 100) / 100,
+          totalPaid: paid,
+          totalDue: due,
+          orders: [entry],
+        });
+      }
+    }
+
+    const customers = Array.from(byMobile.values()).map((c) => ({
+      customerName: c.customerName,
+      customerMobile: c.customerMobile,
+      totalOrders: c.totalOrders,
+      totalPurchase: Math.round(c.totalPurchase * 100) / 100,
+      totalPaid: Math.round(c.totalPaid * 100) / 100,
+      totalDue: Math.round(c.totalDue * 100) / 100,
+      orders: c.orders,
+    }));
+
+    // When a payment status filter is applied, only keep customers with
+    // matching outstanding balances (remove fully-paid customers for DUE/partial).
+    let filtered = customers;
+    if (paymentStatus === "DUE") {
+      filtered = customers.filter((c) => c.totalDue > 0);
+    }
+    filtered = filtered.sort((a, b) => b.totalDue - a.totalDue);
+
+    res.json({ customers: filtered });
+  })
+);
+
+// GET /api/admin/orders/customer/:mobile
+// Customer due detail: all non-cancelled orders for a customer with cash/online
+// breakdown + full payment history (with previous due / remaining due running
+// balance). MUST be declared before /orders/:id so it is not shadowed.
+router.get(
+  "/orders/customer/:mobile",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const mobile = req.params.mobile;
+    if (!mobile) throw new HttpError(400, "Customer mobile is required");
+
+    const orders = await prisma.order.findMany({
+      where: { customerMobile: mobile, status: { not: "CANCELLED" } },
+      include: { items: true, bill: true, payments: { orderBy: { paymentDate: "asc" } } },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (orders.length === 0) {
+      throw new HttpError(404, "Customer not found or has no orders");
+    }
+
+    const detailOrders = orders.map((o) => {
+      const finalAmount = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
+      const cash = (o.payments ?? [])
+        .filter((p: any) => p.paymentMode === "CASH")
+        .reduce((s: number, p: any) => s + Number(p.amount), 0);
+      const online = (o.payments ?? [])
+        .filter((p: any) => p.paymentMode === "ONLINE")
+        .reduce((s: number, p: any) => s + Number(p.amount), 0);
+      const paid = Math.round((cash + online) * 100) / 100;
+      const due = Math.max(0, Math.round((finalAmount - paid) * 100) / 100);
+      return {
+        id: o.id,
+        orderNumber: o.orderNumber,
+        createdAt: o.createdAt,
+        finalAmount: Math.round(finalAmount * 100) / 100,
+        cashPaid: Math.round(cash * 100) / 100,
+        onlinePaid: Math.round(online * 100) / 100,
+        paid,
+        due,
+        paymentStatus: paid <= 0 ? "DUE" : due <= 0 ? "PAID" : "PARTIALLY_PAID",
+      };
+    });
+
+    // Build a running payment history across all the customer's orders,
+    // preserving chronology. For each payment we track the previous due vs
+    // remaining due (approximated by considering the customer's total balance
+    // at that point in time, oldest-first).
+    const allPayments = orders.flatMap((o) =>
+      (o.payments ?? []).map((p: any) => ({
+        ...p,
+        orderNumber: o.orderNumber,
+        orderId: o.id,
+      }))
+    );
+    allPayments.sort((a: any, b: any) => {
+      const d = new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime();
+      if (d !== 0) return d;
+      return a.id - b.id;
+    });
+
+    // Recompute the running total due by replaying payments chronologically.
+    const orderDues = new Map<number, { final: number; paid: number }>();
+    for (const o of orders) {
+      const finalAmount = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
+      orderDues.set(o.id, { final: finalAmount, paid: 0 });
+    }
+    let runningTotalDue = orderDues.size
+      ? Array.from(orderDues.values()).reduce((s, v) => s + v.final, 0)
+      : 0;
+const history = allPayments.map((p: any) => {
+      const prevDue = Math.round(runningTotalDue * 100) / 100;
+      const od = orderDues.get(p.orderId)!;
+      od.paid += Number(p.amount);
+      // Recompute the running total due after applying this payment.
+      runningTotalDue = Array.from(orderDues.values()).reduce(
+        (s, v) => s + Math.max(0, v.final - v.paid),
+        0
+      );
+      return {
+        id: p.id,
+        orderNumber: p.orderNumber,
+        amount: Number(p.amount),
+        paymentMode: p.paymentMode,
+        paymentDate: p.paymentDate,
+        notes: p.notes ?? null,
+        previousDue: prevDue,
+        remainingDue: Math.round(runningTotalDue * 100) / 100,
+      };
+    });
+    history.reverse(); // newest first for display
+
+    const totalPurchase = detailOrders.reduce((s, o) => s + o.finalAmount, 0);
+    const totalPaid = detailOrders.reduce((s, o) => s + o.paid, 0);
+    const totalDue = detailOrders.reduce((s, o) => s + o.due, 0);
+
+    res.json({
+      customer: {
+        customerName: orders[0].customerName,
+        customerMobile: orders[0].customerMobile,
+        totalOrders: orders.length,
+        totalPurchase: Math.round(totalPurchase * 100) / 100,
+        totalPaid: Math.round(totalPaid * 100) / 100,
+        totalDue: Math.round(totalDue * 100) / 100,
+      },
+      orders: detailOrders,
+      paymentHistory: history,
+    });
+  })
+);
+
+// POST /api/admin/orders/customer/:mobile/payments
+// Receive a payment against a CUSTOMER's outstanding balance. The amount is
+// allocated to the customer's due orders oldest-first (FIFO). Each allocation
+// creates a fresh OrderPayment record — old records are NEVER modified.
+// MUST be declared before /orders/:id.
+router.post(
+  "/orders/customer/:mobile/payments",
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const mobile = req.params.mobile;
+    if (!mobile) throw new HttpError(400, "Customer mobile is required");
+    const body = receiveCustomerPaymentSchema.parse(req.body);
+
+    const orders = await prisma.order.findMany({
+      where: { customerMobile: mobile, status: { not: "CANCELLED" } },
+      include: { bill: true, payments: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (orders.length === 0) {
+      throw new HttpError(404, "Customer not found or has no orders");
+    }
+
+    // Compute each order's remaining due.
+    const dues = orders.map((o) => {
+      const finalAmount = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
+      const paid = (o.payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+      return {
+        orderId: o.id,
+        orderNumber: o.orderNumber,
+        due: Math.max(0, Math.round((finalAmount - paid) * 100) / 100),
+      };
+    });
+    const totalDue = Math.round(dues.reduce((s, d) => s + d.due, 0) * 100) / 100;
+
+    if (Math.round(body.amount * 100) / 100 > totalDue + 0.001) {
+      throw new HttpError(
+        400,
+        `Payment of ₹${body.amount} exceeds the customer's total outstanding due of ₹${totalDue}.`
+      );
+    }
+
+    const paymentDate = body.paymentDate ? new Date(body.paymentDate) : new Date();
+    const paymentMode = body.paymentMode;
+    const notes = body.notes?.trim() || null;
+
+    // FIFO allocation: fill the oldest due order first, carry the remainder
+    // to the next. Each allocation becomes its own OrderPayment record.
+    let remaining = Math.round(body.amount * 100) / 100;
+    const createdPayments: any[] = [];
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      for (const d of dues) {
+        if (remaining <= 0) break;
+        if (d.due <= 0) continue;
+        const alloc = Math.min(d.due, remaining);
+        const payment = await tx.orderPayment.create({
+          data: {
+            orderId: d.orderId,
+            amount: alloc,
+            paymentMode,
+            paymentDate,
+            notes,
+          },
+        });
+        createdPayments.push(payment);
+        remaining = Math.round((remaining - alloc) * 100) / 100;
+      }
+    });
+
+    await writeAudit(req, {
+      action: "CUSTOMER_PAYMENT",
+      entity: "Customer",
+      entityId: mobile,
+      details: `Received ${paymentMode} ₹${body.amount} for customer ${mobile} across ${createdPayments.length} order(s)`,
+    });
+
+    // Re-fetch the customer's updated detail.
+    const updatedOrders = await prisma.order.findMany({
+      where: { customerMobile: mobile, status: { not: "CANCELLED" } },
+      include: { items: true, bill: true, payments: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const detailOrders = updatedOrders.map((o) => {
+      const finalAmount = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
+      const cash = (o.payments ?? [])
+        .filter((p: any) => p.paymentMode === "CASH")
+        .reduce((s: number, p: any) => s + Number(p.amount), 0);
+      const online = (o.payments ?? [])
+        .filter((p: any) => p.paymentMode === "ONLINE")
+        .reduce((s: number, p: any) => s + Number(p.amount), 0);
+      const paid = Math.round((cash + online) * 100) / 100;
+      const due = Math.max(0, Math.round((finalAmount - paid) * 100) / 100);
+      return {
+        id: o.id,
+        orderNumber: o.orderNumber,
+        createdAt: o.createdAt,
+        finalAmount: Math.round(finalAmount * 100) / 100,
+        cashPaid: Math.round(cash * 100) / 100,
+        onlinePaid: Math.round(online * 100) / 100,
+        paid,
+        due,
+        paymentStatus: paid <= 0 ? "DUE" : due <= 0 ? "PAID" : "PARTIALLY_PAID",
+      };
+    });
+const totalPurchase = detailOrders.reduce((s, o) => s + o.finalAmount, 0);
+    const totalPaid = detailOrders.reduce((s, o) => s + o.paid, 0);
+    const newTotalDue = detailOrders.reduce((s, o) => s + o.due, 0);
+
+    res.status(201).json({
+      message: "Payment recorded successfully",
+      payments: createdPayments.map((p) => serializeOrderPayment(p)),
+      customer: {
+        customerName: updatedOrders[0].customerName,
+        customerMobile: updatedOrders[0].customerMobile,
+        totalOrders: updatedOrders.length,
+        totalPurchase: Math.round(totalPurchase * 100) / 100,
+        totalPaid: Math.round(totalPaid * 100) / 100,
+        totalDue: Math.round(newTotalDue * 100) / 100,
+      },
+      orders: detailOrders,
     });
   })
 );
@@ -77,7 +456,10 @@ router.get(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const id = parseIntegerParam(req.params.id, "order id");
-    const order = await prisma.order.findUnique({ where: { id }, include: { items: true, bill: true } });
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true, bill: true, payments: true },
+    });
     if (!order) throw new HttpError(404, "Order not found");
     res.json({ order: serializeOrder(order), bill: serializeBill(order.bill) });
   })
@@ -111,7 +493,10 @@ router.delete(
         if (existing.bill) {
           await tx.bill.deleteMany({ where: { orderId: id } });
         }
-        // 3) Finally delete the order itself.
+        // 3) Delete related payments (OrderPayment cascades on order delete,
+        //    but we delete them explicitly for clarity and test determinism).
+        await tx.orderPayment.deleteMany({ where: { orderId: id } });
+        // 4) Finally delete the order itself.
         await tx.order.delete({ where: { id } });
       });
     } catch {
@@ -185,6 +570,64 @@ router.patch(
       details: `${order.orderNumber} -> ${order.status}`,
     });
     res.json({ order: serializeOrder(order) });
+  })
+);
+
+// POST /api/admin/orders/:id/payments
+// Admin receives a pending payment from the customer for an existing order.
+// A new OrderPayment record is created (history is NEVER deleted). The due
+// amount is reduced automatically because it is always derived from the sum
+// of payments vs the order's final payable amount.
+router.post(
+  "/orders/:id/payments",
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const id = parseIntegerParam(req.params.id, "order id");
+    const body = receivePaymentSchema.parse(req.body);
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { bill: true, payments: true },
+    });
+    if (!order) throw new HttpError(404, "Order not found");
+
+    const finalAmount = order.bill ? Number(order.bill.finalAmount) : Number(order.subtotal);
+    const paidSoFar = order.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const due = Math.max(0, Math.round((finalAmount - paidSoFar) * 100) / 100);
+
+    if (body.amount > due + 0.001) {
+      throw new HttpError(
+        400,
+        `Payment of ₹${body.amount} exceeds the remaining due of ₹${due} for this order.`
+      );
+    }
+
+const payment = await prisma.orderPayment.create({
+      data: {
+        orderId: id,
+        amount: Math.round(body.amount * 100) / 100,
+        paymentMode: body.paymentMode,
+        paymentDate: body.paymentDate ? new Date(body.paymentDate) : new Date(),
+        notes: body.notes?.trim() || null,
+      },
+    });
+
+    await writeAudit(req, {
+      action: "ORDER_PAYMENT",
+      entity: "Order",
+      entityId: id,
+      details: `${order.orderNumber} received ${body.paymentMode} ₹${body.amount}`,
+    });
+
+    const updated = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true, bill: true, payments: true },
+    });
+    res.status(201).json({
+      message: "Payment recorded successfully",
+      payment: serializeOrderPayment(payment),
+      order: serializeOrder(updated),
+    });
   })
 );
 

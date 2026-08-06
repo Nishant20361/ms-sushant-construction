@@ -33,6 +33,12 @@ export interface BillData {
   subtotal: number;
   discount: number;
   finalAmount: number;
+  // Payment details (added by the payment management system)
+  cashPaid: number;
+  onlinePaid: number;
+  totalPaid: number;
+  due: number;
+  paymentStatus: "PAID" | "PARTIALLY_PAID" | "DUE";
   // Business invoice details
   businessName: string;
   businessAddress: string;
@@ -98,6 +104,18 @@ function fmtDateShort(d: string | Date): string {
   });
 }
 
+function paymentStatusLabel(status: string): string {
+  switch (status) {
+    case "PAID":
+      return "PAID";
+    case "PARTIALLY_PAID":
+      return "PARTIALLY PAID";
+    case "DUE":
+    default:
+      return "DUE";
+  }
+}
+
 /**
  * WhatsApp-friendly bill text (copy/paste format).
  */
@@ -138,7 +156,15 @@ export function buildBillText(bill: BillData): string {
   if (bill.discount > 0) {
     lines.push(`Discount: -${fmtINR(bill.discount)}`);
   }
-  lines.push(`Final Amount: ${fmtINR(bill.finalAmount)}`);
+  lines.push(`Final Amount (Total): ${fmtINR(bill.finalAmount)}`);
+  lines.push("");
+  lines.push("Payment Details:");
+  lines.push(`  Cash Received: ${fmtINR(bill.cashPaid)}`);
+  lines.push(`  Online Received: ${fmtINR(bill.onlinePaid)}`);
+  lines.push(`  Payment Status: ${paymentStatusLabel(bill.paymentStatus)}`);
+  if (bill.due > 0) {
+    lines.push(`  Remaining Due: ${fmtINR(bill.due)}`);
+  }
   lines.push("");
   lines.push("Thank you 🙏");
   lines.push(`${bizName}`);
@@ -180,6 +206,21 @@ export function buildBillHtml(bill: BillData): string {
         </tr>`
       : "";
 
+  const dueRow =
+    bill.due > 0
+      ? `<tr class="due">
+          <td colspan="3">Remaining Due</td>
+          <td class="num">${fmtINR(bill.due)}</td>
+        </tr>`
+      : "";
+
+  const paymentStatusBadge =
+    bill.paymentStatus === "PAID"
+      ? `<span class="pstatus paid">PAID</span>`
+      : bill.paymentStatus === "DUE"
+      ? `<span class="pstatus due">DUE</span>`
+      : `<span class="pstatus partial">PARTIALLY PAID</span>`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -210,6 +251,16 @@ export function buildBillHtml(bill: BillData): string {
   .totals p { margin: 4px 0; font-size: 14px; }
   .totals .grand { font-size: 18px; font-weight: 700; color: #0f766e; margin-top: 6px; }
   .discount td { color: #b91c1c; font-weight: 600; }
+  .due td { color: #b45309; font-weight: 700; }
+  .payment-box { margin: 0 24px 20px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+  .payment-box .head { background: #f1f5f9; padding: 10px 16px; font-weight: 700; color: #334155; text-transform: uppercase; font-size: 12px; letter-spacing: 0.4px; }
+  .payment-box .row { display: flex; justify-content: space-between; padding: 8px 16px; font-size: 13px; border-top: 1px solid #f1f5f9; }
+  .payment-box .row span.label { color: #64748b; }
+  .payment-box .row span.val { font-weight: 600; color: #0f172a; }
+  .pstatus { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .pstatus.paid { background: #dcfce7; color: #15803d; }
+  .pstatus.due { background: #fee2e2; color: #b91c1c; }
+  .pstatus.partial { background: #fef3c7; color: #b45309; }
   .footer { padding: 20px 24px; text-align: center; color: #64748b; font-size: 13px; border-top: 1px solid #e2e8f0; }
   .footer .tagline { font-weight: 600; color: #334155; margin-top: 6px; }
   @media print {
@@ -260,7 +311,7 @@ export function buildBillHtml(bill: BillData): string {
       </div>
       <div>
         <p class="label">Status</p>
-        <p>${bill.status}</p>
+        <p>${bill.status} · ${paymentStatusBadge}</p>
         ${
           bill.deliveryAddress
             ? `<p class="label">Delivery Address</p><p>${bill.deliveryAddress}</p>`
@@ -287,6 +338,27 @@ export function buildBillHtml(bill: BillData): string {
       <p>Subtotal: <strong>${fmtINR(bill.subtotal)}</strong></p>
       ${discountRow}
       <p class="grand">Final Amount: ${fmtINR(bill.finalAmount)}</p>
+    </div>
+
+    <div class="payment-box">
+      <div class="head">Payment Details</div>
+      <div class="row">
+        <span class="label">Total Amount</span>
+        <span class="val">${fmtINR(bill.finalAmount)}</span>
+      </div>
+      <div class="row">
+        <span class="label">Cash Received</span>
+        <span class="val">${fmtINR(bill.cashPaid)}</span>
+      </div>
+      <div class="row">
+        <span class="label">Online Received</span>
+        <span class="val">${fmtINR(bill.onlinePaid)}</span>
+      </div>
+      <div class="row">
+        <span class="label">Payment Status</span>
+        <span class="val">${paymentStatusBadge}</span>
+      </div>
+      ${dueRow}
     </div>
 
     <div class="footer">
@@ -454,4 +526,3 @@ export async function buildBillPdf(bill: BillData): Promise<Buffer> {
     await page.close().catch(() => undefined);
   }
 }
-

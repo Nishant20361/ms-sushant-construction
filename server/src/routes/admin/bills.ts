@@ -12,11 +12,11 @@ import { AuthenticatedRequest } from "../../types.js";
 
 const router = Router();
 
-/** Load an order with items + bill (404 if missing). */
+/** Load an order with items + bill + payments (404 if missing). */
 async function loadOrderWithBill(id: number) {
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { items: true, bill: true },
+    include: { items: true, bill: true, payments: true },
   });
   if (!order) throw new HttpError(404, "Order not found");
   return order;
@@ -27,6 +27,19 @@ async function toBillData(order: any, bill: any): Promise<BillData> {
   // Load business settings from the database
 const settings = await prisma.siteSetting.findFirst();
   const biz = (settings ?? {}) as any;
+
+  const finalAmount = bill ? Number(bill.finalAmount) : Number(order.subtotal);
+  const payments = order.payments ?? [];
+  const cashPaid = payments
+    .filter((p: any) => p.paymentMode === "CASH")
+    .reduce((s: number, p: any) => s + Number(p.amount), 0);
+  const onlinePaid = payments
+    .filter((p: any) => p.paymentMode === "ONLINE")
+    .reduce((s: number, p: any) => s + Number(p.amount), 0);
+  const totalPaid = Math.round((cashPaid + onlinePaid) * 100) / 100;
+  const due = Math.max(0, Math.round((finalAmount - totalPaid) * 100) / 100);
+  const paymentStatus: "PAID" | "PARTIALLY_PAID" | "DUE" =
+    totalPaid <= 0 ? "DUE" : due <= 0 ? "PAID" : "PARTIALLY_PAID";
 
   return {
     companyName: settings?.companyName || "M/S Sushant Construction",
@@ -46,7 +59,13 @@ const settings = await prisma.siteSetting.findFirst();
     })),
     subtotal: Number(order.subtotal),
     discount: bill ? Number(bill.discount) : 0,
-    finalAmount: bill ? Number(bill.finalAmount) : Number(order.subtotal),
+    finalAmount,
+    // Payment details
+    cashPaid: Math.round(cashPaid * 100) / 100,
+    onlinePaid: Math.round(onlinePaid * 100) / 100,
+    totalPaid,
+    due,
+    paymentStatus,
     // Business invoice details from settings
     businessName: biz.businessName || "",
     businessAddress: biz.businessAddress || "",

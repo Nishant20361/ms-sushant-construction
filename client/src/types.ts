@@ -80,6 +80,20 @@ export type OrderStatus =
   | "DELIVERED"
   | "CANCELLED";
 
+export type PaymentMode = "CASH" | "ONLINE";
+export type PaymentStatus = "PAID" | "PARTIALLY_PAID" | "DUE";
+
+export interface OrderPayment {
+  id: number;
+  orderId: number;
+  amount: number;
+  paymentMode: PaymentMode;
+  paymentDate: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Order {
   id: number;
   orderNumber: string;
@@ -88,6 +102,7 @@ export interface Order {
   deliveryAddress: string | null;
   notes: string | null;
   subtotal: number;
+  finalAmount: number;
   status: OrderStatus;
   items: {
     id: number;
@@ -98,8 +113,70 @@ export interface Order {
     quantity: number;
     total: number;
   }[];
+  payments: OrderPayment[];
+  cashTotal: number;
+  onlineTotal: number;
+  paidTotal: number;
+  due: number;
+  paymentStatus: PaymentStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DueOrderEntry {
+  id: number;
+  orderNumber: string;
+  finalAmount: number;
+  paid: number;
+  due: number;
+  paymentStatus: PaymentStatus;
+  createdAt: string;
+}
+
+export interface CustomerDue {
+  customerName: string;
+  customerMobile: string;
+  totalOrders: number;
+  totalPurchase: number;
+  totalPaid: number;
+  totalDue: number;
+  orders: DueOrderEntry[];
+}
+
+export interface CustomerOrderDetail {
+  id: number;
+  orderNumber: string;
+  createdAt: string;
+  finalAmount: number;
+  cashPaid: number;
+  onlinePaid: number;
+  paid: number;
+  due: number;
+  paymentStatus: PaymentStatus;
+}
+
+export interface PaymentHistoryEntry {
+  id: number;
+  orderNumber: string;
+  amount: number;
+  paymentMode: PaymentMode;
+  paymentDate: string;
+  notes: string | null;
+  previousDue: number;
+  remainingDue: number;
+}
+
+export interface CustomerDetail {
+  customer: {
+    customerName: string;
+    customerMobile: string;
+    totalOrders: number;
+    totalPurchase: number;
+    totalPaid: number;
+    totalDue: number;
+  };
+  orders: CustomerOrderDetail[];
+  paymentHistory: PaymentHistoryEntry[];
 }
 
 export interface DashboardStats {
@@ -113,7 +190,11 @@ export interface DashboardStats {
     outForDeliveryOrders: number;
     deliveredOrders: number;
     cancelledOrders: number;
-    totalRevenue: number;
+totalRevenue: number;
+    totalCollected: number;
+    totalCashCollected: number;
+    totalOnlineCollected: number;
+    totalDue: number;
     lowStockCount: number;
     lowStockThreshold: number;
   };
@@ -192,4 +273,3 @@ export interface ApiError {
   error: string;
   details?: { path: string; message: string }[];
 }
-

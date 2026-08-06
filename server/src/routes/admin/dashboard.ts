@@ -27,7 +27,10 @@ router.get(
       outForDeliveryOrders,
       deliveredOrders,
       cancelledOrders,
-      revenueAgg,
+revenueAgg,
+      paymentsAgg,
+      cashAgg,
+      onlineAgg,
       recentOrders,
       lowStock,
     ] = await Promise.all([
@@ -44,6 +47,20 @@ router.get(
         _sum: { subtotal: true },
         where: { status: { not: "CANCELLED" } },
       }),
+// Total collected = sum of all payments across non-cancelled orders,
+      // split by cash vs online.
+      prisma.orderPayment.aggregate({
+        _sum: { amount: true },
+        where: { order: { status: { not: "CANCELLED" } } },
+      }),
+      prisma.orderPayment.aggregate({
+        _sum: { amount: true },
+        where: { paymentMode: "CASH", order: { status: { not: "CANCELLED" } } },
+      }),
+      prisma.orderPayment.aggregate({
+        _sum: { amount: true },
+        where: { paymentMode: "ONLINE", order: { status: { not: "CANCELLED" } } },
+      }),
       prisma.order.findMany({ orderBy: { createdAt: "desc" }, take: 5 }),
       prisma.product.findMany({
         where: { stock: { lte: threshold }, isActive: true },
@@ -52,6 +69,23 @@ router.get(
         include: { category: true, images: { take: 1 } },
       }),
     ]);
+
+    // Total due = sum of (final payable - collected) across all non-cancelled
+    // orders. This is a lightweight foundation for customer due management.
+    const dueOrders = await prisma.order.findMany({
+      where: { status: { not: "CANCELLED" } },
+      include: { bill: true, payments: true },
+    });
+    let totalDue = 0;
+    for (const o of dueOrders) {
+      const final = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
+      const paid = (o.payments ?? []).reduce(
+        (s: number, p: any) => s + Number(p.amount),
+        0
+      );
+      totalDue += Math.max(0, Math.round((final - paid) * 100) / 100);
+    }
+    totalDue = Math.round(totalDue * 100) / 100;
 
     res.json({
       stats: {
@@ -64,7 +98,11 @@ router.get(
         outForDeliveryOrders,
         deliveredOrders,
         cancelledOrders,
-        totalRevenue: revenueAgg._sum.subtotal ?? 0,
+totalRevenue: revenueAgg._sum.subtotal ?? 0,
+        totalCollected: paymentsAgg._sum.amount ?? 0,
+        totalCashCollected: cashAgg._sum.amount ?? 0,
+        totalOnlineCollected: onlineAgg._sum.amount ?? 0,
+        totalDue,
         lowStockCount: lowStock.length,
         lowStockThreshold: threshold,
       },
@@ -88,4 +126,3 @@ router.get(
 );
 
 export default router;
-

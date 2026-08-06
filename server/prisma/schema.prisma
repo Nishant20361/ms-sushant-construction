@@ -110,10 +110,27 @@ model Order {
   updatedAt       DateTime    @updatedAt
   bill            Bill?
   items           OrderItem[]
+  payments        OrderPayment[]
 
   @@index([status])
   @@index([createdAt])
   @@index([customerMobile])
+}
+
+model OrderPayment {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  amount      Float
+  paymentMode String   @default("CASH") // "CASH" | "ONLINE"
+  paymentDate DateTime @default(now())
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([paymentMode])
+  @@index([paymentDate])
 }
 
 model Bill {

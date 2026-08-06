@@ -10,7 +10,8 @@ const NAV_ITEMS = [
   { to: "/admin/products", label: "Products", icon: "🧱" },
   { to: "/admin/categories", label: "Categories", icon: "🗂️" },
   { to: "/admin/orders", label: "Orders", icon: "📦" },
-  { to: "/admin/billing", label: "Billing", icon: "🧾" },
+{ to: "/admin/billing", label: "Billing", icon: "🧾" },
+  { to: "/admin/dues", label: "Dues", icon: "💰" },
   { to: "/admin/settings", label: "Settings", icon: "⚙️" },
   { to: "/admin/change-password", label: "Change Password", icon: "🔑" },
 ];

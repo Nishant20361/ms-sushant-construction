@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { adminApi, ApiRequestError } from "../../lib/api";
-import type { Order } from "../../types";
+import type { Order, PaymentMode } from "../../types";
 import { formatINR, formatDate } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { useToast } from "../../components/Toast";
@@ -15,13 +15,20 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: "bg-red-100 text-red-700",
 };
 
+const PAYMENT_STATUS_STYLES: Record<string, string> = {
+  PAID: "bg-green-100 text-green-700",
+  PARTIALLY_PAID: "bg-amber-100 text-amber-700",
+  DUE: "bg-red-100 text-red-700",
+};
+
 export default function AdminOrders() {
   const { success, error } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-const [search, setSearch] = useState("");
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(1);
@@ -36,6 +43,12 @@ const [search, setSearch] = useState("");
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  // Receive payment modal state
+  const [payOrder, setPayOrder] = useState<Order | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMode, setPayMode] = useState<PaymentMode>("CASH");
+  const [paySaving, setPaySaving] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -46,6 +59,7 @@ const [search, setSearch] = useState("");
         limit: 10,
         search: search || undefined,
         status: statusFilter || undefined,
+        payment: paymentFilter || undefined,
         from: fromDate || undefined,
         to: toDate || undefined,
       })
@@ -56,7 +70,7 @@ const [search, setSearch] = useState("");
       })
       .catch(() => setLoadError("Failed to load orders"))
       .finally(() => setLoading(false));
-  }, [page, search, statusFilter, fromDate, toDate]);
+  }, [page, search, statusFilter, paymentFilter, fromDate, toDate]);
 
   useEffect(load, [load]);
 
@@ -65,7 +79,6 @@ const [search, setSearch] = useState("");
     setEditingOrder(order);
     setEditOpen(true);
     setEditError(null);
-    // Prepopulate items
     setEditItems(order.items.map((it) => ({
       productId: it.productId,
       productName: it.productName,
@@ -73,7 +86,6 @@ const [search, setSearch] = useState("");
       price: it.price,
       quantity: it.quantity,
     })));
-    // Load products for adding
     adminApi.getProducts({ page: 1, limit: 200 }).then((res) => setAllProducts(res.products)).catch(() => setAllProducts([]));
   };
 
@@ -96,7 +108,6 @@ const [search, setSearch] = useState("");
   const addProductToEdit = (productId: number, qty: number) => {
     const prod = allProducts.find((p) => p.id === productId);
     if (!prod) return;
-    // prevent duplicates
     if (editItems.find((it) => it.productId === productId)) return;
     setEditItems((prev) => [...prev, { productId: prod.id, productName: prod.name, unit: prod.unit, price: prod.price, quantity: qty }]);
   };
@@ -145,8 +156,6 @@ const [search, setSearch] = useState("");
     }
   };
 
-  // TEMPORARY admin-only cleanup: permanently deletes an order. This is NOT
-  // part of the order cancellation flow and may be removed in a future release.
   const handleDelete = async (order: Order) => {
     const confirmed = window.confirm(
       "Are you sure you want to permanently delete this order?"
@@ -160,6 +169,47 @@ const [search, setSearch] = useState("");
     } catch (e) {
       if (e instanceof ApiRequestError) error(e.message);
       else error("Delete failed");
+    }
+  };
+
+  // Receive pending payment
+  const openReceivePayment = (order: Order) => {
+    setPayOrder(order);
+    setPayAmount("");
+    setPayMode("CASH");
+    setPayError(null);
+  };
+
+  const closeReceivePayment = () => {
+    setPayOrder(null);
+    setPayAmount("");
+    setPayMode("CASH");
+    setPayError(null);
+  };
+
+  const submitReceivePayment = async () => {
+    if (!payOrder) return;
+    const amt = parseFloat(payAmount);
+    if (Number.isNaN(amt) || amt <= 0) {
+      setPayError("Enter a valid payment amount");
+      return;
+    }
+    if (amt > payOrder.due + 0.001) {
+      setPayError(`Amount exceeds the remaining due of ${formatINR(payOrder.due)}`);
+      return;
+    }
+    setPaySaving(true);
+    setPayError(null);
+    try {
+      await adminApi.receivePayment(payOrder.id, amt, payMode);
+      success("Payment recorded successfully");
+      closeReceivePayment();
+      load();
+    } catch (e) {
+      if (e instanceof ApiRequestError) setPayError(e.message);
+      else setPayError("Failed to record payment");
+    } finally {
+      setPaySaving(false);
     }
   };
 
@@ -229,12 +279,72 @@ const [search, setSearch] = useState("");
         </div>
       )}
 
+      {/* Receive Payment Modal */}
+      {payOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+            <h3 className="text-lg font-bold">Receive Payment</h3>
+            <p className="text-sm text-slate-500">
+              {payOrder.orderNumber} · {payOrder.customerName} · {payOrder.customerMobile}
+            </p>
+            <div className="mt-4 rounded-lg bg-slate-50 p-4 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600">Order Total</span>
+                <span className="font-bold text-slate-900">{formatINR(payOrder.finalAmount)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-slate-600">Already Paid</span>
+                <span className="font-semibold text-green-700">{formatINR(payOrder.paidTotal)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2">
+                <span className="font-semibold text-slate-800">Remaining Due</span>
+                <span className="font-bold text-red-600">{formatINR(payOrder.due)}</span>
+              </div>
+            </div>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="label" htmlFor="payAmount">Amount Received (₹) *</label>
+                <input
+                  id="payAmount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  className="input"
+                  placeholder="0"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="payMode">Payment Mode</label>
+                <select
+                  id="payMode"
+                  className="input"
+                  value={payMode}
+                  onChange={(e) => setPayMode(e.target.value as PaymentMode)}
+                >
+                  <option value="CASH">Cash</option>
+                  <option value="ONLINE">Online</option>
+                </select>
+              </div>
+              {payError && <div className="text-sm text-red-600">{payError}</div>}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={closeReceivePayment} className="btn-secondary">Cancel</button>
+              <button onClick={submitReceivePayment} disabled={paySaving} className="btn-primary">
+                {paySaving ? "Saving…" : "Record Payment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Orders</h2>
         <p className="text-sm text-slate-500">{total} total</p>
       </div>
 
-<div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3">
         <div className="min-w-[200px] flex-1">
           <input
             type="search"
@@ -261,6 +371,19 @@ const [search, setSearch] = useState("");
               {s === "OUT_FOR_DELIVERY" ? "Out For Delivery" : s}
             </option>
           ))}
+        </select>
+        <select
+          value={paymentFilter}
+          onChange={(e) => {
+            setPaymentFilter(e.target.value);
+            setPage(1);
+          }}
+          className="input min-w-[150px]"
+        >
+          <option value="">All payments</option>
+          <option value="PAID">Paid</option>
+          <option value="PARTIALLY_PAID">Partially Paid</option>
+          <option value="DUE">Due</option>
         </select>
         <input
           type="date"
@@ -298,6 +421,9 @@ const [search, setSearch] = useState("");
                     <span className={`badge ${STATUS_COLORS[o.status] ?? "bg-slate-200 text-slate-600"}`}>
                       {o.status}
                     </span>
+                    <span className={`badge ${PAYMENT_STATUS_STYLES[o.paymentStatus] ?? "bg-slate-200 text-slate-600"}`}>
+                      {o.paymentStatus === "PARTIALLY_PAID" ? "PARTIALLY PAID" : o.paymentStatus}
+                    </span>
                   </div>
                   <p className="mt-0.5 text-sm text-slate-500">
                     {o.customerName} · {o.customerMobile} · {formatDate(o.createdAt)}
@@ -318,10 +444,61 @@ const [search, setSearch] = useState("");
                       <p className="text-sm text-slate-600">{o.customerMobile}</p>
                     </div>
                     <div>
-<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Delivery Address</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Delivery Address</p>
                       <p className="mt-1 text-sm text-slate-700">{o.deliveryAddress || "Address not provided"}</p>
                       {o.notes && <p className="mt-1 text-sm italic text-slate-500">Note: {o.notes}</p>}
                     </div>
+                  </div>
+
+                  {/* Payment details */}
+                  <div className="mb-4 rounded-lg border border-slate-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payment Details</p>
+                      <span className={`badge ${PAYMENT_STATUS_STYLES[o.paymentStatus] ?? "bg-slate-200 text-slate-600"}`}>
+                        {o.paymentStatus === "PARTIALLY_PAID" ? "PARTIALLY PAID" : o.paymentStatus}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Order Total</span>
+                        <span className="font-bold text-slate-900">{formatINR(o.finalAmount)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Cash Paid</span>
+                        <span className="font-semibold text-slate-900">{formatINR(o.cashTotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Online Paid</span>
+                        <span className="font-semibold text-slate-900">{formatINR(o.onlineTotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Total Paid</span>
+                        <span className="font-semibold text-green-700">{formatINR(o.paidTotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+                        <span className="font-semibold text-slate-800">Remaining Due</span>
+                        <span className={`font-bold ${o.due > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                          {formatINR(o.due)}
+                        </span>
+                      </div>
+                    </div>
+                    {o.payments.length > 0 && (
+                      <ul className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-100">
+                        {o.payments.map((p) => (
+                          <li key={p.id} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                            <span className="text-slate-500">
+                              {p.paymentMode === "CASH" ? "Cash" : "Online"} · {formatDate(p.paymentDate)}
+                            </span>
+                            <span className="font-semibold text-slate-800">{formatINR(p.amount)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {o.due > 0 && (
+                      <button onClick={() => openReceivePayment(o)} className="btn-primary mt-3 text-sm">
+                        💰 Receive Payment
+                      </button>
+                    )}
                   </div>
 
                   <div className="mb-4">

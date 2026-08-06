@@ -23,6 +23,7 @@ async function getCsrf() {
 
 beforeAll(async () => {
   // Ensure clean test state
+  await prisma.orderPayment.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.productImage.deleteMany();
@@ -85,6 +86,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await prisma.orderPayment.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.productImage.deleteMany();

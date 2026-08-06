@@ -57,6 +57,19 @@ export function serializeCategory(c: any) {
 }
 
 export function serializeOrder(o: any) {
+  const payments: any[] = (o.payments ?? []).map((p: any) => serializeOrderPayment(p));
+  const finalAmount = o.bill ? toNumber(o.bill.finalAmount) : toNumber(o.subtotal);
+  const cashTotal = payments
+    .filter((p: any) => p.paymentMode === "CASH")
+    .reduce((s: number, p: any) => s + p.amount, 0);
+  const onlineTotal = payments
+    .filter((p: any) => p.paymentMode === "ONLINE")
+    .reduce((s: number, p: any) => s + p.amount, 0);
+  const paidTotal = cashTotal + onlineTotal;
+  const due = Math.max(0, Math.round((finalAmount - paidTotal) * 100) / 100);
+  const paymentStatus =
+    paidTotal <= 0 ? "DUE" : due <= 0 ? "PAID" : "PARTIALLY_PAID";
+
   return {
     id: o.id,
     orderNumber: o.orderNumber,
@@ -65,6 +78,7 @@ export function serializeOrder(o: any) {
     deliveryAddress: o.deliveryAddress,
     notes: o.notes,
     subtotal: toNumber(o.subtotal),
+    finalAmount,
     status: o.status,
     items: (o.items ?? []).map((it: any) => ({
       id: it.id,
@@ -75,8 +89,28 @@ export function serializeOrder(o: any) {
       quantity: it.quantity,
       total: toNumber(it.total),
     })),
+    payments,
+    cashTotal,
+    onlineTotal,
+    paidTotal,
+    due,
+    paymentStatus,
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
+  };
+}
+
+export function serializeOrderPayment(p: any) {
+  if (!p) return null;
+  return {
+    id: p.id,
+    orderId: p.orderId,
+    amount: toNumber(p.amount),
+    paymentMode: p.paymentMode,
+    paymentDate: p.paymentDate,
+    notes: p.notes ?? null,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
   };
 }
 

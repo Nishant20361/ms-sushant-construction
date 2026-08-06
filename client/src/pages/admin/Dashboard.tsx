@@ -29,11 +29,14 @@ export default function Dashboard() {
 const stats = data.stats;
   const cards = [
     { label: "Total Orders", value: stats.totalOrders, icon: "📦", color: "bg-blue-100 text-blue-700" },
+    { label: "Total Sales", value: formatINR(stats.totalRevenue), icon: "💰", color: "bg-purple-100 text-purple-700" },
+    { label: "Cash Received", value: formatINR(stats.totalCashCollected), icon: "💵", color: "bg-green-100 text-green-700" },
+    { label: "Online Received", value: formatINR(stats.totalOnlineCollected), icon: "🏦", color: "bg-indigo-100 text-indigo-700" },
+    { label: "Outstanding Due", value: formatINR(stats.totalDue), icon: "⏳", color: "bg-red-100 text-red-700" },
     { label: "Pending", value: stats.pendingOrders, icon: "⏳", color: "bg-amber-100 text-amber-700" },
     { label: "Confirmed", value: stats.confirmedOrders, icon: "✅", color: "bg-green-100 text-green-700" },
     { label: "Delivered", value: stats.deliveredOrders, icon: "🎉", color: "bg-emerald-100 text-emerald-700" },
     { label: "Cancelled", value: stats.cancelledOrders, icon: "❌", color: "bg-red-100 text-red-700" },
-    { label: "Total Revenue", value: formatINR(stats.totalRevenue), icon: "💰", color: "bg-purple-100 text-purple-700" },
     { label: "Low Stock", value: stats.lowStockCount, icon: "⚠️", color: "bg-red-100 text-red-700" },
   ];
 

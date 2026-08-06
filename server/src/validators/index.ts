@@ -18,6 +18,30 @@ export const createOrderSchema = z.object({
     )
     .min(1, "Cart is empty")
     .max(50, "Too many line items"),
+  // Optional payment info captured at order time. Both are optional and
+  // default to 0, so a customer may pay fully, partially, or not at all.
+  cashAmount: z.coerce.number().min(0, "Cash amount cannot be negative").max(100_000_000).default(0),
+  onlineAmount: z.coerce.number().min(0, "Online amount cannot be negative").max(100_000_000).default(0),
+});
+
+// ------------------------- Admin receive payment -----------------------
+// Receive a pending payment from an order/customer. The amount must be
+// positive and the mode must be CASH or ONLINE.
+export const receivePaymentSchema = z.object({
+  amount: z.coerce.number().positive("Payment amount must be greater than zero").max(100_000_000),
+  paymentMode: z.enum(["CASH", "ONLINE"]).default("CASH"),
+  paymentDate: z.string().optional(),
+  notes: z.string().trim().max(500).optional(),
+});
+
+// Receive a payment against a CUSTOMER's total outstanding balance. The
+// amount is allocated across the customer's due orders oldest-first (FIFO).
+// Each allocation creates its own OrderPayment record so history is preserved.
+export const receiveCustomerPaymentSchema = z.object({
+  amount: z.coerce.number().positive("Payment amount must be greater than zero").max(100_000_000),
+  paymentMode: z.enum(["CASH", "ONLINE"]).default("CASH"),
+  paymentDate: z.string().optional(),
+  notes: z.string().trim().max(500).optional(),
 });
 
 // ------------------------- Admin auth -------------------------

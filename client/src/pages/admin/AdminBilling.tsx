@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { adminApi, ApiRequestError } from "../../lib/api";
 import type { Bill, Order } from "../../types";
 import { formatINR, formatDate } from "../../lib/format";
@@ -17,6 +17,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function AdminBilling() {
   const { success, error } = useToast();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const preselectedId = Number(searchParams.get("order") ?? "") || null;
 
@@ -215,11 +216,79 @@ export default function AdminBilling() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between border-t border-slate-200 pt-2">
-                  <span className="font-semibold text-slate-800">Final Amount</span>
+                  <span className="font-semibold text-slate-800">Final Amount (Total)</span>
                   <span className="text-lg font-bold text-brand-600">
                     {formatINR(bill?.finalAmount ?? order.subtotal)}
                   </span>
                 </div>
+              </div>
+
+              {/* Payment details */}
+              <div className="mt-5 rounded-lg border border-slate-200 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-800">Payment Details</p>
+                  <span
+                    className={`badge ${
+                      order.paymentStatus === "PAID"
+                        ? "bg-green-100 text-green-700"
+                        : order.paymentStatus === "PARTIALLY_PAID"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {order.paymentStatus === "PARTIALLY_PAID" ? "PARTIALLY PAID" : order.paymentStatus}
+                  </span>
+                </div>
+
+                {/* Vertical rows: label left, value right */}
+                <div className="mt-3 divide-y divide-slate-100">
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-600">Total Amount</span>
+                    <span className="font-semibold text-slate-900">{formatINR(order.finalAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-600">Cash Paid</span>
+                    <span className="font-semibold text-green-700">{formatINR(order.cashTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-600">Online Paid</span>
+                    <span className="font-semibold text-blue-700">{formatINR(order.onlineTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="text-slate-600">Total Paid</span>
+                    <span className="font-semibold text-green-700">{formatINR(order.paidTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-slate-800">Due Amount</span>
+                    <span className={`font-bold ${order.due > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                      {formatINR(order.due)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Payment history — below Due Amount */}
+                {order.payments.length > 0 && (
+                  <ul className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-100">
+                    {order.payments.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                        <span className="text-slate-500">
+                          {p.paymentMode === "CASH" ? "Cash" : "Online"} · {formatDate(p.paymentDate)}
+                        </span>
+                        <span className="font-semibold text-slate-800">{formatINR(p.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Receive Payment — below Payment History */}
+                {order.due > 0 && (
+                  <button
+                    onClick={() => navigate(`/admin/payments/receive/${order.id}`)}
+                    className="btn-primary mt-4 text-sm"
+                  >
+                    💰 Receive Payment
+                  </button>
+                )}
               </div>
 
               {/* Discount editor */}
@@ -274,4 +343,3 @@ export default function AdminBilling() {
     </div>
   );
 }
-

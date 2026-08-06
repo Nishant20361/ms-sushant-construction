@@ -179,7 +179,27 @@ const order = await prisma.$transaction(
           throw new HttpError(409, "Sorry, stock changed while placing the order. Please retry.");
         }
 
-        subtotal = Math.round(subtotal * 100) / 100;
+subtotal = Math.round(subtotal * 100) / 100;
+
+        // Validate payment amounts
+        const cashAmount = Math.round((Number(body.cashAmount) || 0) * 100) / 100;
+        const onlineAmount = Math.round((Number(body.onlineAmount) || 0) * 100) / 100;
+        if (cashAmount + onlineAmount > subtotal) {
+          throw new HttpError(
+            400,
+            `Payment amount (${cashAmount + onlineAmount}) cannot exceed the order total (${subtotal}).`
+          );
+        }
+
+        // Build payment records (one per non-zero mode). Only store payments
+        // that were actually made; a fully-due order simply has no records.
+        const paymentRecords = [];
+        if (cashAmount > 0) {
+          paymentRecords.push({ amount: cashAmount, paymentMode: "CASH" });
+        }
+        if (onlineAmount > 0) {
+          paymentRecords.push({ amount: onlineAmount, paymentMode: "ONLINE" });
+        }
 
         return tx.order.create({
           data: {
@@ -190,8 +210,9 @@ const order = await prisma.$transaction(
             notes: body.notes || null,
             subtotal,
             items: { create: orderItems },
+            payments: { create: paymentRecords },
           },
-          include: { items: true },
+          include: { items: true, payments: true },
         });
       },
       {

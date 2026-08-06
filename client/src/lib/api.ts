@@ -4,10 +4,13 @@ import type {
   ApiError,
   Bill,
   Category,
+  CustomerDetail,
+  CustomerDue,
   DashboardStats,
   Notification,
   Order,
   OrderItemInput,
+  OrderPayment,
   Product,
   SiteSettings,
   TrackedOrder,
@@ -132,6 +135,8 @@ export const publicApi = {
     customerMobile: string;
     deliveryAddress: string;
     notes?: string;
+    cashAmount?: number;
+    onlineAmount?: number;
     items: OrderItemInput[];
   }): Promise<{ message: string; order: { id: number; orderNumber: string; subtotal: number; status: string } }> {
     return request(
@@ -238,6 +243,7 @@ export const adminApi = {
     status?: string;
     from?: string;
     to?: string;
+    payment?: string;
   }): Promise<{ orders: Order[]; total: number; page: number; pages: number }> {
     const q = new URLSearchParams();
     if (params.page) q.set("page", String(params.page));
@@ -246,11 +252,44 @@ export const adminApi = {
     if (params.status) q.set("status", params.status);
     if (params.from) q.set("from", params.from);
     if (params.to) q.set("to", params.to);
+    if (params.payment) q.set("payment", params.payment);
     const qs = q.toString();
     return request(`/admin/orders${qs ? `?${qs}` : ""}`);
   },
-  updateOrderStatus(id: number, status: string): Promise<{ order: Order }> {
+updateOrderStatus(id: number, status: string): Promise<{ order: Order }> {
     return request(`/admin/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }, { csrf: true });
+  },
+getDuesSummary(params: {
+    search?: string;
+    from?: string;
+    to?: string;
+    dateRange?: string;
+    paymentStatus?: string;
+  }): Promise<{ customers: CustomerDue[] }> {
+    const q = new URLSearchParams();
+    if (params.search) q.set("search", params.search);
+    if (params.from) q.set("from", params.from);
+    if (params.to) q.set("to", params.to);
+    if (params.dateRange) q.set("dateRange", params.dateRange);
+    if (params.paymentStatus) q.set("paymentStatus", params.paymentStatus);
+    const qs = q.toString();
+    return request(`/admin/orders/due-snapshot${qs ? `?${qs}` : ""}`);
+  },
+  getCustomerDetail(mobile: string): Promise<CustomerDetail> {
+    return request(`/admin/orders/customer/${encodeURIComponent(mobile)}`);
+  },
+  receiveCustomerPayment(
+    mobile: string,
+    amount: number,
+    paymentMode: "CASH" | "ONLINE",
+    paymentDate?: string,
+    notes?: string
+  ): Promise<{ message: string; payments: OrderPayment[]; customer: CustomerDetail["customer"]; orders: CustomerDetail["orders"] }> {
+    return request(
+      `/admin/orders/customer/${encodeURIComponent(mobile)}/payments`,
+      { method: "POST", body: JSON.stringify({ amount, paymentMode, paymentDate, notes }) },
+      { csrf: true }
+    );
   },
   getOrder(id: number): Promise<{ order: Order; bill?: Bill | null }> {
     return request(`/admin/orders/${id}`);
@@ -327,6 +366,17 @@ export const adminApi = {
       { csrf: true }
     );
   },
+  receivePayment(
+    orderId: number,
+    amount: number,
+    paymentMode: "CASH" | "ONLINE"
+  ): Promise<{ message: string; payment: OrderPayment; order: Order }> {
+    return request(
+      `/admin/orders/${orderId}/payments`,
+      { method: "POST", body: JSON.stringify({ amount, paymentMode }) },
+      { csrf: true }
+    );
+  },
   forgotPassword(email: string): Promise<{ message: string }> {
     return request(
       "/admin/auth/forgot-password",
@@ -370,4 +420,3 @@ export interface CategoryPayload {
   displayOrder: number;
   isActive: boolean;
 }
-
