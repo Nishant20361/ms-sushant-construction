@@ -7,13 +7,25 @@ import { formatOrderStatus } from "../../lib/format";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", icon: "📊" },
+  { to: "/admin/analytics", label: "Analytics", icon: "📈" },
   { to: "/admin/products", label: "Products", icon: "🧱" },
   { to: "/admin/categories", label: "Categories", icon: "🗂️" },
   { to: "/admin/orders", label: "Orders", icon: "📦" },
 { to: "/admin/billing", label: "Billing", icon: "🧾" },
   { to: "/admin/dues", label: "Dues", icon: "💰" },
+  { to: "/admin/customer-due-report", label: "Due Report", icon: "📋" },
+  { to: "/admin/customer-statement", label: "Statements", icon: "🧾" },
+  { to: "/admin/product-history", label: "Product History", icon: "🔍" },
+  { to: "/admin/sales-reports", label: "Sales Reports", icon: "📊" },
   { to: "/admin/settings", label: "Settings", icon: "⚙️" },
   { to: "/admin/change-password", label: "Change Password", icon: "🔑" },
+];
+
+// Sub-links under Sales Reports (shown as a small nested menu).
+const REPORT_SUB_LINKS = [
+  { to: "/admin/sales-reports", label: "Daily Report", end: true },
+  { to: "/admin/sales-reports?mode=weekly", label: "Weekly Report" },
+  { to: "/admin/sales-reports?mode=monthly", label: "Monthly Report" },
 ];
 
 export default function AdminLayout() {
@@ -104,24 +116,46 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 p-3">
+<nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
           {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/admin"}
-              onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                  isActive
-                    ? "bg-brand-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                }`
-              }
-            >
-              <span>{item.icon}</span>
-              {item.label}
-            </NavLink>
+            <div key={item.to}>
+              <NavLink
+                to={item.to}
+                end={item.to === "/admin"}
+                onClick={() => setSidebarOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                    isActive
+                      ? "bg-brand-600 text-white"
+                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  }`
+                }
+              >
+                <span>{item.icon}</span>
+                {item.label}
+              </NavLink>
+              {item.to === "/admin/sales-reports" && (
+                <div className="ml-4 mt-1 flex flex-col gap-0.5 border-l border-slate-700 pl-3">
+                  {REPORT_SUB_LINKS.map((sub) => (
+                    <NavLink
+                      key={sub.to}
+                      to={sub.to}
+                      end={sub.end}
+                      onClick={() => setSidebarOpen(false)}
+                      className={({ isActive }) =>
+                        `rounded px-2 py-1 text-xs font-medium transition ${
+                          isActive
+                            ? "bg-brand-600 text-white"
+                            : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                        }`
+                      }
+                    >
+                      {sub.label}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
 

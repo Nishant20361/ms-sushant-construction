@@ -4,15 +4,27 @@ import type {
   ApiError,
   Bill,
   Category,
+  CategoryReportRow,
   CustomerDetail,
   CustomerDue,
+  CustomerDueReport,
+  CustomerStatement,
   DashboardStats,
   Notification,
   Order,
-  OrderItemInput,
+OrderItemInput,
   OrderPayment,
+  PaymentAnalytics,
+  PaymentModeRow,
   Product,
+  ProductHistory,
+  ReportFilters,
+  ReportType,
+  SalesAnalytics,
+  SalesReport,
   SiteSettings,
+  TopCustomer,
+  TopProduct,
   TrackedOrder,
   TrackedOrderSummary,
 } from "../types";
@@ -394,11 +406,139 @@ getDuesSummary(params: {
   getBillTextUrl(orderId: number): string {
     return `${API_BASE}/admin/orders/${orderId}/bill/text`;
   },
-  getBillPdfUrl(orderId: number): string {
+getBillPdfUrl(orderId: number): string {
     return `${API_BASE}/admin/orders/${orderId}/bill/pdf`;
   },
   getBillHtmlUrl(orderId: number): string {
     return `${API_BASE}/admin/orders/${orderId}/bill/html`;
+  },
+  // ------------------ Sales Reports ------------------
+  getSalesReport(
+    type: ReportType,
+    params: {
+      date?: string;
+      from?: string;
+      to?: string;
+      month?: number;
+      year?: number;
+      filters?: ReportFilters;
+    }
+  ): Promise<{ report: SalesReport }> {
+    const q = new URLSearchParams();
+    q.set("type", type);
+    if (params.date) q.set("date", params.date);
+    if (params.from) q.set("from", params.from);
+    if (params.to) q.set("to", params.to);
+    if (params.month != null) q.set("month", String(params.month));
+    if (params.year != null) q.set("year", String(params.year));
+    const f = params.filters ?? {};
+    if (f.customerName) q.set("customerName", f.customerName);
+    if (f.phone) q.set("phone", f.phone);
+    if (f.orderId) q.set("orderId", f.orderId);
+    if (f.paymentType) q.set("paymentType", f.paymentType);
+    if (f.status) q.set("status", f.status);
+    if (f.productName) q.set("productName", f.productName);
+    if (f.category) q.set("category", f.category);
+    return request(`/admin/reports/data?${q.toString()}`);
+  },
+  getSalesReportPdfUrl(
+    type: ReportType,
+    params: {
+      date?: string;
+      from?: string;
+      to?: string;
+      month?: number;
+      year?: number;
+      filters?: ReportFilters;
+    }
+  ): string {
+    const q = new URLSearchParams();
+    q.set("type", type);
+    if (params.date) q.set("date", params.date);
+    if (params.from) q.set("from", params.from);
+    if (params.to) q.set("to", params.to);
+    if (params.month != null) q.set("month", String(params.month));
+    if (params.year != null) q.set("year", String(params.year));
+    const f = params.filters ?? {};
+    if (f.customerName) q.set("customerName", f.customerName);
+    if (f.phone) q.set("phone", f.phone);
+    if (f.orderId) q.set("orderId", f.orderId);
+    if (f.paymentType) q.set("paymentType", f.paymentType);
+    if (f.status) q.set("status", f.status);
+    if (f.productName) q.set("productName", f.productName);
+if (f.category) q.set("category", f.category);
+    return `${API_BASE}/admin/reports/pdf?${q.toString()}`;
+  },
+
+  // ------------------ Phase 2 Analytics ------------------
+  getAnalyticsOverview(): Promise<{ sales: SalesAnalytics; payments: PaymentAnalytics }> {
+    return request("/admin/analytics/overview");
+  },
+  getTopCustomers(limit = 10): Promise<{
+    byPurchase: TopCustomer[];
+    byOrders: TopCustomer[];
+    byAverageOrderValue: TopCustomer[];
+    byDue: TopCustomer[];
+  }> {
+    return request(`/admin/analytics/top-customers?limit=${limit}`);
+  },
+  getTopProducts(): Promise<{
+    topSelling: TopProduct[];
+    lowestSelling: TopProduct[];
+    mostOrdered: TopProduct[];
+    highestRevenue: TopProduct[];
+    leastRevenue: TopProduct[];
+  }> {
+    return request("/admin/analytics/top-products");
+  },
+  getCategoryReport(): Promise<{ categories: CategoryReportRow[] }> {
+    return request("/admin/analytics/categories");
+  },
+  getPaymentModeReport(): Promise<{ totalRevenue: number; modes: PaymentModeRow[] }> {
+    return request("/admin/analytics/payment-modes");
+  },
+  getChartData(kind: string, from?: string, to?: string): Promise<any> {
+    const q = new URLSearchParams();
+    q.set("kind", kind);
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    return request(`/admin/analytics/charts?${q.toString()}`);
+  },
+  getCustomerDueReport(params: {
+    search?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<CustomerDueReport> {
+    const q = new URLSearchParams();
+    if (params.search) q.set("search", params.search);
+    if (params.from) q.set("from", params.from);
+    if (params.to) q.set("to", params.to);
+    if (params.page) q.set("page", String(params.page));
+    if (params.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request(`/admin/analytics/customer-due-report${qs ? `?${qs}` : ""}`);
+  },
+  getCustomerDueReportExportUrl(format: "csv" | "xlsx" | "pdf", params: { search?: string; from?: string; to?: string }): string {
+    const q = new URLSearchParams();
+    q.set("export", format);
+    if (params.search) q.set("search", params.search);
+    if (params.from) q.set("from", params.from);
+    if (params.to) q.set("to", params.to);
+    return `${API_BASE}/admin/analytics/customer-due-report?${q.toString()}`;
+  },
+  getCustomerStatement(mobile: string): Promise<CustomerStatement> {
+    return request(`/admin/analytics/customer-statement/${encodeURIComponent(mobile)}`);
+  },
+  getCustomerStatementPdfUrl(mobile: string): string {
+    return `${API_BASE}/admin/analytics/customer-statement/${encodeURIComponent(mobile)}/pdf`;
+  },
+  getProductHistory(id: number): Promise<ProductHistory> {
+    return request(`/admin/analytics/product-history/${id}`);
+  },
+  getAnalyticsProducts(): Promise<{ products: { id: number; name: string; unit: string; category: { name: string } | null }[] }> {
+    return request("/admin/analytics/products");
   },
 };
 

@@ -273,3 +273,231 @@ export interface ApiError {
   error: string;
   details?: { path: string; message: string }[];
 }
+
+// ------------------------- Sales Reports ------------------------
+export type ReportType = "daily" | "weekly" | "monthly";
+
+export interface ReportLineItem {
+  productId: number;
+  productName: string;
+  category: string | null;
+  imageUrl: string | null;
+  unit: string;
+  price: number;
+  quantity: number;
+  total: number;
+}
+
+export interface ReportOrder {
+  id: number;
+  orderNumber: string;
+  customerName: string;
+  customerMobile: string;
+  deliveryAddress: string | null;
+  createdAt: string;
+  status: string;
+  subtotal: number;
+  discount: number;
+  finalAmount: number;
+  cashPaid: number;
+  onlinePaid: number;
+  duePaid: number;
+  remainingDue: number;
+  paymentStatus: string;
+  items: ReportLineItem[];
+}
+
+export interface SalesReport {
+  reportType: ReportType;
+  periodLabel: string;
+  from: string;
+  to: string;
+  generatedAt: string;
+  generatedBy: string;
+  summary: {
+    totalOrders: number;
+    deliveredOrders: number;
+    cancelledOrders: number;
+    totalSales: number;
+    totalDiscount: number;
+    cashCollection: number;
+    onlineCollection: number;
+    dueCollection: number;
+    remainingDue: number;
+    uniqueCustomers: number;
+    productsSold: number;
+    totalQuantitySold: number;
+  };
+  orders: ReportOrder[];
+}
+
+export interface ReportFilters {
+  customerName?: string;
+  phone?: string;
+  orderId?: string;
+  paymentType?: string;
+  status?: string;
+  productName?: string;
+  category?: string;
+}
+
+// ------------------------- Phase 2 Analytics ------------------------
+export interface SalesAnalytics {
+  todaySales: number;
+  yesterdaySales: number;
+  thisWeekSales: number;
+  lastWeekSales: number;
+  thisMonthSales: number;
+  lastMonthSales: number;
+  thisYearSales: number;
+  totalLifetimeSales: number;
+}
+
+export interface PaymentAnalytics {
+  cashCollection: number;
+  onlineCollection: number;
+  totalCollected: number;
+  dueOutstanding: number;
+  recoveredDue: number;
+  pendingDue: number;
+}
+
+export interface TopCustomer {
+  customerName: string;
+  customerMobile: string;
+  customerSince: string;
+  lastPurchase: string;
+  totalOrders: number;
+  totalPurchase: number;
+  totalPaid: number;
+  totalDue: number;
+  averageOrderValue: number;
+}
+
+export interface TopProduct {
+  productId: number;
+  productName: string;
+  unit: string;
+  quantitySold: number;
+  revenue: number;
+  orderCount: number;
+  customerCount: number;
+  lastSold: string;
+  averagePrice: number;
+}
+
+export interface CategoryReportRow {
+  category: string;
+  orders: number;
+  quantity: number;
+  revenue: number;
+}
+
+export interface PaymentModeRow {
+  mode: string;
+  orders: number;
+  revenue: number;
+  percentage: number;
+}
+
+export interface ChartPoint {
+  date?: string;
+  week?: string;
+  month?: string;
+  name?: string;
+  sales?: number;
+  value?: number;
+  due?: number;
+}
+
+export interface CustomerDueReportRow {
+  customerName: string;
+  customerMobile: string;
+  address: string | null;
+  totalOrders: number;
+  totalPurchase: number;
+  totalPaid: number;
+  remainingDue: number;
+  lastPaymentDate: string | null;
+  oldestDueDate: string | null;
+  newestDueDate: string | null;
+}
+
+export interface CustomerDueReport {
+  customers: CustomerDueReportRow[];
+  total: number;
+  page: number;
+  pages: number;
+  summary: {
+    totalCustomers: number;
+    totalPendingDue: number;
+  };
+}
+
+export interface CustomerStatement {
+  customer: {
+    customerName: string;
+    customerMobile: string;
+    address: string | null;
+    customerSince: string;
+    totalOrders: number;
+    totalPurchase: number;
+    totalPaid: number;
+    totalDue: number;
+  };
+  ledger: {
+    type: "ORDER" | "PAYMENT";
+    orderNumber: string;
+    date: string;
+    debit: number;
+    credit: number;
+    mode?: string;
+    notes?: string | null;
+    balance: number;
+  }[];
+  orders: {
+    id: number;
+    orderNumber: string;
+    createdAt: string;
+    finalAmount: number;
+    paid: number;
+    due: number;
+    items: {
+      productId: number;
+      productName: string;
+      quantity: number;
+      unit: string;
+      price: number;
+      total: number;
+    }[];
+  }[];
+}
+
+export interface ProductHistory {
+  product: {
+    id: number;
+    name: string;
+    unit: string;
+    price: number;
+    stock: number;
+    category: string | null;
+  };
+  stats: {
+    totalQuantitySold: number;
+    revenue: number;
+    customersPurchased: number;
+    lastSold: string | null;
+    averageSellingPrice: number;
+    averageRate: number;
+  };
+  recentOrders: {
+    orderId: number;
+    orderNumber: string;
+    customerName: string;
+    customerMobile: string;
+    quantity: number;
+    total: number;
+    status: string;
+    createdAt: string;
+  }[];
+}

@@ -57,7 +57,7 @@ const notoDevaRegular = readFileSync(join(fontsDir, "NotoSansDevanagari-Regular.
 const notoDevaBold = readFileSync(join(fontsDir, "NotoSansDevanagari-Bold.ttf")).toString("base64");
 const notoSansRegular = readFileSync(join(fontsDir, "NotoSans-Regular.ttf")).toString("base64");
 
-function getEmbeddedFontCss(): string {
+export function getEmbeddedFontCss(): string {
   return `
     @font-face {
       font-family: 'Noto Sans Devanagari';
@@ -80,11 +80,11 @@ function getEmbeddedFontCss(): string {
   `;
 }
 
-function fmtINR(n: number): string {
+export function fmtINR(n: number): string {
   return "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(n);
 }
 
-function fmtDate(d: string | Date): string {
+export function fmtDate(d: string | Date): string {
   const date = new Date(d);
   return date.toLocaleString("en-IN", {
     day: "2-digit",
@@ -95,7 +95,7 @@ function fmtDate(d: string | Date): string {
   });
 }
 
-function fmtDateShort(d: string | Date): string {
+export function fmtDateShort(d: string | Date): string {
   const date = new Date(d);
   return date.toLocaleDateString("en-IN", {
     day: "2-digit",
@@ -479,7 +479,7 @@ let browserPromise: Promise<any> | undefined;
  * Lazily launch (once) and reuse a single Puppeteer browser instance.
  * Closing per-request browsers was both slow and fragile on servers.
  */
-async function getBrowser(): Promise<any> {
+export async function getBrowser(): Promise<any> {
   if (!browserPromise) {
     const puppeteer = (await import("puppeteer")).default;
     const executablePath = await resolveBrowserExecutablePath();

@@ -8,6 +8,8 @@ import settingsRoutes from "./settings.js";
 import uploadRoutes from "./uploads.js";
 import notificationRoutes from "./notifications.js";
 import billRoutes from "./bills.js";
+import reportRoutes from "./reports.js";
+import analyticsRoutes from "./analytics.js";
 
 const router = Router();
 
@@ -21,6 +23,8 @@ router.use("/", settingsRoutes);
 router.use("/", uploadRoutes);
 router.use("/", notificationRoutes);
 router.use("/", billRoutes);
+router.use("/", reportRoutes);
+router.use("/", analyticsRoutes);
 
 export default router;
 
