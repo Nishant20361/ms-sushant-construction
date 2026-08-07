@@ -446,31 +446,31 @@ function findSystemBrowser(): string | undefined {
   return undefined;
 }
 
-let cachedExecutablePath: string | undefined;
-let resolvedExecutablePath: boolean = false;
+// ---------------------------------------------------------------------------
+// Reusable browser singleton
+// ---------------------------------------------------------------------------
+
+let browserPromise: Promise<any> | undefined;
 
 /**
- * Resolve a usable Chrome/Chromium executable path, or undefined if none is
- * available. The result is cached after the first (successful) discovery.
+ * Resolve a usable Chrome/Chromium executable path.
  *
- * Detection order (highest priority first):
+ * Priority (highest first):
  *   1. PUPPETEER_EXECUTABLE_PATH env var (explicit admin override).
  *   2. Puppeteer's own bundled browser (cache/executable path).
  *   3. A system-installed Chrome / Chromium / Edge / Brave.
+ *
+ * This is intentionally re-run on every (cold) getBrowser() call so the env
+ * var is ALWAYS re-read — previous versions cached a stale "not found" result
+ * and returned undefined instead of picking up the env override.
  */
 async function resolveExecutablePath(): Promise<string | undefined> {
-  if (resolvedExecutablePath) return cachedExecutablePath;
-
-  // Debug: confirm the env var is actually present on the server.
-  console.log("PUPPETEER PATH:", process.env.PUPPETEER_EXECUTABLE_PATH);
-
   // 1) Explicit env override wins.
+  console.log("PUPPETEER PATH:", process.env.PUPPETEER_EXECUTABLE_PATH);
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
   if (envPath && existsSync(envPath)) {
     console.log("USING ENV-OVERRIDE PATH:", envPath);
-    cachedExecutablePath = envPath;
-    resolvedExecutablePath = true;
-    return cachedExecutablePath;
+    return envPath;
   }
 
   // 2) Prefer Puppeteer's own bundled browser (normally downloaded at install).
@@ -479,36 +479,23 @@ async function resolveExecutablePath(): Promise<string | undefined> {
     const bundled = await puppeteer.executablePath();
     if (bundled && existsSync(bundled)) {
       console.log("USING PUPPETEER BUNDLED PATH:", bundled);
-      cachedExecutablePath = bundled;
-      resolvedExecutablePath = true;
-      return cachedExecutablePath;
+      return bundled;
     }
   } catch {
     // Puppeteer not resolvable here, or no bundled browser was downloaded
-    // (common on servers where the download is skipped). Fall through to scan
-    // for a system-installed browser.
+    // (common on servers where the download is skipped). Fall through to
+    // scan for a system-installed browser.
   }
 
   // 3) Fall back to a system-installed browser.
   const system = findSystemBrowser();
   if (system) {
     console.log("USING SYSTEM BROWSER PATH:", system);
-    cachedExecutablePath = system;
-    resolvedExecutablePath = true;
-    return cachedExecutablePath;
+    return system;
   }
 
-  // 4) Nothing found. Cache the "not found" result so we don't re-scan on every
-  //    request, and let the caller produce a clear, actionable error.
-  resolvedExecutablePath = true;
   return undefined;
 }
-
-// ---------------------------------------------------------------------------
-// Reusable browser singleton
-// ---------------------------------------------------------------------------
-
-let browserPromise: Promise<any> | undefined;
 
 /**
  * Lazily launch (once) and reuse a single Puppeteer browser instance.
@@ -519,10 +506,10 @@ export async function getBrowser(): Promise<any> {
     const puppeteer = (await import("puppeteer")).default;
     const executablePath = await resolveExecutablePath();
 
-    console.log("RESOLVED EXECUTABLE PATH:", executablePath);
-    console.log("EXISTS:", executablePath ? existsSync(executablePath) : false);
+    console.log("FINAL EXECUTABLE PATH:", executablePath);
+    console.log("FILE EXISTS:", executablePath ? existsSync(executablePath) : false);
 
-    if (!executablePath || !existsSync(executablePath)) {
+    if (!executablePath) {
       throw new HttpError(
         503,
         "PDF browser engine is not available. " +
