@@ -468,31 +468,33 @@ async function resolveExecutablePath(): Promise<string> {
   const puppeteer = (await import("puppeteer")).default;
 
   // 1) Puppeteer's own bundled browser (normally downloaded at install).
-  console.log("PUPPETEER INTERNAL PATH:", puppeteer.executablePath());
-  try {
-    const bundled = await puppeteer.executablePath();
-    if (bundled && existsSync(bundled)) {
-      console.log("USING PUPPETEER BUNDLED PATH:", bundled);
-      return bundled;
-    }
-  } catch {
-    // Puppeteer not resolvable here, or no bundled browser was downloaded
-    // (common on servers where the download is skipped). Fall through.
+  // NOTE: In Puppeteer v25, executablePath() is ASYNC and resolves to a string.
+  // We AWAIT it and log the resolved string (not the Promise) so the output is
+  // a real path, never a `Promise { <pending> }` and never `undefined`.
+  let executablePath: string | undefined;
+  const bundledPath = await puppeteer.executablePath();
+  console.log("PUPPETEER INTERNAL PATH:", bundledPath);
+  if (bundledPath && existsSync(bundledPath)) {
+    executablePath = bundledPath;
+    console.log("USING PUPPETEER BUNDLED PATH:", bundledPath);
+    return executablePath;
   }
 
   // 2) Explicit env override.
   console.log("ENV PATH:", process.env.PUPPETEER_EXECUTABLE_PATH);
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
   if (envPath && existsSync(envPath)) {
+    executablePath = envPath;
     console.log("USING ENV PATH:", envPath);
-    return envPath;
+    return executablePath;
   }
 
   // 3) Fall back to a system-installed browser.
   const system = findSystemBrowser();
   if (system) {
+    executablePath = system;
     console.log("USING SYSTEM BROWSER PATH:", system);
-    return system;
+    return executablePath;
   }
 
   throw new HttpError(
@@ -518,7 +520,7 @@ export async function getBrowser(): Promise<any> {
     browserPromise = puppeteer.launch({
       executablePath,
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      args: RENDER_SAFE_LAUNCH_ARGS,
     }).catch((err: unknown) => {
       // Allow a retry on the next request if launch failed.
       browserPromise = undefined;
