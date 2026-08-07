@@ -8,12 +8,10 @@
  * so the admin can change them at any time without a redeploy.
  */
 import puppeteer from "puppeteer";
-import type { Browser } from "puppeteer";
 import fs from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
-import { HttpError } from "./httpError.js";
 
 export interface BillLineItem {
   productName: string;
@@ -378,13 +376,8 @@ export function buildBillHtml(bill: BillData): string {
 </html>`;
 }
 
-// ---------------------------------------------------------------------------
-// Puppeteer browser handling
-// ---------------------------------------------------------------------------
+let browserPromise: Promise<any> | null = null;
 
-// Launching Chromium in headless mode on Linux (e.g. Render) requires these
-// flags. Without them Puppeteer fails to start with a sandbox / shared-memory
-// error. They are harmless on macOS/Windows.
 export const RENDER_SAFE_LAUNCH_ARGS = [
   "--no-sandbox",
   "--disable-setuid-sandbox",
@@ -392,122 +385,97 @@ export const RENDER_SAFE_LAUNCH_ARGS = [
   "--disable-gpu",
 ];
 
-/**
- * Common system Chrome/Chromium install paths (macOS, Linux, Windows).
- *
- * We deliberately map the well-known install locations for each OS instead of
- * hardcoding a single developer machine's path, so the same code works on
- * local macOS/Windows dev machines and CI/production Linux servers.
- */
-export const SYSTEM_BROWSER_CANDIDATES: string[] = [
-  // Common Linux locations.
+const SYSTEM_BROWSER_CANDIDATES = [
   "/usr/bin/google-chrome",
   "/usr/bin/google-chrome-stable",
   "/usr/bin/chromium",
   "/usr/bin/chromium-browser",
-  "/usr/bin/chrome",
-  "/opt/google/chrome/chrome",
-  "/usr/local/bin/chrome",
-  "/usr/local/bin/chromium",
-  "/usr/local/bin/google-chrome",
-  // Common macOS locations.
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "/Applications/Chromium.app/Contents/MacOS/Chromium",
-  "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-  "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-  // Common Windows locations.
-  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
 ];
 
-let browserPromise: Promise<Browser> | null = null;
+function findSystemBrowser(): string | undefined {
+  for (const path of SYSTEM_BROWSER_CANDIDATES) {
+    if (fs.existsSync(path)) {
+      return path;
+    }
+  }
+  return undefined;
+}
 
-/**
- * Resolve the Chrome/Chromium executable to use for PDF rendering.
- *
- * Priority:
- *   1. process.env.PUPPETEER_EXECUTABLE_PATH
- *   2. await puppeteer.executablePath()
- *   3. Common system Chrome/Chromium install paths
- *
- * Throws an HttpError(503) if no usable browser can be found so the caller
- * gets a clear, actionable message instead of a masked 500.
- */
 async function resolveExecutablePath(): Promise<string> {
-  // 1. Environment variable (e.g. Render)
+  console.log("ENV PATH:", process.env.PUPPETEER_EXECUTABLE_PATH);
+
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
-  console.log("ENV PATH:", envPath);
+
   if (envPath && fs.existsSync(envPath)) {
     console.log("USING ENV PATH:", envPath);
     return envPath;
   }
 
-  // 2. Puppeteer's own downloaded Chromium
   const puppeteerPath = await puppeteer.executablePath();
+
   console.log("PUPPETEER PATH:", puppeteerPath);
+
   if (puppeteerPath && fs.existsSync(puppeteerPath)) {
     console.log("USING PUPPETEER PATH:", puppeteerPath);
+
     return puppeteerPath;
   }
 
-  // 3. Common system Chrome/Chromium install paths
-  for (const candidate of SYSTEM_BROWSER_CANDIDATES) {
-    if (candidate && fs.existsSync(candidate)) {
-      console.log("USING SYSTEM BROWSER:", candidate);
-      return candidate;
-    }
+  const system = findSystemBrowser();
+
+  if (system) {
+    console.log("USING SYSTEM PATH:", system);
+
+    return system;
   }
 
-  throw new HttpError(
-    503,
-    "Chromium browser not available. Install Chromium or set PUPPETEER_EXECUTABLE_PATH."
-  );
+  throw new Error("Chromium browser not available");
 }
 
-/**
- * Reusable Puppeteer browser singleton.
- *
- * Returns the already-launched browser if one exists, otherwise resolves the
- * executable path, launches a brand-new headless instance and caches the
- * promise so concurrent requests share a single browser.
- */
-export async function getBrowser(): Promise<Browser> {
+export async function getBrowser() {
   if (browserPromise) {
     return browserPromise;
   }
 
-  const executablePath = await resolveExecutablePath();
-  console.log("FINAL EXECUTABLE PATH:", executablePath);
-  console.log("EXISTS:", fs.existsSync(executablePath));
+  browserPromise = (async () => {
+    const executablePath = await resolveExecutablePath();
 
-  browserPromise = puppeteer.launch({
-    executablePath,
-    headless: true,
-    args: RENDER_SAFE_LAUNCH_ARGS,
-  });
+    console.log("FINAL EXECUTABLE PATH:", executablePath);
+
+    console.log("FILE EXISTS:", fs.existsSync(executablePath));
+
+    return puppeteer.launch({
+      executablePath,
+      headless: true,
+      args: RENDER_SAFE_LAUNCH_ARGS,
+    });
+  })();
 
   return browserPromise;
 }
-/**
- * Generate a professional PDF buffer for an order bill.
- *
- * Renders the invoice HTML in a shared Chrome/Chromium instance so
- * Devanagari/₹ text is preserved, then returns the PDF bytes.
- */
+
 export async function buildBillPdf(bill: BillData): Promise<Buffer> {
   const html = buildBillHtml(bill);
+
   const browser = await getBrowser();
 
   const page = await browser.newPage();
+
   try {
-    await page.setContent(html, { waitUntil: "load" });
-    await page.evaluate(() => (globalThis as any).document?.fonts?.ready);
+    await page.setContent(html, {
+      waitUntil: "networkidle0",
+    });
+
     await page.emulateMediaType("print");
-    const pdf = await page.pdf({ format: "A4", printBackground: true });
+
+    const pdf = await page.pdf({
+      format: "A4",
+      printBackground: true,
+    });
+
     return Buffer.from(pdf);
   } finally {
-    // Close each page but keep the shared browser alive for reuse.
     await page.close().catch(() => undefined);
   }
 }
