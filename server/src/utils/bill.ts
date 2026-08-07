@@ -458,12 +458,16 @@ let resolvedExecutablePath: boolean = false;
  *   2. Puppeteer's own bundled browser (cache/executable path).
  *   3. A system-installed Chrome / Chromium / Edge / Brave.
  */
-async function resolveBrowserExecutablePath(): Promise<string | undefined> {
+async function resolveExecutablePath(): Promise<string | undefined> {
   if (resolvedExecutablePath) return cachedExecutablePath;
+
+  // Debug: confirm the env var is actually present on the server.
+  console.log("PUPPETEER PATH:", process.env.PUPPETEER_EXECUTABLE_PATH);
 
   // 1) Explicit env override wins.
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
   if (envPath && existsSync(envPath)) {
+    console.log("USING ENV-OVERRIDE PATH:", envPath);
     cachedExecutablePath = envPath;
     resolvedExecutablePath = true;
     return cachedExecutablePath;
@@ -474,6 +478,7 @@ async function resolveBrowserExecutablePath(): Promise<string | undefined> {
     const puppeteer = (await import("puppeteer")).default;
     const bundled = await puppeteer.executablePath();
     if (bundled && existsSync(bundled)) {
+      console.log("USING PUPPETEER BUNDLED PATH:", bundled);
       cachedExecutablePath = bundled;
       resolvedExecutablePath = true;
       return cachedExecutablePath;
@@ -487,6 +492,7 @@ async function resolveBrowserExecutablePath(): Promise<string | undefined> {
   // 3) Fall back to a system-installed browser.
   const system = findSystemBrowser();
   if (system) {
+    console.log("USING SYSTEM BROWSER PATH:", system);
     cachedExecutablePath = system;
     resolvedExecutablePath = true;
     return cachedExecutablePath;
@@ -511,9 +517,12 @@ let browserPromise: Promise<any> | undefined;
 export async function getBrowser(): Promise<any> {
   if (!browserPromise) {
     const puppeteer = (await import("puppeteer")).default;
-    const executablePath = await resolveBrowserExecutablePath();
+    const executablePath = await resolveExecutablePath();
 
-    if (!executablePath) {
+    console.log("RESOLVED EXECUTABLE PATH:", executablePath);
+    console.log("EXISTS:", executablePath ? existsSync(executablePath) : false);
+
+    if (!executablePath || !existsSync(executablePath)) {
       throw new HttpError(
         503,
         "PDF browser engine is not available. " +
@@ -524,7 +533,8 @@ export async function getBrowser(): Promise<any> {
 
     browserPromise = puppeteer.launch({
       executablePath,
-      args: RENDER_SAFE_LAUNCH_ARGS,
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
     }).catch((err: unknown) => {
       // Allow a retry on the next request if launch failed.
       browserPromise = undefined;
