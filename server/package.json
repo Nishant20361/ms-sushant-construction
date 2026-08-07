@@ -20,7 +20,7 @@
     "db:check-admin": "tsx scripts/reset-admin-password.ts --check",
     "db:reset-admin": "tsx scripts/reset-admin-password.ts",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && npx puppeteer browsers install chrome"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
