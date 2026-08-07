@@ -11,6 +11,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync, existsSync } from "node:fs";
+import { HttpError } from "./httpError.js";
 
 export interface BillLineItem {
   productName: string;
@@ -395,12 +396,24 @@ export function buildBillHtml(bill: BillData): string {
 // Browser discovery
 // ---------------------------------------------------------------------------
 
-/** Common system Chrome/Chromium install paths (macOS, Linux, Windows). */
-const SYSTEM_BROWSER_CANDIDATES: string[] = [
-  // Env override wins (admins can point at any custom binary).
-  ...(process.env.PUPPETEER_EXECUTABLE_PATH
-    ? [process.env.PUPPETEER_EXECUTABLE_PATH]
-    : []),
+// Launching Chromium in headless mode on Linux (e.g. Render) requires these
+// flags. Without them Puppeteer fails to start with a sandbox / shared-memory
+// error. They are harmless on macOS/Windows.
+export const RENDER_SAFE_LAUNCH_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+];
+
+/**
+ * Common system Chrome/Chromium install paths (macOS, Linux, Windows).
+ *
+ * We deliberately map the well-known install locations for each OS instead of
+ * hardcoding a single developer machine's path, so the same code works on
+ * local macOS/Windows dev machines and CI/production Linux servers.
+ */
+export const SYSTEM_BROWSER_CANDIDATES: string[] = [
   // Common Linux locations.
   "/usr/bin/google-chrome",
   "/usr/bin/google-chrome-stable",
@@ -439,11 +452,24 @@ let resolvedExecutablePath: boolean = false;
 /**
  * Resolve a usable Chrome/Chromium executable path, or undefined if none is
  * available. The result is cached after the first (successful) discovery.
+ *
+ * Detection order (highest priority first):
+ *   1. PUPPETEER_EXECUTABLE_PATH env var (explicit admin override).
+ *   2. Puppeteer's own bundled browser (cache/executable path).
+ *   3. A system-installed Chrome / Chromium / Edge / Brave.
  */
 async function resolveBrowserExecutablePath(): Promise<string | undefined> {
   if (resolvedExecutablePath) return cachedExecutablePath;
 
-  // 1) Prefer Puppeteer's own cached browser (normally downloaded at install).
+  // 1) Explicit env override wins.
+  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (envPath && existsSync(envPath)) {
+    cachedExecutablePath = envPath;
+    resolvedExecutablePath = true;
+    return cachedExecutablePath;
+  }
+
+  // 2) Prefer Puppeteer's own bundled browser (normally downloaded at install).
   try {
     const puppeteer = (await import("puppeteer")).default;
     const bundled = await puppeteer.executablePath();
@@ -453,10 +479,12 @@ async function resolveBrowserExecutablePath(): Promise<string | undefined> {
       return cachedExecutablePath;
     }
   } catch {
-    // puppeteer not resolvable here — fall through to system candidates
+    // Puppeteer not resolvable here, or no bundled browser was downloaded
+    // (common on servers where the download is skipped). Fall through to scan
+    // for a system-installed browser.
   }
 
-  // 2) Fall back to a system-installed browser.
+  // 3) Fall back to a system-installed browser.
   const system = findSystemBrowser();
   if (system) {
     cachedExecutablePath = system;
@@ -464,7 +492,8 @@ async function resolveBrowserExecutablePath(): Promise<string | undefined> {
     return cachedExecutablePath;
   }
 
-  // 3) Nothing found. Cache the "not found" result so we don't re-scan every call.
+  // 4) Nothing found. Cache the "not found" result so we don't re-scan on every
+  //    request, and let the caller produce a clear, actionable error.
   resolvedExecutablePath = true;
   return undefined;
 }
@@ -485,7 +514,8 @@ export async function getBrowser(): Promise<any> {
     const executablePath = await resolveBrowserExecutablePath();
 
     if (!executablePath) {
-      throw new Error(
+      throw new HttpError(
+        503,
         "PDF browser engine is not available. " +
           "Install Chromium on the server or set the PUPPETEER_EXECUTABLE_PATH environment variable " +
           "to point at a Chrome/Chromium executable."
@@ -494,7 +524,7 @@ export async function getBrowser(): Promise<any> {
 
     browserPromise = puppeteer.launch({
       executablePath,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
+      args: RENDER_SAFE_LAUNCH_ARGS,
     }).catch((err: unknown) => {
       // Allow a retry on the next request if launch failed.
       browserPromise = undefined;
