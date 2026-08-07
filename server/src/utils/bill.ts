@@ -7,10 +7,12 @@
  * All business details come from the SiteSetting record (database-driven),
  * so the admin can change them at any time without a redeploy.
  */
-
+import puppeteer from "puppeteer";
+import type { Browser } from "puppeteer";
+import fs from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { HttpError } from "./httpError.js";
 
 export interface BillLineItem {
@@ -376,24 +378,8 @@ export function buildBillHtml(bill: BillData): string {
 </html>`;
 }
 
-/**
- * Generate a professional PDF buffer for an order bill.
- *
- * Uses Puppeteer to render the existing HTML invoice so Hindi/Devanagari
- * text and the Indian Rupee symbol (₹) are preserved in the PDF.
- *
- * Production hardening: the Puppeteer Chromium browser is often not present on
- * a server (the download is skipped during `npm install`). We therefore:
- *   1. Auto-detect a usable Chrome/Chromium binary (env override → Puppeteer's
- *      own cached browser → common system install paths).
- *   2. Reuse a single browser instance across requests (lazy singleton) so we
- *      don't pay the launch cost on every download.
- *   3. Fail with a clear, actionable message instead of a masked 500 if no
- *      browser can be found.
- */
-
 // ---------------------------------------------------------------------------
-// Browser discovery
+// Puppeteer browser handling
 // ---------------------------------------------------------------------------
 
 // Launching Chromium in headless mode on Linux (e.g. Render) requires these
@@ -435,101 +421,74 @@ export const SYSTEM_BROWSER_CANDIDATES: string[] = [
   "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
 ];
 
-function findSystemBrowser(): string | undefined {
-  for (const candidate of SYSTEM_BROWSER_CANDIDATES) {
-    try {
-      if (candidate && existsSync(candidate)) return candidate;
-    } catch {
-      // ignore per-candidate errors and keep scanning
-    }
-  }
-  return undefined;
-}
-
-// ---------------------------------------------------------------------------
-// Reusable browser singleton
-// ---------------------------------------------------------------------------
-
-let browserPromise: Promise<any> | undefined;
+let browserPromise: Promise<Browser> | null = null;
 
 /**
- * Resolve a usable Chrome/Chromium executable path.
+ * Resolve the Chrome/Chromium executable to use for PDF rendering.
  *
- * Priority (highest first):
- *   1. Puppeteer's own bundled browser (cache/executable path), verified on disk.
- *   2. PUPPETEER_EXECUTABLE_PATH env var (explicit admin override), verified on disk.
- *   3. A system-installed Chrome / Chromium / Edge / Brave.
+ * Priority:
+ *   1. process.env.PUPPETEER_EXECUTABLE_PATH
+ *   2. await puppeteer.executablePath()
+ *   3. Common system Chrome/Chromium install paths
  *
- * This is re-run on every (cold) getBrowser() call — no stale caching — and
- * never returns undefined: if no usable browser is found it throws a clear
- * HttpError(503) so the caller always gets an actionable path.
+ * Throws an HttpError(503) if no usable browser can be found so the caller
+ * gets a clear, actionable message instead of a masked 500.
  */
 async function resolveExecutablePath(): Promise<string> {
-  const puppeteer = (await import("puppeteer")).default;
-
-  // 1) Puppeteer's own bundled browser (normally downloaded at install).
-  // NOTE: In Puppeteer v25, executablePath() is ASYNC and resolves to a string.
-  // We AWAIT it and log the resolved string (not the Promise) so the output is
-  // a real path, never a `Promise { <pending> }` and never `undefined`.
-  let executablePath: string | undefined;
-  const bundledPath = await puppeteer.executablePath();
-  console.log("PUPPETEER INTERNAL PATH:", bundledPath);
-  if (bundledPath && existsSync(bundledPath)) {
-    executablePath = bundledPath;
-    console.log("USING PUPPETEER BUNDLED PATH:", bundledPath);
-    return executablePath;
-  }
-
-  // 2) Explicit env override.
-  console.log("ENV PATH:", process.env.PUPPETEER_EXECUTABLE_PATH);
+  // 1. Environment variable (e.g. Render)
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
-  if (envPath && existsSync(envPath)) {
-    executablePath = envPath;
+  console.log("ENV PATH:", envPath);
+  if (envPath && fs.existsSync(envPath)) {
     console.log("USING ENV PATH:", envPath);
-    return executablePath;
+    return envPath;
   }
 
-  // 3) Fall back to a system-installed browser.
-  const system = findSystemBrowser();
-  if (system) {
-    executablePath = system;
-    console.log("USING SYSTEM BROWSER PATH:", system);
-    return executablePath;
+  // 2. Puppeteer's own downloaded Chromium
+  const puppeteerPath = await puppeteer.executablePath();
+  console.log("PUPPETEER PATH:", puppeteerPath);
+  if (puppeteerPath && fs.existsSync(puppeteerPath)) {
+    console.log("USING PUPPETEER PATH:", puppeteerPath);
+    return puppeteerPath;
+  }
+
+  // 3. Common system Chrome/Chromium install paths
+  for (const candidate of SYSTEM_BROWSER_CANDIDATES) {
+    if (candidate && fs.existsSync(candidate)) {
+      console.log("USING SYSTEM BROWSER:", candidate);
+      return candidate;
+    }
   }
 
   throw new HttpError(
     503,
-    "PDF browser engine is not available. " +
-      "Install Chromium on the server or set the PUPPETEER_EXECUTABLE_PATH environment variable " +
-      "to point at a Chrome/Chromium executable."
+    "Chromium browser not available. Install Chromium or set PUPPETEER_EXECUTABLE_PATH."
   );
 }
 
 /**
- * Lazily launch (once) and reuse a single Puppeteer browser instance.
- * Closing per-request browsers was both slow and fragile on servers.
+ * Reusable Puppeteer browser singleton.
+ *
+ * Returns the already-launched browser if one exists, otherwise resolves the
+ * executable path, launches a brand-new headless instance and caches the
+ * promise so concurrent requests share a single browser.
  */
-export async function getBrowser(): Promise<any> {
-  if (!browserPromise) {
-    const puppeteer = (await import("puppeteer")).default;
-    const executablePath = await resolveExecutablePath();
-
-    console.log("FINAL PATH:", executablePath);
-    console.log("EXISTS:", existsSync(executablePath));
-
-    browserPromise = puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: RENDER_SAFE_LAUNCH_ARGS,
-    }).catch((err: unknown) => {
-      // Allow a retry on the next request if launch failed.
-      browserPromise = undefined;
-      throw err;
-    });
+export async function getBrowser(): Promise<Browser> {
+  if (browserPromise) {
+    return browserPromise;
   }
+
+  const executablePath = await resolveExecutablePath();
+  console.log("FINAL EXECUTABLE PATH:", executablePath);
+  console.log("EXISTS:", fs.existsSync(executablePath));
+
+  browserPromise = puppeteer.launch({
+    executablePath,
+    headless: true,
+    args: RENDER_SAFE_LAUNCH_ARGS,
+  });
+
   return browserPromise;
 }
-
 /**
  * Generate a professional PDF buffer for an order bill.
  *
