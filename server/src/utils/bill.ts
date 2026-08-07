@@ -403,63 +403,79 @@ function findSystemBrowser(): string | undefined {
 }
 
 async function resolveExecutablePath(): Promise<string> {
+  console.log("ENV PATH:", process.env.PUPPETEER_EXECUTABLE_PATH);
 
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
 
-  console.log("ENV PATH:", envPath);
-
-
-  if (envPath) {
-
-    console.log(
-      "ENV FILE EXISTS:",
-      fs.existsSync(envPath)
-    );
-
-    if (fs.existsSync(envPath)) {
-      console.log("USING ENV PATH:", envPath);
-      return envPath;
-    }
+  if (envPath && fs.existsSync(envPath)) {
+    console.log("USING ENV PATH:", envPath);
+    return envPath;
   }
-
 
   const puppeteerPath = await puppeteer.executablePath();
 
-  console.log(
-    "PUPPETEER PATH:",
-    puppeteerPath
-  );
+  console.log("PUPPETEER PATH:", puppeteerPath);
 
-
-  console.log(
-    "PUPPETEER FILE EXISTS:",
-    fs.existsSync(puppeteerPath)
-  );
-
-
-  if (fs.existsSync(puppeteerPath)) {
-    console.log(
-      "USING PUPPETEER PATH:",
-      puppeteerPath
-    );
+  if (puppeteerPath && fs.existsSync(puppeteerPath)) {
+    console.log("USING PUPPETEER PATH:", puppeteerPath);
 
     return puppeteerPath;
   }
 
-
   const system = findSystemBrowser();
 
   if (system) {
-    console.log(
-      "USING SYSTEM PATH:",
-      system
-    );
+    console.log("USING SYSTEM PATH:", system);
 
     return system;
   }
 
+  throw new Error("Chromium browser not available");
+}
 
-  throw new Error(
-    "Chromium browser not available"
-  );
+export async function getBrowser() {
+  if (browserPromise) {
+    return browserPromise;
+  }
+
+  browserPromise = (async () => {
+    const executablePath = await resolveExecutablePath();
+
+    console.log("FINAL EXECUTABLE PATH:", executablePath);
+
+    console.log("FILE EXISTS:", fs.existsSync(executablePath));
+
+    return puppeteer.launch({
+      executablePath,
+      headless: true,
+      args: RENDER_SAFE_LAUNCH_ARGS,
+    });
+  })();
+
+  return browserPromise;
+}
+
+export async function buildBillPdf(bill: BillData): Promise<Buffer> {
+  const html = buildBillHtml(bill);
+
+  const browser = await getBrowser();
+
+  const page = await browser.newPage();
+
+  try {
+    await page.setContent(html, {
+      waitUntil: "networkidle0",
+    });
+
+    await page.emulateMediaType("print");
+
+    const pdf = await page.pdf({
+      format: "A4",
+      printBackground: true,
+    });
+
+    return Buffer.from(pdf);
+  } finally {
+    await page.close().catch(() => undefined);
+  }
 }
