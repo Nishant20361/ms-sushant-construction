@@ -550,20 +550,27 @@ const discount = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100)
   const outOfStock = p.stock <= 0;
   // Only "kg" (case-insensitive) permits decimal quantity. All other units are integer-only.
   const isKg = (p.unit || "").trim().toLowerCase() === "kg";
-  const [quantity, setQuantity] = useState(1);
+  // Blanks by default so the customer must enter a quantity before adding.
+  const [quantity, setQuantity] = useState<number | "">("");
 
   const handleQuantityChange = (raw: string) => {
+    // Allow only positive numbers (with optional decimals). No negatives or text.
+    if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+    if (raw === "") {
+      setQuantity("");
+      return;
+    }
     const parsed = Number(raw);
     if (Number.isNaN(parsed)) return;
     let q = parsed;
     if (isKg) {
-      // kg allows up to one decimal place
-      q = Math.max(0.1, Math.round(q * 10) / 10);
+      // kg allows decimals (e.g. 0.5, 1.25, 10.50)
+      q = Math.max(0.001, q);
     } else {
       // all other units: integer only
       q = Math.max(1, Math.floor(q));
     }
-    q = Math.min(Math.max(q, 0), p.stock);
+    q = Math.min(q, p.stock);
     setQuantity(q);
   };
 
@@ -623,20 +630,21 @@ const discount = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100)
             type="number"
             inputMode={isKg ? "decimal" : "numeric"}
             value={quantity}
-            min={isKg ? "0.1" : "1"}
+            min={isKg ? "0" : "1"}
             max={p.stock}
             step={isKg ? "0.1" : "1"}
+            placeholder="Enter the quantity"
             disabled={outOfStock}
             onChange={(e) => handleQuantityChange(e.target.value)}
-            className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={`Quantity for ${p.name}`}
           />
           <span className="text-sm text-slate-600">{p.unit}</span>
         </div>
 
         <button
-          onClick={() => onAdd(quantity)}
-          disabled={outOfStock}
+          onClick={() => onAdd(quantity === "" || Number(quantity) <= 0 ? 0 : Number(quantity))}
+          disabled={outOfStock || quantity === "" || Number(quantity) <= 0}
           className="btn-primary mt-3 w-full disabled:cursor-not-allowed disabled:opacity-50"
         >
           {outOfStock ? "Out of Stock" : "Add to Cart"}
