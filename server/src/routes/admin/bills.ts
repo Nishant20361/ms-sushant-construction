@@ -7,7 +7,7 @@ import { billSchema } from "../../validators/index.js";
 import { requireAdmin } from "../../middleware/auth.js";
 import { writeAudit } from "../../middleware/audit.js";
 import { serializeBill } from "../../utils/serializer.js";
-import { buildBillText, buildBillHtml, buildBillPdf, BillData } from "../../utils/bill.js";
+import { buildBillText, buildBillHtml, BillData } from "../../utils/bill.js";
 import { AuthenticatedRequest } from "../../types.js";
 
 const router = Router();
@@ -196,24 +196,6 @@ router.get(
 const html = buildBillHtml(await toBillData(order, order.bill));
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(html);
-  })
-);
-
-// GET /api/admin/orders/:id/bill/pdf
-// Generates and returns a professional PDF invoice.
-router.get(
-  "/orders/:id/bill/pdf",
-  requireAdmin,
-  asyncHandler(async (req, res) => {
-    const id = parseIntegerParam(req.params.id, "order id");
-    const order = await loadOrderWithBill(id);
-const pdf = await buildBillPdf(await toBillData(order, order.bill));
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="bill-${order.orderNumber}.pdf"`
-    );
-    res.send(pdf);
   })
 );
 

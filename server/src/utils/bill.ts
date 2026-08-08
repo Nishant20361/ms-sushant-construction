@@ -7,8 +7,6 @@
  * All business details come from the SiteSetting record (database-driven),
  * so the admin can change them at any time without a redeploy.
  */
-import puppeteer from "puppeteer";
-import fs from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
@@ -374,108 +372,4 @@ export function buildBillHtml(bill: BillData): string {
   </div>
 </body>
 </html>`;
-}
-
-let browserPromise: Promise<any> | null = null;
-
-export const RENDER_SAFE_LAUNCH_ARGS = [
-  "--no-sandbox",
-  "--disable-setuid-sandbox",
-  "--disable-dev-shm-usage",
-  "--disable-gpu",
-];
-
-const SYSTEM_BROWSER_CANDIDATES = [
-  "/usr/bin/google-chrome",
-  "/usr/bin/google-chrome-stable",
-  "/usr/bin/chromium",
-  "/usr/bin/chromium-browser",
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-];
-
-function findSystemBrowser(): string | undefined {
-  for (const path of SYSTEM_BROWSER_CANDIDATES) {
-    if (fs.existsSync(path)) {
-      return path;
-    }
-  }
-  return undefined;
-}
-
-async function resolveExecutablePath(): Promise<string> {
-  console.log("ENV PATH:", process.env.PUPPETEER_EXECUTABLE_PATH);
-
-  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
-
-  if (envPath && fs.existsSync(envPath)) {
-    console.log("USING ENV PATH:", envPath);
-    return envPath;
-  }
-
-  const puppeteerPath = await puppeteer.executablePath();
-
-  console.log("PUPPETEER PATH:", puppeteerPath);
-
-  if (puppeteerPath && fs.existsSync(puppeteerPath)) {
-    console.log("USING PUPPETEER PATH:", puppeteerPath);
-
-    return puppeteerPath;
-  }
-
-  const system = findSystemBrowser();
-
-  if (system) {
-    console.log("USING SYSTEM PATH:", system);
-
-    return system;
-  }
-
-  throw new Error("Chromium browser not available");
-}
-
-export async function getBrowser() {
-  if (browserPromise) {
-    return browserPromise;
-  }
-
-  browserPromise = (async () => {
-    const executablePath = await resolveExecutablePath();
-
-    console.log("FINAL EXECUTABLE PATH:", executablePath);
-
-    console.log("FILE EXISTS:", fs.existsSync(executablePath));
-
-    return puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: RENDER_SAFE_LAUNCH_ARGS,
-    });
-  })();
-
-  return browserPromise;
-}
-
-export async function buildBillPdf(bill: BillData): Promise<Buffer> {
-  const html = buildBillHtml(bill);
-
-  const browser = await getBrowser();
-
-  const page = await browser.newPage();
-
-  try {
-    await page.setContent(html, {
-      waitUntil: "networkidle0",
-    });
-
-    await page.emulateMediaType("print");
-
-    const pdf = await page.pdf({
-      format: "A4",
-      printBackground: true,
-    });
-
-    return Buffer.from(pdf);
-  } finally {
-    await page.close().catch(() => undefined);
-  }
 }

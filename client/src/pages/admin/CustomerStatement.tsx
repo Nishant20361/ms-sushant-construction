@@ -3,12 +3,9 @@ import { adminApi } from "../../lib/api";
 import type { CustomerStatement as CustomerStatementType } from "../../types";
 import { formatINR, formatDate } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
-import { useToast } from "../../components/Toast";
 
 export default function CustomerStatement() {
-  const { success } = useToast();
   const [mobile, setMobile] = useState("");
-  const [searchedMobile, setSearchedMobile] = useState("");
   const [statement, setStatement] = useState<CustomerStatementType | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -20,19 +17,12 @@ export default function CustomerStatement() {
     try {
       const data = await adminApi.getCustomerStatement(mobile.trim());
       setStatement(data);
-      setSearchedMobile(mobile.trim());
     } catch (e: any) {
       setStatement(null);
       setLoadError(e?.message ?? "Customer not found");
     } finally {
       setLoading(false);
     }
-  };
-
-  const downloadPdf = () => {
-    if (!searchedMobile) return;
-    window.open(adminApi.getCustomerStatementPdfUrl(searchedMobile), "_blank");
-    success("Customer statement PDF is being generated");
   };
 
   return (
@@ -56,9 +46,6 @@ export default function CustomerStatement() {
           />
         </div>
         <button onClick={search} className="btn-primary">Search</button>
-        {statement && (
-          <button onClick={downloadPdf} className="btn-secondary">⬇️ Download Statement PDF</button>
-        )}
       </div>
 
       {loading ? (

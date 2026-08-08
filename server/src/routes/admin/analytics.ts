@@ -16,7 +16,6 @@ import {
   getCustomerStatement,
   getProductHistory,
 } from "../../utils/analytics.js";
-import { buildCustomerStatementPdf, buildDueReportPdf } from "../../utils/analyticsPdf.js";
 import { buildCsv, buildXlsx, ExportColumn } from "../../utils/export.js";
 
 const router = Router();
@@ -146,14 +145,6 @@ router.get(
       return;
     }
 
-    if (exportType === "pdf") {
-      const pdf = await buildDueReportPdf(report);
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="customer-due-report-${Date.now()}.pdf"`);
-      res.send(pdf);
-      return;
-    }
-
     res.json(report);
   })
 );
@@ -168,22 +159,6 @@ router.get(
     const statement = await getCustomerStatement(mobile);
     if (!statement) throw new HttpError(404, "Customer not found or has no orders");
     res.json(statement);
-  })
-);
-
-// GET /api/admin/analytics/customer-statement/:mobile/pdf
-router.get(
-  "/analytics/customer-statement/:mobile/pdf",
-  requireAdmin,
-  asyncHandler(async (req, res) => {
-    const mobile = req.params.mobile;
-    if (!mobile) throw new HttpError(400, "Customer mobile is required");
-    const statement = await getCustomerStatement(mobile);
-    if (!statement) throw new HttpError(404, "Customer not found or has no orders");
-    const pdf = await buildCustomerStatementPdf(statement);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="customer-statement-${mobile}-${Date.now()}.pdf"`);
-    res.send(pdf);
   })
 );
 

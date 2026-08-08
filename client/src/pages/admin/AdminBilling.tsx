@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { adminApi, ApiRequestError } from "../../lib/api";
 import type { Bill, Order } from "../../types";
 import { formatINR, formatDate } from "../../lib/format";
+import { printInvoice } from "../../lib/printInvoice";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { useToast } from "../../components/Toast";
 
@@ -100,9 +101,12 @@ export default function AdminBilling() {
     }
   };
 
-  const openPrintView = () => {
+const openPrintView = () => {
     if (!order) return;
-    window.open(adminApi.getBillHtmlUrl(order.id), "_blank");
+    const win = printInvoice(order.id);
+    if (!win) {
+      error("Popup blocked. Please allow popups for this site and try again.");
+    }
   };
 
   return (
@@ -110,7 +114,7 @@ export default function AdminBilling() {
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Billing</h2>
         <p className="text-sm text-slate-500">
-          Generate invoices, add discounts, download PDF bills and share via WhatsApp.
+          Generate invoices, add discounts, print invoices and share via WhatsApp.
         </p>
       </div>
 
@@ -317,21 +321,13 @@ export default function AdminBilling() {
                 </div>
               </div>
 
-              {/* Bill actions */}
+{/* Bill actions */}
               <div className="mt-5 flex flex-wrap gap-3">
-                <a
-                  href={adminApi.getBillPdfUrl(order.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary"
-                >
-                  ⬇️ Download PDF Bill
-                </a>
+                <button onClick={openPrintView} className="btn-primary">
+                  🖨️ Print Invoice
+                </button>
                 <button onClick={handleCopyText} className="btn-secondary">
                   📋 Copy Bill Text
-                </button>
-                <button onClick={openPrintView} className="btn-secondary">
-                  🖨️ Print Invoice
                 </button>
               </div>
             </>

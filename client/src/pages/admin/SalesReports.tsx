@@ -4,6 +4,7 @@ import { adminApi } from "../../lib/api";
 import type { ReportFilters, ReportOrder, ReportType, SalesReport } from "../../types";
 import { formatINR, formatDate, resolveImageUrl } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
+import { downloadFile } from "../../lib/download";
 import { useToast } from "../../components/Toast";
 
 const STATUS_OPTIONS = ["PENDING", "CONFIRMED", "PROCESSING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"] as const;
@@ -29,7 +30,7 @@ function todayStr(): string {
 }
 
 export default function SalesReports() {
-  const { success } = useToast();
+  const { success, error: toastError } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const modeParam = searchParams.get("mode");
 
@@ -128,28 +129,36 @@ export default function SalesReports() {
     });
   };
 
-  const downloadPdf = () => {
-    const url = adminApi.getSalesReportPdfUrl(tab, {
-      date,
-      from,
-      to,
-      month,
-      year,
-      filters: {
-        customerName: customerFilter || undefined,
-        phone: phoneFilter || undefined,
-        orderId: orderIdFilter || undefined,
-        productName: productFilter || undefined,
-        category: categoryFilter || undefined,
-        paymentType: paymentFilter || undefined,
-        status: statusFilter || undefined,
-      },
+  const handleExport = async (format: "excel" | "csv") => {
+    const f: ReportFilters = {
+      customerName: customerFilter || undefined,
+      phone: phoneFilter || undefined,
+      orderId: orderIdFilter || undefined,
+      productName: productFilter || undefined,
+      category: categoryFilter || undefined,
+      paymentType: paymentFilter || undefined,
+      status: statusFilter || undefined,
+    };
+    const url = adminApi.getSalesReportExportUrl(tab, format, {
+      date: tab === "daily" ? date : undefined,
+      from: tab === "weekly" ? from : undefined,
+      to: tab === "weekly" ? to : undefined,
+      month: tab === "monthly" ? month : undefined,
+      year: tab === "monthly" ? year : undefined,
+      filters: f,
     });
-    window.open(url, "_blank");
-    success("PDF report is being generated");
+    try {
+      await downloadFile(
+        url,
+        `sales-report-${tab}.${format === "excel" ? "xlsx" : "csv"}`
+      );
+      success(`Sales report exported as ${format === "excel" ? "Excel" : "CSV"}`);
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : "Export failed");
+    }
   };
 
-  const s = report?.summary;
+const s = report?.summary;
 
   const summaryCards = report
     ? [
@@ -170,16 +179,21 @@ export default function SalesReports() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+<div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Sales Reports</h2>
           <p className="text-sm text-slate-500">
             {report ? report.periodLabel : "Select a period to view sales"}
           </p>
         </div>
-        <button onClick={downloadPdf} disabled={!report} className="btn-primary">
-          ⬇️ Download PDF
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => handleExport("excel")} className="btn-secondary text-sm">
+            ⬇️ Export Excel
+          </button>
+          <button onClick={() => handleExport("csv")} className="btn-secondary text-sm">
+            ⬇️ Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

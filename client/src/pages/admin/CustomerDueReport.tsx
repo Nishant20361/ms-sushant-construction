@@ -4,6 +4,7 @@ import type { CustomerDueReport as CustomerDueReportType } from "../../types";
 import { formatINR, formatDate } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { useToast } from "../../components/Toast";
+import { downloadFile } from "../../lib/download";
 
 const PAGE_SIZE = 20;
 
@@ -55,14 +56,17 @@ export default function CustomerDueReport() {
     setPage(1);
   };
 
-  const downloadExport = (format: "csv" | "xlsx" | "pdf") => {
+  const downloadExport = (format: "csv" | "xlsx") => {
     const url = adminApi.getCustomerDueReportExportUrl(format, {
       search: appliedSearch || undefined,
       from: appliedFrom || undefined,
       to: appliedTo || undefined,
     });
-    window.open(url, "_blank");
-    success(`Exporting ${format.toUpperCase()} with all filtered records…`);
+    downloadFile(url, `customer-due-report.${format === "xlsx" ? "xlsx" : "csv"}`)
+      .then(() => success(`Exporting ${format.toUpperCase()} with all filtered records…`))
+      .catch((e: Error) => {
+        alert(e.message || "Export failed");
+      });
   };
 
   return (
@@ -101,7 +105,6 @@ export default function CustomerDueReport() {
         <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
           <button onClick={() => downloadExport("csv")} className="btn-secondary text-sm">⬇️ CSV</button>
           <button onClick={() => downloadExport("xlsx")} className="btn-secondary text-sm">⬇️ Excel</button>
-          <button onClick={() => downloadExport("pdf")} className="btn-secondary text-sm">⬇️ PDF</button>
         </div>
       </div>
 

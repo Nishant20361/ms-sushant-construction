@@ -406,9 +406,6 @@ getDuesSummary(params: {
   getBillTextUrl(orderId: number): string {
     return `${API_BASE}/admin/orders/${orderId}/bill/text`;
   },
-getBillPdfUrl(orderId: number): string {
-    return `${API_BASE}/admin/orders/${orderId}/bill/pdf`;
-  },
   getBillHtmlUrl(orderId: number): string {
     return `${API_BASE}/admin/orders/${orderId}/bill/html`;
   },
@@ -441,8 +438,9 @@ getBillPdfUrl(orderId: number): string {
     if (f.category) q.set("category", f.category);
     return request(`/admin/reports/data?${q.toString()}`);
   },
-  getSalesReportPdfUrl(
+  getSalesReportExportUrl(
     type: ReportType,
+    format: "excel" | "csv",
     params: {
       date?: string;
       from?: string;
@@ -452,7 +450,7 @@ getBillPdfUrl(orderId: number): string {
       filters?: ReportFilters;
     }
   ): string {
-    const q = new URLSearchParams();
+const q = new URLSearchParams();
     q.set("type", type);
     if (params.date) q.set("date", params.date);
     if (params.from) q.set("from", params.from);
@@ -466,11 +464,13 @@ getBillPdfUrl(orderId: number): string {
     if (f.paymentType) q.set("paymentType", f.paymentType);
     if (f.status) q.set("status", f.status);
     if (f.productName) q.set("productName", f.productName);
-if (f.category) q.set("category", f.category);
-    return `${API_BASE}/admin/reports/pdf?${q.toString()}`;
+    if (f.category) q.set("category", f.category);
+    const ext = format === "excel" ? "excel" : "csv";
+    return `${API_BASE}/admin/reports/sales/export/${ext}?${q.toString()}`;
   },
 
   // ------------------ Phase 2 Analytics ------------------
+
   getAnalyticsOverview(): Promise<{ sales: SalesAnalytics; payments: PaymentAnalytics }> {
     return request("/admin/analytics/overview");
   },
@@ -520,7 +520,7 @@ if (f.category) q.set("category", f.category);
     const qs = q.toString();
     return request(`/admin/analytics/customer-due-report${qs ? `?${qs}` : ""}`);
   },
-  getCustomerDueReportExportUrl(format: "csv" | "xlsx" | "pdf", params: { search?: string; from?: string; to?: string }): string {
+  getCustomerDueReportExportUrl(format: "csv" | "xlsx", params: { search?: string; from?: string; to?: string }): string {
     const q = new URLSearchParams();
     q.set("export", format);
     if (params.search) q.set("search", params.search);
@@ -530,9 +530,6 @@ if (f.category) q.set("category", f.category);
   },
   getCustomerStatement(mobile: string): Promise<CustomerStatement> {
     return request(`/admin/analytics/customer-statement/${encodeURIComponent(mobile)}`);
-  },
-  getCustomerStatementPdfUrl(mobile: string): string {
-    return `${API_BASE}/admin/analytics/customer-statement/${encodeURIComponent(mobile)}/pdf`;
   },
   getProductHistory(id: number): Promise<ProductHistory> {
     return request(`/admin/analytics/product-history/${id}`);

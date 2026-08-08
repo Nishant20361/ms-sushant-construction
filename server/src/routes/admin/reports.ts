@@ -2,11 +2,148 @@ import { Router } from "express";
 import { requireAdmin } from "../../middleware/auth.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { HttpError } from "../../utils/httpError.js";
-import { buildSalesReport, ReportPeriod, ReportFilters } from "../../utils/report.js";
-import { buildReportPdf } from "../../utils/reportPdf.js";
+import { buildSalesReport, ReportPeriod, ReportFilters, SalesReportData } from "../../utils/report.js";
+import { buildCsv, buildXlsx, ExportColumn } from "../../utils/export.js";
 import { AuthenticatedRequest } from "../../types.js";
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// Sales report export (Excel / CSV)
+// ---------------------------------------------------------------------------
+
+const SALES_EXPORT_COLUMNS: ExportColumn[] = [
+  { header: "Date", key: "date" },
+  { header: "Invoice Number", key: "invoiceNumber" },
+  { header: "Customer Name", key: "customerName" },
+  { header: "Mobile", key: "customerMobile" },
+  { header: "Products", key: "products" },
+  { header: "Quantity", key: "quantity", format: "0.00" },
+  { header: "Subtotal", key: "subtotal", format: "#,##0.00" },
+  { header: "Discount", key: "discount", format: "#,##0.00" },
+  { header: "Final Amount", key: "finalAmount", format: "#,##0.00" },
+  { header: "Cash Paid", key: "cashPaid", format: "#,##0.00" },
+  { header: "Online Paid", key: "onlinePaid", format: "#,##0.00" },
+  { header: "Due Amount", key: "dueAmount", format: "#,##0.00" },
+  { header: "Payment Status", key: "paymentStatus" },
+];
+
+/** Map a report to the flat rows used by both CSV and Excel exporters. */
+function toSalesExportRows(report: SalesReportData): Record<string, any>[] {
+  return report.orders.map((o) => ({
+    date: new Date(o.createdAt).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }),
+    invoiceNumber: o.orderNumber,
+    customerName: o.customerName,
+    customerMobile: o.customerMobile,
+    products: o.items.map((it) => it.productName).join(", "),
+    quantity: Math.round(o.items.reduce((s, it) => s + it.quantity, 0) * 100) / 100,
+    subtotal: o.subtotal,
+    discount: o.discount,
+    finalAmount: o.finalAmount,
+    cashPaid: o.cashPaid,
+    onlinePaid: o.onlinePaid,
+    dueAmount: o.remainingDue,
+    paymentStatus: o.paymentStatus === "PARTIALLY_PAID" ? "PARTIALLY PAID" : o.paymentStatus,
+  }));
+}
+
+function salesExportFilename(report: SalesReportData, ext: "csv" | "xlsx"): string {
+  const safe = report.periodLabel.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `sales-report-${report.reportType}-${safe || Date.now()}.${ext}`;
+}
+
+function isSalesPeriod(v: string): v is "daily" | "weekly" | "monthly" {
+  return v === "daily" || v === "weekly" || v === "monthly";
+}
+
+function isSalesFormat(v: string): v is "excel" | "csv" {
+  return v === "excel" || v === "csv";
+}
+
+/**
+ * Build the export for a sales report and send it as a file download.
+ * Sends CSV or XLSX with proper Content-Type / Content-Disposition headers.
+ */
+async function sendSalesExport(
+  req: AuthenticatedRequest,
+  res: import("express").Response,
+  periodType: "daily" | "weekly" | "monthly",
+  format: "excel" | "csv"
+): Promise<void> {
+  const query = { ...req.query, type: periodType } as Record<string, unknown>;
+  const period = parsePeriod(query);
+  const filters = parseFilters(query);
+  const generatedBy = req.admin?.username ?? "Admin";
+  const report = await buildSalesReport(period, filters, generatedBy);
+
+  const rows = toSalesExportRows(report);
+
+  if (format === "csv") {
+    const csv = buildCsv(SALES_EXPORT_COLUMNS, rows);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${salesExportFilename(report, "csv")}"`
+    );
+    res.send(Buffer.from("\uFEFF" + csv, "utf-8"));
+    return;
+  }
+
+  const buf = await buildXlsx(SALES_EXPORT_COLUMNS, rows);
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${salesExportFilename(report, "xlsx")}"`
+  );
+  res.send(buf);
+}
+
+// GET /api/admin/reports/sales/export/excel
+// GET /api/admin/reports/sales/export/csv
+// Sales report export (Excel / CSV) for the current period.
+// Query params mirror /reports/data: type, date, from, to, month, year + filters.
+router.get(
+  "/reports/sales/export/excel",
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const periodType = String(req.query.type);
+    if (!isSalesPeriod(periodType)) throw new HttpError(400, "Invalid sales report period");
+    await sendSalesExport(req, res, periodType, "excel");
+  })
+);
+
+router.get(
+  "/reports/sales/export/csv",
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const periodType = String(req.query.type);
+    if (!isSalesPeriod(periodType)) throw new HttpError(400, "Invalid sales report period");
+    await sendSalesExport(req, res, periodType, "csv");
+  })
+);
+
+// GET /api/admin/reports/sales/:period/:format
+// period ∈ daily | weekly | monthly
+// format ∈ excel | csv
+// Query params mirror /reports/data: date, from, to, month, year + filters.
+router.get(
+  "/reports/sales/:period/:format",
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const periodType = String(req.params.period);
+    const format = String(req.params.format);
+    if (!isSalesPeriod(periodType)) throw new HttpError(400, "Invalid sales report period");
+    if (!isSalesFormat(format)) throw new HttpError(400, "Invalid export format");
+    await sendSalesExport(req, res, periodType, format);
+  })
+);
 
 /** Parse the period query params into a ReportPeriod. */
 function parsePeriod(query: Record<string, unknown>): ReportPeriod {
@@ -59,27 +196,6 @@ router.get(
     const generatedBy = req.admin?.username ?? "Admin";
     const report = await buildSalesReport(period, filters, generatedBy);
     res.json({ report });
-  })
-);
-
-// GET /api/admin/reports/pdf?type=daily|weekly|monthly&...&filters
-// Returns a professional multi-page PDF (no page limit).
-router.get(
-  "/reports/pdf",
-  requireAdmin,
-  asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const period = parsePeriod(req.query as Record<string, unknown>);
-    const filters = parseFilters(req.query as Record<string, unknown>);
-    const generatedBy = req.admin?.username ?? "Admin";
-    const report = await buildSalesReport(period, filters, generatedBy);
-    const pdf = await buildReportPdf(report);
-    const filename = `${report.reportType}-sales-report-${Date.now()}.pdf`;
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${filename}"`
-    );
-    res.send(pdf);
   })
 );
 
