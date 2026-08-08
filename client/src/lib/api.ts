@@ -2,7 +2,9 @@ import { API_BASE } from "../config";
 import type {
   AdminProfile,
   ApiError,
+  AssistantLanguage,
   Bill,
+  ConstructionChatResponse,
   Category,
   CategoryReportRow,
   CustomerDetail,
@@ -172,6 +174,20 @@ export const publicApi = {
   },
   health(): Promise<{ status: string; service: string; time: string }> {
     return request("/health");
+  },
+  constructionAssistantChat(payload: {
+    message: string;
+    sessionId?: string;
+    language?: AssistantLanguage;
+  }): Promise<ConstructionChatResponse> {
+    const body: Record<string, string> = { message: payload.message };
+    if (payload.sessionId) body.sessionId = payload.sessionId;
+    if (payload.language) body.language = payload.language;
+    return request(
+      "/construction-assistant/chat",
+      { method: "POST", body: JSON.stringify(body) },
+      { csrf: true }
+    );
   },
 };
 

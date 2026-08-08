@@ -201,9 +201,13 @@ export const resetPasswordSchema = z.object({
     .max(128, "Password too long"),
 });
 
-// ------------------------- Admin notification email -------------------
-// Accepts null/undefined/empty string -> null (disable notifications), but
-// still requires a valid email format whenever a non-empty value is given.
+// ------------------------- Construction Assistant --------------------
+export const constructionChatSchema = z.object({
+  message: z.string().trim().min(1, "Message cannot be empty").max(2000),
+  sessionId: z.string().trim().max(100).optional(),
+  language: z.enum(["Hindi", "English"]).optional(),
+});
+
 export const adminEmailSchema = z.object({
   email: z.preprocess(
     (v) => (v === null || v === undefined || v === "" ? null : v),

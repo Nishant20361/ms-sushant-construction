@@ -38,3 +38,37 @@
   }
 }
 
+/* Construction Assistant typing indicator (three bouncing dots) */
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.typing-dots::before,
+.typing-dots::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing-dots::before {
+  animation-delay: 0.2s;
+}
+.typing-dots::after {
+  animation-delay: 0.4s;
+}
+@keyframes typing-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+

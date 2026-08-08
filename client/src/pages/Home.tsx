@@ -6,6 +6,7 @@ import type { Category, Product, TrackedOrder, TrackedOrderSummary } from "../ty
 import { formatINR, formatOrderStatus, resolveImageUrl } from "../lib/format";
 import { EmptyState, ErrorState, LoadingState } from "../components/Loading";
 import { useToast } from "../components/Toast";
+import ConstructionAssistant from "../components/ConstructionAssistant";
 
 const PAGE_SIZE = 12;
 
@@ -231,6 +232,24 @@ const handleAdd = (p: Product, quantity: number) => {
               className="mt-8 h-56 w-full rounded-xl object-cover"
               loading="lazy"
             />
+          </div>
+        </div>
+      </section>
+
+      {/* ============ CONSTRUCTION ASSISTANT ============ */}
+      <section id="assistant" className="bg-slate-50 py-16">
+        <div className="container-page">
+          <div className="text-center">
+            <span className="badge bg-brand-600 text-white">🤖 AI Construction Assistant</span>
+            <h2 className="mt-3 text-3xl font-bold text-slate-900">
+              अपने घर के बारे में जानकारी यहाँ से प्राप्त करें 🏠
+            </h2>
+            <p className="mx-auto mt-3 max-w-2xl text-slate-600">
+              AI Construction Assistant से पूछें और अपने घर के लिए अनुमानित सामग्री, लागत और निर्माण जानकारी प्राप्त करें।
+            </p>
+          </div>
+          <div className="mt-10">
+            <ConstructionAssistant />
           </div>
         </div>
       </section>

@@ -274,6 +274,15 @@ export interface ApiError {
   details?: { path: string; message: string }[];
 }
 
+// ------------------------- Construction Assistant ---------------------
+export type AssistantLanguage = "Hindi" | "English";
+
+export interface ConstructionChatResponse {
+  reply: string;
+  language: AssistantLanguage;
+  sessionId: string;
+}
+
 // ------------------------- Sales Reports ------------------------
 export type ReportType = "daily" | "weekly" | "monthly";
 

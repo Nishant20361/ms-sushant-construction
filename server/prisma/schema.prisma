@@ -217,3 +217,14 @@ model AdminAuditLog {
   @@index([adminId])
   @@index([createdAt])
 }
+
+model ConstructionQuery {
+  id             Int      @id @default(autoincrement())
+  customerMessage String
+  language       String   @default("English")
+  assistantReply String
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([language])
+}
