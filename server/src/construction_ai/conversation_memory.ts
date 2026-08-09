@@ -42,6 +42,35 @@ export interface SessionData {
   lastTopic: string | null;
   /** Whether the assistant has already said the welcome greeting. */
   greeted: boolean;
+
+  // ---- PART 2 additions (Phases 11-30) ----
+  /** Current consultation intent (e.g. "build_new_house", "renovate", "roof", "foundation", etc.). */
+  consultIntent: string | null;
+  /** Step within the consultation flow. */
+  consultStep: string | null;
+
+  // Room-based estimation (Phase 12)
+  bedrooms: number | null;
+  halls: number | null;
+  stores: number | null;
+  balconies: number | null;
+  verandas: number | null;
+  staircases: number | null;
+  /** Whether the user described their house via rooms (e.g. "3 room 1 kitchen 2 bathroom"). */
+  roomBased: boolean;
+
+  // Roof type query (Phase 11)
+  /** "rcc" or "sheet" or null. */
+  roofTypeDetail: string | null;
+
+  // Boundary wall (Phase 11)
+  boundaryWall: boolean;
+
+  /** Whether the assistant already asked location for cost. */
+  askedLocationForCost: boolean;
+
+  /** Last product looked up (for follow-up). */
+  lastProduct: string | null;
 }
 
 /** Compute the total built-up area from the remembered dimensions + floors. */
@@ -68,5 +97,18 @@ export function createInitialSession(lang: AssistantLanguage): SessionData {
     cementProduct: null,
     lastTopic: null,
     greeted: false,
+    consultIntent: null,
+    consultStep: null,
+    bedrooms: null,
+    halls: null,
+    stores: null,
+    balconies: null,
+    verandas: null,
+    staircases: null,
+    roomBased: false,
+    roofTypeDetail: null,
+    boundaryWall: false,
+    askedLocationForCost: false,
+    lastProduct: null,
   };
 }

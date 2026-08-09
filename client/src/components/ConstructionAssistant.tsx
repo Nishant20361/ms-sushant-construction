@@ -89,6 +89,15 @@ const SUGGESTED_QUESTIONS: { label: string; message: string }[] = [
   { label: "💧 Waterproofing कैसे करें?", message: "waterproofing kaise karein" },
   { label: "🧱 ACC F2R के बारे में बताओ", message: "ACC F2R ke bare me batao" },
   { label: "💰 Construction cost कितनी?", message: "construction cost kitni aayegi" },
+  // ---- PART 2 suggested questions (Phases 11-30) ----
+  { label: "🏠 Rooms से area निकालें", message: "3 room 1 kitchen 2 bathroom" },
+  { label: "⚖️ OPC vs PPC", message: "OPC vs PPC which is better?" },
+  { label: "⚖️ M-Sand vs River Sand", message: "M sand vs river sand difference" },
+  { label: "📋 Material checklist", message: "material list for building a house" },
+  { label: "💰 Cost breakdown", message: "cost breakdown" },
+  { label: "❓ Steel क्यों लगता है?", message: "why steel in roof?" },
+  { label: "🏠 RCC या Sheet roof?", message: "RCC roof or sheet which is better?" },
+  { label: "🏗️ घर कैसे बनता है?", message: "ghar kaise banta hai?" },
 ];
 
 let msgSeq = 0;

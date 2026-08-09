@@ -100,6 +100,7 @@ import { findStage } from "./construction_stages.js";
 import { findCementCompany } from "./cement_data.js";
 import { findSteelInfo } from "./steel_data.js";
 import { findRoofingInfo } from "./roofing_data.js";
+import { handlePart2 } from "./part2_handlers.js";
 
 export { createInitialSession, getTotalArea };
 export type { SessionData, AssistantLanguage };
@@ -810,7 +811,7 @@ export function processMessage(session: SessionData, message: string): Assistant
   const trimmed = message.trim();
   const lower = trimmed.toLowerCase();
 
-  const conversation = () => ({
+const conversation = () => ({
     length: session.dimensions?.length ?? null,
     width: session.dimensions?.width ?? null,
     area: session.dimensions?.area ?? null,
@@ -819,6 +820,20 @@ export function processMessage(session: SessionData, message: string): Assistant
     quality: session.quality,
     location: session.location,
   });
+
+  // -------- PART 2 consultation handlers (Phases 11-30) --------
+  // Runs before the standard flow so the new abilities can take priority.
+  // Returns a Part2Result when matched, otherwise null to fall through.
+  const part2Result = handlePart2(session, trimmed);
+  if (part2Result) {
+    return {
+      reply: part2Result.reply,
+      language: lang,
+      conversation: conversation(),
+      producedEstimate: part2Result.producedEstimate ?? false,
+      ...(part2Result.suggestions ? { suggestions: part2Result.suggestions } : {}),
+    };
+  }
 
   // -------- Greeting --------
   if (isGreeting(trimmed) && !session.greeted) {

@@ -41,23 +41,26 @@ export function formatIndianNumber(num: number): string {
 /**
  * Parse a two-dimensional house size from the user's message.
  *
- * Supported separators: "x", "×", "*", "by", "बाई", "गुणा".
- * Unquoted numbers are matched regardless of surrounding words.
+ * Supported separators: "x", "×", "*", "by", "बाई", "बाय", "बाइ", "गुणा".
+ * Handles trailing "h"/"f" (e.g. "40x35h") and "feet"/"ft"/"फीट" suffixes.
  * Returns null when a valid LENGTH x WIDTH pair cannot be found.
  */
 export function parseDimensions(text: string): ParsedDimensions | null {
   const cleaned = text
     .toLowerCase()
     // Normalize the various separators to a single marker with spaces.
-    .replace(/गुणा/g, " बाई ")
+    .replace(/गुणा/g, " x ")
+    .replace(/बाई/g, " x ")
+    .replace(/बाय/g, " x ")
+    .replace(/बाइ/g, " x ")
     .replace(/×/g, " x ")
     .replace(/\*/g, " x ")
     .replace(/\bby\b/g, " x ")
-    .replace(/बाई/g, " x ");
+// Normalize "feet"/"ft"/"फीट"/"fit"/"h"/"f" suffixes.
+    .replace(/\s*(?:feet|ft|फीट|फुट|fit|h|f)\b/g, "");
 
   // Match a pair of numbers separated by "x", with optional "feet"/"ft"/"फीट" suffix.
   const patterns: RegExp[] = [
-    /(\d+)\s*[xX]\s*(\d+)/,
     /(\d+(?:\.\d+)?)\s*[xX]\s*(\d+(?:\.\d+)?)/,
   ];
 
@@ -382,4 +385,53 @@ export function staircaseEstimate(): { note: string } {
   return {
     note: "Staircase design depends on floor height, available space and structural design.",
   };
+}
+
+// ===========================================================================
+// PART 2 — Room-based area estimation & cost breakdown helpers
+// ===========================================================================
+
+/**
+ * Approximate house built-up area from a room composition (Phase 12).
+ * Uses rough per-room planning figures (sq.ft). These are approximate and
+ * only used to start a conversation when the user gives rooms instead of
+ * dimensions.
+ */
+export interface RoomComposition {
+  bedrooms?: number;
+  halls?: number;
+  kitchens?: number;
+  bathrooms?: number;
+  stores?: number;
+  balconies?: number;
+  verandas?: number;
+  staircases?: number;
+}
+
+export function estimateAreaFromRooms(rooms: RoomComposition): number {
+  const bedrooms = rooms.bedrooms ?? 0;
+  const halls = rooms.halls ?? 0;
+  const kitchens = rooms.kitchens ?? 0;
+  const bathrooms = rooms.bathrooms ?? 0;
+  const stores = rooms.stores ?? 0;
+  const balconies = rooms.balconies ?? 0;
+  const verandas = rooms.verandas ?? 0;
+  const staircases = rooms.staircases ?? 0;
+
+  // Rough per-room planning figures (sq.ft).
+  const area =
+    bedrooms * 180 +
+    halls * 250 +
+    kitchens * 120 +
+    bathrooms * 60 +
+    stores * 80 +
+    balconies * 40 +
+    verandas * 60 +
+    staircases * 80;
+  return area;
+}
+
+/** Format a number with Indian grouping (re-export convenience). */
+export function roomBasedAreaLabel(area: number): string {
+  return formatIndianNumber(area) + " sq.ft";
 }

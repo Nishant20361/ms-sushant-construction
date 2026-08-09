@@ -724,12 +724,102 @@ it("gives cement recommendation guidance for an application", async () => {
     expect(res.body.reply).toContain("स्वागत");
   });
 
-  it("explains the construction sequence", async () => {
+it("explains the construction sequence", async () => {
     const { agent, token } = await getCsrf();
     const res = await agent
       .post("/api/construction-assistant/chat")
       .set("X-CSRF-Token", token)
       .send({ message: "ghar banane ka sequence kya hai", language: "Hindi" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toMatch(/foundation|नींव/i);
+    expect(res.body.reply).toMatch(/roof|छत/i);
+  });
+});
+
+describe("Construction Assistant PART 2 (Phases 11-30)", () => {
+  it("answers a comparison (OPC vs PPC)", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "OPC vs PPC which is better?", language: "English" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toContain("OPC");
+    expect(res.body.reply).toContain("PPC");
+  });
+
+  it("provides a material checklist", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "material list for building a house", language: "English" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toMatch(/FOUNDATION/i);
+    expect(res.body.reply).toMatch(/ROOF/i);
+  });
+
+  it("answers a why question", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "why steel in roof?", language: "English" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toMatch(/tensile/i);
+  });
+
+  it("answers a cost breakdown after size is known", async () => {
+    const { agent, token } = await getCsrf();
+    const first = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "40x35 house", language: "English" });
+    const sessionId = first.body.sessionId;
+    await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "2 floor", sessionId, language: "English" });
+    await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "normal", sessionId, language: "English" });
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "cost breakdown", sessionId, language: "English" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toMatch(/Material/i);
+    expect(res.body.reply).toMatch(/Labour/i);
+  });
+
+  it("estimates area from a room-based description", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "3 room 1 kitchen 2 bathroom", language: "English" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply.toLowerCase()).toContain("sq.ft");
+  });
+
+  it("answers a product lookup (ACC F2R)", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "ACC F2R ke bare me batao", language: "Hindi" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toContain("ACC");
+    expect(res.body.reply).toContain("F2R");
+  });
+
+  it("answers a construction stage guide", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "ghar kaise banta hai?", language: "Hindi" });
     expect(res.status).toBe(200);
     expect(res.body.reply).toMatch(/foundation|नींव/i);
     expect(res.body.reply).toMatch(/roof|छत/i);
