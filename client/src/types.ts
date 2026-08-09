@@ -277,10 +277,23 @@ export interface ApiError {
 // ------------------------- Construction Assistant ---------------------
 export type AssistantLanguage = "Hindi" | "English";
 
+export interface AssistantConversation {
+  length: number | null;
+  width: number | null;
+  area: number | null;
+  floors: number | null;
+  totalArea: number | null;
+  quality: string | null;
+  location: string | null;
+}
+
 export interface ConstructionChatResponse {
   reply: string;
   language: AssistantLanguage;
   sessionId: string;
+  conversation?: AssistantConversation;
+  suggestions?: string[];
+  producedEstimate?: boolean;
 }
 
 // ------------------------- Sales Reports ------------------------

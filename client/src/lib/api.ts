@@ -175,7 +175,7 @@ export const publicApi = {
   health(): Promise<{ status: string; service: string; time: string }> {
     return request("/health");
   },
-  constructionAssistantChat(payload: {
+constructionAssistantChat(payload: {
     message: string;
     sessionId?: string;
     language?: AssistantLanguage;

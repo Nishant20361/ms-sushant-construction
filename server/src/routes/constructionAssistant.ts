@@ -80,7 +80,7 @@ router.post(
       }
     }
 
-    const result = processMessage(data, message);
+const result = processMessage(data, message);
 
     // Persist the assistant reply + customer message to the database.
     // Queries are saved only after the response is generated.
@@ -101,10 +101,25 @@ router.post(
     const stored = sessions.get(sessionId);
     if (stored) stored.updatedAt = Date.now();
 
-    res.json({
+res.json({
       reply: result.reply,
       language: result.language,
       sessionId,
+      ...(result.conversation
+        ? {
+            conversation: {
+              length: result.conversation.length,
+              width: result.conversation.width,
+              area: result.conversation.area,
+              floors: result.conversation.floors,
+              totalArea: result.conversation.totalArea,
+              quality: result.conversation.quality,
+              location: result.conversation.location,
+            },
+          }
+        : {}),
+      ...(result.suggestions ? { suggestions: result.suggestions } : {}),
+      producedEstimate: result.producedEstimate ?? false,
     });
   })
 );

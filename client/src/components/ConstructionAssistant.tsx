@@ -48,7 +48,6 @@ interface WebSpeechRecognition extends EventTarget {
 
 type WebSpeechRecognitionConstructor = new () => WebSpeechRecognition;
 
-// Declare the global constructors the browser exposes on `window`.
 declare global {
   interface Window {
     SpeechRecognition: any;
@@ -74,8 +73,23 @@ function getSpeechRecognition(): WebSpeechRecognition | null {
   return Ctor ? new Ctor() : null;
 }
 
-const WELCOME_HINDI = "नमस्ते! मैं आपका 🏠 Construction Assistant हूं। मुझे अपने घर का आकार बताएं, जैसे 40x35 फीट।";
-const WELCOME_ENGLISH = "Namaste! I'm your 🏠 Construction Assistant. Tell me your house size, e.g. 40x35 feet.";
+// Friendly bilingual welcome messages.
+const WELCOME_HINDI =
+  "नमस्ते 😊 M/S Sushant Construction में आपका स्वागत है।\nमैं घर बनाने, material, cost, cement, steel, roof और foundation की जानकारी दे सकता हूँ।";
+const WELCOME_ENGLISH =
+  "Hello 😊 Welcome to M/S Sushant Construction.\nI can help you with house building, materials, cost, cement, steel, roof and foundation.";
+
+// Suggested questions (bilingual-friendly: the assistant auto-detects).
+const SUGGESTED_QUESTIONS: { label: string; message: string }[] = [
+  { label: "🏠 40×35 घर का estimate", message: "40x35 ka ghar ka estimate do" },
+  { label: "🧱 Cement कितना लगेगा?", message: "cement kitna lagega" },
+  { label: "🔩 Steel कितना चाहिए?", message: "steel kitna lagega" },
+  { label: "🏗️ Foundation में क्या लगता है?", message: "foundation me kya kya lagega" },
+  { label: "🏠 Roof के लिए क्या चाहिए?", message: "roof banane me kya kya chahiye" },
+  { label: "💧 Waterproofing कैसे करें?", message: "waterproofing kaise karein" },
+  { label: "🧱 ACC F2R के बारे में बताओ", message: "ACC F2R ke bare me batao" },
+  { label: "💰 Construction cost कितनी?", message: "construction cost kitni aayegi" },
+];
 
 let msgSeq = 0;
 
@@ -88,21 +102,33 @@ export default function ConstructionAssistant() {
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [supportsVoice] = useState<boolean>(() => !!getSpeechRecognition());
+  const [showSuggestions, setShowSuggestions] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<WebSpeechRecognition | null>(null);
   const languageRef = useRef<AssistantLanguage>(language);
+  const sessionIdRef = useRef<string>("");
 
   useEffect(() => {
     languageRef.current = language;
-    // System greeting reflects the UI language.
-    const greeting =
-      language === "Hindi" ? WELCOME_HINDI : WELCOME_ENGLISH;
-    setMessages((prev) => (prev.length === 0 ? [{ id: ++msgSeq, role: "assistant", text: greeting }] : prev));
   }, [language]);
 
-  // Scroll only the chat message container, never the whole page.
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  // Greeting reflects the UI language.
+  useEffect(() => {
+    const greeting = language === "Hindi" ? WELCOME_HINDI : WELCOME_ENGLISH;
+    setMessages((prev) =>
+      prev.length === 0
+        ? [{ id: ++msgSeq, role: "assistant", text: greeting }]
+        : prev
+    );
+  }, [language]);
+
+  // Scroll ONLY the chat message container, never the whole page.
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (container) {
@@ -130,19 +156,29 @@ export default function ConstructionAssistant() {
     if (!trimmed || loading) return;
     setInput("");
     addMessage("user", trimmed);
+    setShowSuggestions(false);
     setLoading(true);
     setVoiceError(null);
     try {
       const res: ConstructionChatResponse =
         await publicApi.constructionAssistantChat({
           message: trimmed,
-          sessionId: sessionId || undefined,
-          language: languageRef.current,
+          sessionId: sessionIdRef.current || undefined,
+          // Do NOT force the language here — let the assistant auto-detect
+          // Hindi/English/Hinglish from the message for a natural response.
         });
       setSessionId(res.sessionId ?? "");
       addMessage("assistant", res.reply);
-      // Follow the assistant's resolved language for consistency.
+      // Follow the assistant's resolved language for follow-up UI text.
       if (res.language) setLanguage(res.language);
+      // Show the assistant-provided suggestions (if any), otherwise hide.
+      if (res.suggestions && res.suggestions.length > 0) {
+        setShowSuggestions(true);
+      } else if (messages.length === 0) {
+        setShowSuggestions(true);
+      } else {
+        setShowSuggestions(false);
+      }
     } catch (e: any) {
       addMessage(
         "assistant",
@@ -191,9 +227,6 @@ export default function ConstructionAssistant() {
     setVoiceError(null);
     const rec = new RecognitionCtor();
     rec.lang = languageRef.current === "Hindi" ? "hi-IN" : "en-IN";
-    // Single-utterance recognition stops automatically after the user stops
-    // speaking, avoiding the "continuous" mode issues where a generic error
-    // surfaces without producing any transcript.
     rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
@@ -206,7 +239,6 @@ export default function ConstructionAssistant() {
       recognitionRef.current = null;
     };
 
-    // Expose via ref so we can stop from elsewhere.
     recognitionRef.current = rec;
 
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
@@ -217,7 +249,7 @@ export default function ConstructionAssistant() {
       if (code === "not-allowed" || code === "service-not-allowed" || code === "permission-denied" || code === "audio-capture") {
         msg =
           languageRef.current === "Hindi"
-            ? "🎤 माइक्रोफ़ोन की अनुमति नहीं मिली। कृपया ब्राउज़र में माइक्रोफ़ोन अनुमति दें।"
+            ? "🎤 Microphone permission नहीं मिली। Browser settings में microphone permission allow करके फिर try करें।"
             : "🎤 Microphone permission was denied. Please allow microphone access in your browser.";
       } else if (code === "no-speech") {
         msg =
@@ -255,10 +287,8 @@ export default function ConstructionAssistant() {
       }
       const text = (finalTranscript || interimTranscript).trim();
       if (text) {
-        // Show the converted text in the input box for the user to edit.
         setInput(text);
       }
-      // Once the utterance is final, stop listening so the user can edit/send.
       if (finalTranscript) {
         stopListening();
       }
@@ -293,9 +323,11 @@ export default function ConstructionAssistant() {
               🏠
             </div>
             <div>
-              <p className="font-bold text-white">Construction Assistant</p>
+              <p className="font-bold text-white">AI Construction Assistant</p>
               <p className="text-xs text-slate-300">
-                {listening ? "🎤 सुन रहा हूँ… / Listening…" : "AI सहायक · भाषा बदलें / Switch language"}
+                {listening
+                  ? "🎤 सुन रहा हूँ… / Listening…"
+                  : "हिंदी • English • Hinglish · भाषा बदलें"}
               </p>
             </div>
           </div>
@@ -359,9 +391,29 @@ export default function ConstructionAssistant() {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Suggested questions (only in the chat container, no page scroll) */}
+        {showSuggestions && !loading && (
+          <div className="border-t border-slate-700/60 bg-slate-800/40 px-4 py-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              {language === "Hindi" ? "सुझाए गए सवाल" : "Suggested questions"}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {SUGGESTED_QUESTIONS.map((q) => (
+                <button
+                  key={q.message}
+                  onClick={() => handleSend(q.message)}
+                  className="rounded-full border border-slate-600 bg-slate-700/60 px-3 py-1.5 text-xs text-slate-200 transition hover:border-brand-400 hover:bg-brand-600 hover:text-white"
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Voice error banner */}
         {voiceError && (
-          <div className="mx-5 mb-2 rounded-lg bg-amber-500/15 px-4 py-2.5 text-sm text-amber-200">
+          <div className="mx-5 my-2 rounded-lg bg-amber-500/15 px-4 py-2.5 text-sm text-amber-200">
             {voiceError}
           </div>
         )}
@@ -396,8 +448,8 @@ export default function ConstructionAssistant() {
               onKeyDown={handleKeyDown}
               placeholder={
                 language === "Hindi"
-                  ? "अपना घर का आकार लिखें, जैसे 40x35…"
-                  : "Type your house size, e.g. 40x35…"
+                  ? "अपना सवाल लिखें, जैसे 40×35 घर का estimate…"
+                  : "Type your message, e.g. 40×35 house estimate…"
               }
               className="input flex-1 !bg-slate-700 !border-slate-600 !text-white placeholder:!text-slate-400"
               aria-label="Chat message"
@@ -430,4 +482,3 @@ export default function ConstructionAssistant() {
     </div>
   );
 }
-

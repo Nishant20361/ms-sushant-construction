@@ -561,3 +561,177 @@ describe("Health endpoint", () => {
     expect(res.body.service).toBe("ms-sushant-construction");
   });
 });
+
+describe("Construction Assistant (local rule-based)", () => {
+  it("answers a Hindi house-size query from the local dataset", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "मुझे 40 बाई 35 का घर बनाना है", language: "Hindi" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toContain("1,400 sq.ft");
+    expect(res.body.language).toBe("Hindi");
+  });
+
+  it("remembers the session across turns (multi-turn)", async () => {
+    const { agent, token } = await getCsrf();
+    const first = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "40x35 house banana hai", language: "English" });
+    expect(first.status).toBe(200);
+    const sessionId = first.body.sessionId;
+    expect(sessionId).toBeTruthy();
+
+    const second = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "2 floor", sessionId, language: "English" });
+    expect(second.status).toBe(200);
+
+    const third = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "premium", sessionId, language: "English" });
+    expect(third.status).toBe(200);
+    expect(third.body.reply).toContain("Cement");
+    expect(third.body.reply).toContain("Steel");
+  });
+
+  it("answers roof material query from local knowledge", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "छत बनाने में क्या क्या लगेगा", language: "Hindi" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toContain("Cement");
+    expect(res.body.reply).toContain("TMT steel");
+  });
+
+  it("answers foundation material query from local knowledge", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "foundation ke liye kya chahiye?", language: "English" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toContain("Excavation");
+    expect(res.body.reply).toContain("PCC bed");
+  });
+
+  it("answers how-much-cement after a size is provided", async () => {
+    const { agent, token } = await getCsrf();
+    const first = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "40x35 house", language: "English" });
+    expect(first.status).toBe(200);
+    const sessionId = first.body.sessionId;
+
+const q = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "how much cement?", sessionId, language: "English" });
+    expect(q.status).toBe(200);
+    expect(q.body.reply.toLowerCase()).toContain("cement");
+  });
+
+  it("does not give unsafe structural dimensions", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "column size kya rakhe?", language: "English" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toMatch(/structural engineer/i);
+  });
+
+  it("explains a cement company from the local dataset", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "ACC cement ke bare me batao", language: "Hindi" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toContain("ACC");
+    expect(res.body.reply).toContain("फायदे");
+  });
+
+it("gives cement recommendation guidance for an application", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "which cement is good for plaster?", language: "English" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply.toLowerCase()).toContain("cement");
+  });
+
+  it("handles natural small talk (kaise ho)", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "kaise ho", language: "Hindi" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toMatch(/बढ़िया|अच्छा|हूँ/i);
+  });
+
+  it("uses total area (area × floors) for later material questions", async () => {
+    const { agent, token } = await getCsrf();
+    const first = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "40x35 house", language: "English" });
+    const sessionId = first.body.sessionId;
+    await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "2 floor", sessionId, language: "English" });
+    await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "normal", sessionId, language: "English" });
+    const cement = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "cement kitna lagega", sessionId, language: "English" });
+    // 1400 × 2 = 2800 sq.ft → ~1120 bags
+    expect(cement.body.reply).toContain("1,120");
+  });
+
+  it("returns conversation context and producedEstimate flags", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "40x35 ka ghar banana hai", language: "Hindi" });
+    expect(res.status).toBe(200);
+    expect(res.body.sessionId).toBeTruthy();
+    expect(res.body).toHaveProperty("conversation");
+    expect(res.body).toHaveProperty("producedEstimate");
+  });
+
+  it("returns a natural welcome greeting on hello", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "hello", language: "Hindi" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toContain("स्वागत");
+  });
+
+  it("explains the construction sequence", async () => {
+    const { agent, token } = await getCsrf();
+    const res = await agent
+      .post("/api/construction-assistant/chat")
+      .set("X-CSRF-Token", token)
+      .send({ message: "ghar banane ka sequence kya hai", language: "Hindi" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toMatch(/foundation|नींव/i);
+    expect(res.body.reply).toMatch(/roof|छत/i);
+  });
+});

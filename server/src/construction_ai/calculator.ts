@@ -1,12 +1,18 @@
 /**
  * Calculation helpers: parse a house size from user text and compute the
  * material + cost estimate from the dataset.
+ *
+ * All new helpers are APPROXIMATE planning calculations. They are clearly
+ * labelled as estimates and never presented as engineering approval.
  */
 import {
   MATERIAL_RATES,
   COST_BANDS,
   BuildQuality,
   MAX_AREA,
+  WATER_TANK_PARAMS,
+  ELECTRICAL_PARAMS,
+  PLUMBING_PARAMS,
 } from "./dataset.js";
 
 export interface ParsedDimensions {
@@ -118,3 +124,262 @@ export function calculateMaterials(
   };
 }
 
+// ===========================================================================
+// NEW: Approximate per-stage & material calculators (all planning estimates)
+// ===========================================================================
+
+/** Convert inches to feet. */
+export function inchesToFeet(inches: number): number {
+  return inches / 12;
+}
+
+/**
+ * Approximate RCC roof/slab concrete volume.
+ * volume(cu.ft) = length(ft) × width(ft) × thickness(ft).
+ * Thickness is NOT a structural recommendation — example only.
+ */
+export function calculateRoofConcrete(
+  lengthFt: number,
+  widthFt: number,
+  thicknessInches: number
+): { volumeCft: number; volumeCum: number } {
+  const volumeCft = lengthFt * widthFt * inchesToFeet(thicknessInches);
+  // 1 cu.ft ≈ 0.0283168 cu.m
+  const volumeCum = volumeCft * 0.0283168;
+  return { volumeCft, volumeCum };
+}
+
+/**
+ * Approximate RCC roof material for a given concrete volume.
+ * Uses a typical nominal residential mix (e.g. M20 ~1:1.5:3) as an example.
+ * Dry volume factor ~1.54.
+ */
+export function estimateRoofMaterials(
+  volumeCft: number
+): { cementBags: number; sandCft: number; aggregateCft: number; steelKg: number } {
+  const dryFactor = 1.54;
+  const dryVol = volumeCft * dryFactor;
+  // M20 nominal mix 1 : 1.5 : 3 (cement : sand : aggregate)
+  const totalParts = 1 + 1.5 + 3;
+  const cementCft = (dryVol / totalParts) * 1;
+  const sandCft = (dryVol / totalParts) * 1.5;
+  const aggregateCft = (dryVol / totalParts) * 3;
+  // 1 bag cement ≈ 1.25 CFT
+  const cementBags = Math.round(cementCft / 1.25);
+  // Approx 80-100 kg steel per cu.m of slab (structural). Use 90 kg/cu.m.
+  const steelKg = Math.round((volumeCft * 0.0283168) * 90);
+  return {
+    cementBags,
+    sandCft: Math.round(sandCft),
+    aggregateCft: Math.round(aggregateCft),
+    steelKg,
+  };
+}
+
+/**
+ * Approximate brick wall requirement.
+ * bricks = wall volume(sq.ft of face) × bricksPerSqft, with wastage.
+ * wallFaceArea = length × height (sq.ft). thickness in inches.
+ */
+export function calculateBrickWall(
+  lengthFt: number,
+  heightFt: number,
+  thicknessInches: number,
+  wastage = 0.08
+): { bricks: number; mortarCft: number; cementBags: number; sandCft: number } {
+  const faceArea = lengthFt * heightFt;
+  // Rough rule: 15 bricks/sq.ft of wall face (for 9-inch wall roughly).
+  // Adjust roughly by thickness factor (9-inch standard).
+  const thicknessFactor = thicknessInches / 9;
+  const bricks = Math.round(faceArea * 15 * thicknessFactor * (1 + wastage));
+  // Approx mortar ~ 0.3 CFT per sq.ft of 9-inch wall.
+  const mortarCft = Math.round(faceArea * 0.3 * thicknessFactor);
+  // Approx 1:6 mortar: cement ~ 1.2 bags per 10 CFT mortar; sand ~ 6 CFT per 7 CFT.
+  const cementBags = Math.round((mortarCft / 10) * 1.2);
+  const sandCft = Math.round((mortarCft / 7) * 6);
+  return { bricks, mortarCft, cementBags, sandCft };
+}
+
+/**
+ * Approximate PCC material for a given area & thickness.
+ * dryFactor ~1.54, nominal lean mix 1:4:8.
+ */
+export function calculatePCC(
+  areaSqft: number,
+  thicknessInches: number
+): { volumeCft: number; cementBags: number; sandCft: number; aggregateCft: number } {
+  const volumeCft = areaSqft * inchesToFeet(thicknessInches);
+  const dryVol = volumeCft * 1.54;
+  const totalParts = 1 + 4 + 8;
+  const cementCft = (dryVol / totalParts) * 1;
+  const sandCft = (dryVol / totalParts) * 4;
+  const aggregateCft = (dryVol / totalParts) * 8;
+  return {
+    volumeCft: Math.round(volumeCft),
+    cementBags: Math.round(cementCft / 1.25),
+    sandCft: Math.round(sandCft),
+    aggregateCft: Math.round(aggregateCft),
+  };
+}
+
+/**
+ * Approximate plaster material.
+ * wetVolume = area × thickness. dryVolume ≈ 1.33 × wetVolume.
+ * Nominal cement : sand = 1:6 (internal) example.
+ */
+export function calculatePlaster(
+  areaSqft: number,
+  thicknessInches: number,
+  ratioCementSand: [number, number] = [1, 6]
+): { wetVolumeCft: number; dryVolumeCft: number; cementBags: number; sandCft: number } {
+  const wetVolumeCft = areaSqft * inchesToFeet(thicknessInches);
+  const dryVolumeCft = wetVolumeCft * 1.33;
+  const [cementParts, sandParts] = ratioCementSand;
+  const totalParts = cementParts + sandParts;
+  const cementCft = (dryVolumeCft / totalParts) * cementParts;
+  const sandCft = (dryVolumeCft / totalParts) * sandParts;
+  return {
+    wetVolumeCft: Math.round(wetVolumeCft),
+    dryVolumeCft: Math.round(dryVolumeCft),
+    cementBags: Math.round(cementCft / 1.25),
+    sandCft: Math.round(sandCft),
+  };
+}
+
+/**
+ * Approximate flooring requirement.
+ * Required tile area = floor area × (1 + wastage%).
+ */
+export function calculateFlooring(
+  lengthFt: number,
+  widthFt: number,
+  wastage = 0.08
+): { floorArea: number; requiredTileArea: number; wastageAmount: number } {
+  const floorArea = lengthFt * widthFt;
+  const requiredTileArea = floorArea * (1 + wastage);
+  return {
+    floorArea: Math.round(floorArea),
+    requiredTileArea: Math.round(requiredTileArea),
+    wastageAmount: Math.round(floorArea * wastage),
+  };
+}
+
+/**
+ * Approximate wall tile area.
+ * wallTileArea = wall length × wall height, minus openings.
+ */
+export function calculateWallTiles(
+  wallLengthFt: number,
+  wallHeightFt: number,
+  openingAreaSqft = 0,
+  wastage = 0.08
+): { wallArea: number; requiredTileArea: number; wastageAmount: number } {
+  const wallArea = wallLengthFt * wallHeightFt - openingAreaSqft;
+  const requiredTileArea = wallArea * (1 + wastage);
+  return {
+    wallArea: Math.round(wallArea),
+    requiredTileArea: Math.round(requiredTileArea),
+    wastageAmount: Math.round(wallArea * wastage),
+  };
+}
+
+/**
+ * Approximate painting input.
+ * Coverage approx ranges (per ltr per coat). wallAreaSqft & ceilingAreaSqft.
+ */
+export function calculatePaint(
+  wallAreaSqft: number,
+  ceilingAreaSqft = 0,
+  coats = 2,
+  coverageSqftPerLtr = 100
+): { totalArea: number; paintLtr: number; primerLtr: number; puttyKg: number } {
+  const totalArea = wallAreaSqft + ceilingAreaSqft;
+  const paintLtr = Math.round((totalArea * coats) / coverageSqftPerLtr);
+  // Primer ~1 coat over walls+ceiling.
+  const primerLtr = Math.round(totalArea / coverageSqftPerLtr);
+  // Putty ~0.2 kg/sq.ft (approx 2 coats).
+  const puttyKg = Math.round(totalArea * 0.2);
+  return { totalArea: Math.round(totalArea), paintLtr, primerLtr, puttyKg };
+}
+
+/** Approximate cost by location using configurable ranges. */
+export function calculateCostByLocation(
+  areaSqft: number,
+  costPerSqft: { min: number; max: number }
+): { costMin: number; costMax: number } {
+  return { costMin: areaSqft * costPerSqft.min, costMax: areaSqft * costPerSqft.max };
+}
+
+/**
+ * Approximate water tank capacity for a household.
+ * liters = people × litersPerPersonPerDay × reserveDays.
+ * Returns range (e.g. 2-3 days).
+ */
+export function waterTankCapacity(
+  people: number,
+  reserveDays: [number, number] = [2, 3]
+): { litersMin: number; litersMax: number; perDay: number } {
+  const perDay = people * WATER_TANK_PARAMS.litersPerPersonPerDay;
+  return {
+    litersMin: Math.round(perDay * reserveDays[0]),
+    litersMax: Math.round(perDay * reserveDays[1]),
+    perDay: Math.round(perDay),
+  };
+}
+
+/** Approximate doors/windows area. */
+export function doorsWindowsArea(
+  count: number,
+  widthFt: number,
+  heightFt: number
+): { areaSqft: number; eachArea: number } {
+  const eachArea = widthFt * heightFt;
+  return { areaSqft: Math.round(eachArea * count), eachArea: Math.round(eachArea) };
+}
+
+/** Approximate electrical estimate based on room/point counts. */
+export function estimateElectrical(params: {
+  rooms?: number;
+  fans?: number;
+  lights?: number;
+  sockets?: number;
+  acPoints?: number;
+  geyserPoints?: number;
+}): { points: number; wireRolls: number; note: string } {
+  const rooms = params.rooms ?? 1;
+  const basePoints =
+    (params.fans ?? rooms) +
+    (params.lights ?? rooms * 2) +
+    (params.sockets ?? rooms * 3) +
+    (params.acPoints ?? 0) +
+    (params.geyserPoints ?? 0);
+  const points = Math.max(1, basePoints);
+  const wireRolls = Math.round(points * ELECTRICAL_PARAMS.wireRollsPerPoint);
+  return {
+    points,
+    wireRolls,
+    note: "Electrical wiring का final quantity electrical layout के बाद तय होगा।",
+  };
+}
+
+/** Approximate plumbing pipe estimate. */
+export function estimatePlumbing(params: {
+  bathrooms?: number;
+  kitchens?: number;
+  washBasins?: number;
+  toilets?: number;
+}): { totalPipeFt: number; note: string } {
+  const bathrooms = params.bathrooms ?? 1;
+  const kitchens = params.kitchens ?? 1;
+  const totalPipeFt = Math.round(
+    bathrooms * PLUMBING_PARAMS.pipePerBathroom + kitchens * PLUMBING_PARAMS.pipePerKitchen
+  );
+  return { totalPipeFt, note: "Pipe quantity plumbing layout के बाद तय होगा।" };
+}
+
+/** Approximate staircase material note (design dependent). */
+export function staircaseEstimate(): { note: string } {
+  return {
+    note: "Staircase design depends on floor height, available space and structural design.",
+  };
+}
