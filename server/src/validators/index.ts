@@ -208,6 +208,19 @@ export const constructionChatSchema = z.object({
   language: z.enum(["Hindi", "English"]).optional(),
 });
 
+// ------------------------- Construction Knowledge (Phase 5) --------------
+export const constructionKnowledgeSchema = z.object({
+  category: z.string().trim().min(1, "Category is required").max(100),
+  title: z.string().trim().min(1, "Title is required").max(200),
+  content: z.string().trim().min(1, "Content is required").max(10000),
+  keywords: z
+    .array(z.string().trim().min(1).max(100))
+    .min(1, "At least one keyword is required")
+    .max(100),
+  materialType: z.string().trim().max(100).nullable().optional(),
+  companyName: z.string().trim().max(100).nullable().optional(),
+});
+
 export const adminEmailSchema = z.object({
   email: z.preprocess(
     (v) => (v === null || v === undefined || v === "" ? null : v),

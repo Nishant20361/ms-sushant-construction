@@ -228,3 +228,25 @@ model ConstructionQuery {
   @@index([createdAt])
   @@index([language])
 }
+
+// ---------------------------------------------------------------------------
+// Construction Knowledge Database (RAG source of truth)
+// ---------------------------------------------------------------------------
+// Stores structured construction knowledge that the assistant can retrieve at
+// runtime instead of relying only on static code files. Each record carries
+// bilingual keywords used for keyword-based search.
+model ConstructionKnowledge {
+  id           Int      @id @default(autoincrement())
+  category     String
+  title        String
+  content      String
+  keywords     String[]
+  materialType String?
+  companyName  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+  @@index([materialType])
+  @@index([companyName])
+}

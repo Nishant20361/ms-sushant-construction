@@ -8,6 +8,8 @@ import {
   detectLanguage,
   SessionData,
 } from "../construction_ai/assistant.js";
+import { answerWithRAG } from "../construction_ai/rag/ragService.js";
+import { isRAGQuestion } from "../construction_ai/rag/intentDetector.js";
 
 const router = Router();
 
@@ -80,7 +82,49 @@ router.post(
       }
     }
 
-const result = processMessage(data, message);
+// Decide which engine handles this message.
+//
+// Strategy: the existing rule-based assistant is the primary engine. It already
+// handles house size, material quantity, cost, floors, quality, estimates,
+// comparisons, checklists, why-questions, cost breakdown, room-based estimation,
+// product lookup and construction stage guides using its large local dataset.
+//
+// RAG (Groq + retrieved local knowledge) is used ONLY as a complement: when the
+// rule-based assistant doesn't have a confident answer (returns its generic
+// "didn't understand" fallback), we consult RAG for product/comparison/benefit/
+// advice questions and returned retrieved knowledge.
+const COMPUTE_UNKNOWN_REPLY =
+  data.language === "Hindi"
+    ? "मुझे समझ नहीं आया"
+    : "I didn't quite get that";
+
+let result: {
+  reply: string;
+  language: "Hindi" | "English";
+  conversation?: import("../construction_ai/assistant.js").AssistantResult["conversation"];
+  suggestions?: string[];
+  producedEstimate?: boolean;
+};
+
+// 1) Try the rule-based assistant first (it already covers all Part 2 phases).
+const local = processMessage(data, message);
+const ruleBasedUnderstood = !local.reply.includes(COMPUTE_UNKNOWN_REPLY);
+
+if (ruleBasedUnderstood) {
+  result = local;
+} else if (isRAGQuestion(message)) {
+  // 2) RAG complement for product/comparison/benefit/why/advice questions the
+  //    rule-based engine didn't recognize.
+  const rag = await answerWithRAG(message);
+  result = {
+    reply: rag.answer,
+    language: rag.language === "Hindi" ? "Hindi" : "English",
+    producedEstimate: false,
+  };
+} else {
+  // 3) Otherwise return the rule-based answer (which steers the user back).
+  result = local;
+}
 
     // Persist the assistant reply + customer message to the database.
     // Queries are saved only after the response is generated.

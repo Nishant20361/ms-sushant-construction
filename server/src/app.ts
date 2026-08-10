@@ -8,6 +8,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { csrfProtect, issueCsrfToken } from "./utils/csrf.js";
 import publicRoutes from "./routes/public.js";
 import constructionAssistantRoutes from "./routes/constructionAssistant.js";
+import constructionKnowledgeRoutes from "./routes/constructionKnowledge.js";
 import adminRoutes from "./routes/admin/index.js";
 import { isUploadedFileSafe, UPLOAD_DIR } from "./middleware/upload.js";
 
@@ -105,9 +106,14 @@ export function createApp() {
   // are kept so the SPA and tests keep working unchanged.
   app.use("/api", publicRoutes);
   app.use("/api/public", publicRoutes);
-  // Construction assistant available at both /api/* and /api/public/*.
+// Construction assistant available at both /api/* and /api/public/*.
   app.use("/api", constructionAssistantRoutes);
   app.use("/api/public", constructionAssistantRoutes);
+// Construction knowledge (RAG) available at both /api/* and /api/public/*.
+  app.use("/api", constructionKnowledgeRoutes);
+  app.use("/api/public", constructionKnowledgeRoutes);
+  // /api/construction-ai alias (matches the documented route namespace).
+  app.use("/api/construction-ai", constructionKnowledgeRoutes);
   app.use("/api/admin", adminRoutes);
 
   // ---------- Errors ----------

@@ -1,4 +1,3 @@
-import { defineConfig } from "vitest/config";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -26,6 +25,10 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     testTimeout: 15000,
     hookTimeout: 30000,
+    // These integration tests share a single test database and each file
+    // calls deleteMany() + reseeds in beforeAll. Running them in parallel
+    // causes them to interfere with each other, so run files sequentially.
+    fileParallelism: false,
     globalSetup: ["./tests/globalSetup.ts"],
     // Runs before every test file is loaded. Guarantees DATABASE_URL is the
     // isolated test DB before `src/db.ts` instantiates PrismaClient.
@@ -37,4 +40,3 @@ export default defineConfig({
     },
   },
 });
-
