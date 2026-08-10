@@ -1,67 +1,99 @@
-# Construction Assistant PART 2 — Implementation TODO (Phases 11–30)
+# Construction Assistant — Part 2 (Phases 11–30) Implementation TODO
 
-## Phase 13 — Expanded Material Knowledge (new dataset)
-- [x] Create `material_knowledge.ts` (cement OPC/PPC/PSC, steel TMT/Fe grades, bricks, sand, aggregate, roof, waterproofing, finishing)
+## PART 2 — Advanced Trained Construction Assistant (local / rule-based)
 
-## Phase 14 — Why Questions (new dataset)
-- [x] Create `why_questions.ts` (why steel in roof, why waterproofing, why wet/cure cement)
+### Phase 11 — Construction Consultation Mode
+- [x] Intent detection (build/renovate/roof/foundation/boundary wall/room/kitchen/bathroom/staircase/RCC slab/repair roof/waterproofing/plastering/flooring/painting/brickwork/concrete/electrical/plumbing/material-select/cement-select/steel-select/cost/quantity)
+- [x] Roof type detail (RCC vs sheet) follow-up
+- [x] part2_keywords.ts INTENT_* markers
 
-## Phase 16 — Comparison Engine (new dataset)
-- [x] Create `comparisons.ts` (OPC vs PPC, M-Sand vs River Sand, Red Brick vs AAC, RCC Roof vs Sheet, ACC vs Nuvoco, etc.)
+### Phase 12 — Room-Based Estimation
+- [x] Extract bedrooms/hall/kitchens/bathrooms/store/balcony/veranda/staircase
+- [x] estimateAreaFromRooms() + RoomComposition (calculator.ts)
+- [x] Natural ask for house size when missing
 
-## Phase 20 — Material Checklist (new dataset)
-- [x] Create `material_checklist.ts` (FOUNDATION/STRUCTURE/BRICKWORK/PLASTER/ROOF/FINISHING/ELECTRICAL/PLUMBING)
+### Phase 13 — Material Knowledge
+- [x] material_knowledge.ts (cement OPC/PPC/PSC, steel TMT/grades, bricks red/flyash/AAC/concrete, sand river/M/plastering/concrete, aggregate coarse/20mm/10mm, roof RCC/sheet/waterproofing/insulation/drainage, waterproofing roof/bathroom/terrace/foundation/crack, finishing plaster/putty/primer/paint/tiles/flooring)
 
-## Phase 18 — Cost Breakdown (new dataset + calculator)
-- [x] Create `cost_breakdown.ts` (Material/Labour/Finishing/Electrical/Plumbing/Contingency split)
+### Phase 14 — "Why" Questions
+- [x] why_questions.ts (steel in roof, waterproofing, wet/curing cement, brick soak, mix ratio, steel in columns)
 
-## Phase 27 — Product Data System (new dataset)
-- [x] Create `product_data.ts` (structured product DB with confidence tagging KNOWN/GENERAL/UNAVAILABLE)
+### Phase 15 — Benefit / Loss / Comparison
+- [x] Benefit/loss markers (BENEFIT_MARKERS, LOSS_MARKERS)
+- [x] Material knowledge benefit/loss replies
 
-## Phase 25 — Smart Corrections & Phase 22 — Aliases (calculator)
-- [x] Extend `parseDimensions` to handle "40x35h", "40 feet by 35 feet", "बाय", "बाइ", "*"
-- [x] Add `costBreakdown(area, quality)` calculator
-- [x] Add room-based area estimate helper
+### Phase 16 — Comparison Engine
+- [x] comparisons.ts (OPC vs PPC, PSC vs OPC, M-Sand vs River, Red Brick vs Fly Ash, Red Brick vs AAC, RCC vs Sheet, ACC vs Nuvoco, Cement vs Steel)
+- [x] Bilingual bullet follow-up questions
 
-## Phase 22 — Aliases & intent markers (hindi_keywords / part2_keywords)
-- [x] Add consult intent markers (build/renovate/roof/foundation/boundary wall/room/kitchen/bathroom/staircase/RCC slab/repair/plaster/flooring/painting/brickwork/concrete/electrical/plumbing/material-select/cement-select/steel-select/cost/quantity)
-- [x] Add WHY markers, comparison markers, benefit/loss markers, checklist markers, stage-guide markers, incomplete-question words
-- [x] Add material aliases (cement/simaat, steel/sariya/saria, brick/eent, sand/रेत/baloo, aggregate/gitti, roof/छत/slab, foundation/नींव/नीव)
+### Phase 17 — Location Awareness
+- [x] Ask location when cost matters (existing LOCATIONS dataset + cost-by-location)
+- [x] configurable estimate label (NOT live market price)
 
-## Phase 12 — Conversation memory (conversation_memory)
-- [x] Extend SessionData: intent, consultIntent, consultStep, estimatedArea, bedrooms, halls, stores, balconies, verandas, staircases, roomsListed, lastProduct, roofType, boundaryWall, askedLocationForCost
+### Phase 18 — Cost Breakdown
+- [x] cost_breakdown.ts (Material/Labour/Finishing/Electrical/Plumbing/Other %) 
+- [x] costBreakdownReply() in part2_handlers.ts
 
-## Main engine (part2_handlers.ts + assistant.ts wiring)
-- [x] Phase 11 — Consultation mode (roof RCC/sheet, foundation, boundary wall, room, etc.)
-- [x] Phase 12 — Room-based estimation flow
-- [x] Phase 13 — Wire material knowledge lookups
-- [x] Phase 14 — Why-question answers
-- [x] Phase 15 — Benefit/loss answers using dataset
-- [x] Phase 16 — Comparison engine responses
-- [x] Phase 17 — Location awareness for cost
-- [x] Phase 18 — Cost breakdown response
-- [x] Phase 19 — Construction stage guide (ghar kaise banta hai)
-- [x] Phase 20 — Material checklist response
-- [x] Phase 21 — Follow-up suggestions after answers
-- [x] Phase 22 — Material aliases mapping
-- [x] Phase 23 — Incomplete question handling
-- [x] Phase 24 — Follow-up memory usage (never forget context, update floors)
-- [x] Phase 25 — Smart corrections (typos, dimension variants)
-- [x] Phase 26 — Safety/engineering disclaimer for structural questions
-- [x] Phase 27 — Product lookup integration
-- [x] Phase 28 — Data confidence tagging
-- [x] Phase 29 — Response quality (friendly, short/complex, mobile-friendly, not repetitive)
+### Phase 19 — Construction Stage Guide
+- [x] STAGE_GUIDE_MARKERS → constructionSequenceReply (16 steps)
 
-## Phase 30 — Final Testing
-- [x] Extend `verify_assistant.ts` (Part 1: 20 checks passing)
-- [x] Create `verify_assistant_part2.ts` (Test conversations 1–20: 20 passing)
-- [x] Extend `server/tests/api.test.ts` with new assistant cases (20 passing)
-- [x] Client: add new suggested-question chips for Part 2 abilities
+### Phase 20 — Material Checklist
+- [x] material_checklist.ts (FOUNDATION/STRUCTURE/BRICKWORK/PLASTER/ROOF/FINISHING/ELECTRICAL/PLUMBING)
+- [x] buildChecklistReply()
 
-## Build & Verify
-- [x] `cd server && npm run build` (passes)
-- [x] `cd client && npm run build` (passes)
-- [x] `npx tsx verify_assistant.ts` (20/20)
-- [x] `npx tsx verify_assistant_part2.ts` (20/20)
-- [x] Run server API tests for assistant endpoints (20/20)
+### Phase 21 — Follow-Up Suggestions
+- [x] followupSuggestions() (cement/steel/bricks/cost breakdown/checklist)
 
+### Phase 22 — Understand Different Ways of Asking
+- [x] MATERIAL_ALIASES (simaat/सीमेंट, sariya/सरिया, eent/ईंट, बालू, gitti/गिट्टी, छत/स्लैब, नींव/नीव/footing)
+- [x] matchMaterialAlias()
+
+### Phase 23 — Handle Incomplete Questions
+- [x] INCOMPLETE_WORDS + isIncomplete() natural clarification
+
+### Phase 24 — Handle Follow-Up Questions
+- [x] Conversation memory (dimensions, floors, quality, totalArea persist across turns)
+- [x] Smart floor-update (2 floor → 3 floor)
+
+### Phase 25 — Smart Corrections
+- [x] parseDimensions handles "40x35h", "40 by 35 feet", "40*35", "40 × 35", "40 बाय 35", "बाइ"
+- [x] cement aliases "cemnt"/"cment"/"seement"
+- [x] steel aliases "sariya"/"saria"/"सरिया"
+
+### Phase 26 — Safety / Engineering Disclaimer
+- [x] Structural disclaimers preserved (no invented dimensions/design)
+
+### Phase 27 — Product Data System
+- [x] product_data.ts (ACC F2R, ACC Concreto, Nuvoco Vistas, UltraTech, OPC/PPC/PSC, M-Sand, River Sand, Red/Fly Ash Brick, AAC, Concrete Block, TMT, Roofing Sheet, RCC Slab)
+- [x] findProduct() structured lookup with source tag
+
+### Phase 28 — Data Confidence
+- [x] DataConfidence type (KNOWN / GENERAL / UNAVAILABLE)
+- [x] All products tagged with confidence + "local dataset" source
+
+### Phase 29 — Response Quality
+- [x] Friendly, short/simple, bilingual, emoji-sparing, non-repetitive
+
+### Phase 30 — Final Testing
+- [x] verify_assistant_part2.ts — 20 test cases covering Test conversations 1–20
+- [x] verify_assistant.ts — Part 1 20 checks still pass
+- [x] Server typecheck clean
+- [x] Server build passes
+- [x] Client build passes
+- [x] Existing API tests (43) pass
+
+## ALSO COMPLETED — Construction Knowledge Database (RAG)
+- [x] ConstructionKnowledge Prisma model + migration (20260809114043_add_construction_knowledge)
+- [x] knowledge.service.ts (addKnowledge/searchKnowledge/getKnowledgeByCategory/getKnowledgeByKeyword)
+- [x] seedConstructionKnowledge.ts (26338+ chars, all categories)
+- [x] constructionKnowledgeSchema validator
+- [x] routes/constructionKnowledge.ts (GET search, GET category/keyword, POST admin add)
+- [x] Mounted in app.ts at /api and /api/public
+- [x] db:seed:knowledge script in package.json
+
+## Final Build & Verify (all green)
+- [x] cd server && npm run build (passes)
+- [x] cd client && npm run build (passes)
+- [x] npx tsx verify_assistant.ts (20 passed)
+- [x] npx tsx verify_assistant_part2.ts (20 passed)
+- [x] npx vitest run tests/api.test.ts (43 passed)
