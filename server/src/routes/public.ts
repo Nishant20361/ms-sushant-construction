@@ -13,6 +13,20 @@ import { config } from "../config.js";
 
 const router = Router();
 
+function getValidOrderNotificationEmail(adminEmail?: string | null): string {
+  const configuredEmail = config.smtp.user || process.env.EMAIL_USER || process.env.ADMIN_EMAIL || "";
+
+  if (adminEmail && adminEmail.trim()) {
+    const emailLower = adminEmail.trim().toLowerCase();
+    // Ignore dummy placeholder test domains
+    if (!emailLower.endsWith("@example.com") && !emailLower.endsWith("@test.com")) {
+      return emailLower;
+    }
+  }
+
+  return configuredEmail ? configuredEmail.trim().toLowerCase() : "";
+}
+
 // GET /api/test-email?to=target_email
 router.get(
   "/test-email",
@@ -123,6 +137,11 @@ router.post(
   orderLimiter,
   asyncHandler(async (req, res) => {
     const body = createOrderSchema.parse(req.body);
+    console.log("[ORDER DEBUG]");
+    console.log("ORDER ROUTE HIT: YES");
+    console.log(`CUSTOMER: ${body.customerName}`);
+    console.log(`ITEMS COUNT: ${body.items.length}`);
+
     const mobile = normalizeIndianMobile(body.customerMobile);
     if (!mobile) throw new HttpError(400, "Invalid mobile number");
 
@@ -136,7 +155,7 @@ router.post(
       quantity,
     }));
 
-const order = await prisma.$transaction(
+    const order = await prisma.$transaction(
       async (tx) => {
         const productIds = lineItems.map((l) => l.productId);
         const products = await tx.product.findMany({
@@ -190,7 +209,7 @@ const order = await prisma.$transaction(
           throw new HttpError(409, "Sorry, stock changed while placing the order. Please retry.");
         }
 
-subtotal = Math.round(subtotal * 100) / 100;
+        subtotal = Math.round(subtotal * 100) / 100;
 
         // Validate payment amounts
         const cashAmount = Math.round((Number(body.cashAmount) || 0) * 100) / 100;
@@ -237,31 +256,59 @@ subtotal = Math.round(subtotal * 100) / 100;
       }
     );
 
+    console.log("ORDER CREATED: YES");
+    console.log(`ORDER NUMBER: ${order.orderNumber}`);
+
     // ----- Order Notification (email + in-app bell) -----
+    let adminFound = "NO";
+    let adminEmailStr = "(none)";
+    let finalRecipient = "";
+
     try {
       const admin = await prisma.admin.findFirst({
         where: { isActive: true },
         orderBy: { id: "asc" },
       });
-      const to = admin?.email || config.smtp.user || process.env.EMAIL_USER || process.env.ADMIN_EMAIL || "";
 
-      const orderItems = order.items ?? [];
-      await sendOrderNotificationEmail(to, {
-        orderNumber: order.orderNumber,
-        customerName: order.customerName,
-        customerMobile: order.customerMobile,
-        deliveryAddress: order.deliveryAddress,
-        subtotal: order.subtotal,
-        status: order.status,
-        createdAt: order.createdAt,
-        items: orderItems.map((it) => ({
-          productName: it.productName,
-          quantity: it.quantity,
-          price: Number(it.price),
-          total: Number(it.total),
-          unit: it.unit,
-        })),
-      });
+      if (admin) {
+        adminFound = "YES";
+        adminEmailStr = admin.email || "(none)";
+      }
+
+      finalRecipient = getValidOrderNotificationEmail(admin?.email);
+      console.log(`ADMIN FOUND: ${adminFound}`);
+      console.log(`ADMIN EMAIL: ${adminEmailStr}`);
+
+      if (finalRecipient) {
+        console.log("ORDER EMAIL START");
+        console.log(`RECIPIENT: ${finalRecipient}`);
+
+        const orderItems = order.items ?? [];
+        const sent = await sendOrderNotificationEmail(finalRecipient, {
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          customerMobile: order.customerMobile,
+          deliveryAddress: order.deliveryAddress,
+          subtotal: order.subtotal,
+          status: order.status,
+          createdAt: order.createdAt,
+          items: orderItems.map((it) => ({
+            productName: it.productName,
+            quantity: it.quantity,
+            price: Number(it.price),
+            total: Number(it.total),
+            unit: it.unit,
+          })),
+        });
+
+        if (sent) {
+          console.log("ORDER EMAIL SUCCESS");
+        } else {
+          console.log("ORDER EMAIL ERROR: sendOrderNotificationEmail returned false");
+        }
+      } else {
+        console.log("ORDER EMAIL ERROR: No valid recipient email address found");
+      }
 
       if (admin) {
         await prisma.notification.create({
@@ -274,7 +321,8 @@ subtotal = Math.round(subtotal * 100) / 100;
           },
         });
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.log(`ORDER EMAIL ERROR: ${err?.message || String(err)}`);
       console.error("[order] Admin notification error:", err);
     }
 
