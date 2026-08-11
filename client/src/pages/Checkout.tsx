@@ -17,18 +17,9 @@ export default function Checkout() {
     deliveryAddress: "",
     notes: "",
   });
-  const [payments, setPayments] = useState({ cash: "", online: "" });
   const [placing, setPlacing] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [placedOrder, setPlacedOrder] = useState<{ orderNumber: string; subtotal: number } | null>(null);
-
-  const cashAmount = parseFloat(payments.cash) || 0;
-  const onlineAmount = parseFloat(payments.online) || 0;
-  const totalPaid = Math.round((cashAmount + onlineAmount) * 100) / 100;
-  const due = Math.max(0, Math.round((subtotal - totalPaid) * 100) / 100);
-
-  const paymentStatus =
-    totalPaid <= 0 ? "DUE" : due <= 0 ? "PAID" : "PARTIALLY PAID";
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -38,11 +29,6 @@ export default function Checkout() {
     const digits = form.customerMobile.replace(/\D/g, "").replace(/^(0|91)/, "");
     if (!/^[6-9]\d{9}$/.test(digits)) {
       errs.customerMobile = "Enter a valid 10-digit Indian mobile number";
-    }
-    if (cashAmount < 0 || onlineAmount < 0) {
-      errs.payments = "Payment amounts cannot be negative";
-    } else if (totalPaid > subtotal + 0.001) {
-      errs.payments = "Total payment cannot exceed the order total";
     }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -61,8 +47,8 @@ export default function Checkout() {
         customerMobile: form.customerMobile.trim(),
         deliveryAddress: form.deliveryAddress.trim(),
         notes: form.notes.trim() || undefined,
-        cashAmount: cashAmount || 0,
-        onlineAmount: onlineAmount || 0,
+        cashAmount: 0,
+        onlineAmount: 0,
         items: items.map((it) => ({ productId: it.productId, quantity: it.quantity })),
       });
       setPlacedOrder({ orderNumber: res.order.orderNumber, subtotal: res.order.subtotal });
@@ -140,7 +126,7 @@ export default function Checkout() {
       <p className="mt-1 text-slate-600">Fill in your delivery details to place the order.</p>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-5">
-        {/* Delivery form */}
+        {/* Delivery details form */}
         <div className="lg:col-span-3">
           <div className="card p-6">
             <h2 className="text-lg font-semibold text-slate-900">Delivery Details</h2>
@@ -201,78 +187,9 @@ export default function Checkout() {
               </div>
             </div>
           </div>
-
-          {/* Payment section */}
-          <div className="card mt-6 p-6">
-            <h2 className="text-lg font-semibold text-slate-900">Payment</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              You can pay now, partially, or fully later. Leave blank if paying on delivery.
-            </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="label" htmlFor="cashAmount">Cash Received (₹)</label>
-                <input
-                  id="cashAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="input"
-                  placeholder="0"
-                  value={payments.cash}
-                  onChange={(e) => setPayments({ ...payments, cash: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="label" htmlFor="onlineAmount">Online Received (₹)</label>
-                <input
-                  id="onlineAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="input"
-                  placeholder="0"
-                  value={payments.online}
-                  onChange={(e) => setPayments({ ...payments, online: e.target.value })}
-                />
-              </div>
-            </div>
-            {fieldErrors.payments && (
-              <p className="mt-2 text-xs font-medium text-red-600">{fieldErrors.payments}</p>
-            )}
-            <div className="mt-4 rounded-lg bg-slate-50 p-4 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600">Total Amount</span>
-                <span className="font-bold text-slate-900">{formatINR(subtotal)}</span>
-              </div>
-              <div className="mt-1 flex items-center justify-between">
-                <span className="text-slate-600">Total Paid</span>
-                <span className="font-semibold text-green-700">{formatINR(totalPaid)}</span>
-              </div>
-              <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2">
-                <span className="font-semibold text-slate-800">Remaining Due</span>
-                <span className={`font-bold ${due > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                  {formatINR(due)}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-slate-600">Payment Status</span>
-                <span
-                  className={`badge ${
-                    paymentStatus === "PAID"
-                      ? "bg-green-100 text-green-700"
-                      : paymentStatus === "PARTIALLY PAID"
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  {paymentStatus}
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Order summary */}
+        {/* Order summary & Place order action */}
         <div className="lg:col-span-2">
           <div className="card sticky top-20 p-6">
             <h2 className="text-lg font-semibold text-slate-900">Order Summary</h2>
@@ -330,7 +247,7 @@ export default function Checkout() {
             <Link to="/" className="btn-secondary mt-2 w-full">
               Continue Shopping
             </Link>
-</div>
+          </div>
         </div>
       </div>
     </main>
