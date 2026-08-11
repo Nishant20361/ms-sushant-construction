@@ -373,6 +373,8 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
   };
 
   if (!host || !user || !pass) {
+    console.log("SMTP CONFIGURED: NO");
+    console.log("SMTP CONNECTION: FAILED");
     diagnostics.connectionError = "Missing required environment variables (EMAIL_HOST/SMTP_HOST, EMAIL_USER/SMTP_USER, EMAIL_PASSWORD/SMTP_PASS)";
     return {
       SMTP_CONNECTED: "NO",
@@ -381,6 +383,8 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
     };
   }
 
+  console.log("SMTP CONFIGURED: YES");
+
   let activeTransporter = createProductionTransporter(primaryPort)!;
   let smtpConnected = false;
   let activePort = primaryPort;
@@ -388,6 +392,7 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
   try {
     await activeTransporter.verify();
     smtpConnected = true;
+    console.log("SMTP CONNECTION: SUCCESS");
     console.log(`[SMTP TEST] Primary SMTP connection verified successfully on port ${primaryPort}`);
   } catch (err: any) {
     console.warn(`[SMTP TEST] Primary port ${primaryPort} verify failed (${err?.message}). Attempting fallback port ${fallbackPort}...`);
@@ -403,11 +408,15 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
         diagnostics.port = fallbackPort;
         diagnostics.secure = fallbackPort === 465;
         diagnostics.connectionError = null;
+        console.log("SMTP CONNECTION: SUCCESS");
         console.log(`[SMTP TEST] Fallback SMTP connection verified successfully on port ${fallbackPort}`);
       } catch (fallbackErr: any) {
+        console.log("SMTP CONNECTION: FAILED");
         diagnostics.connectionError = `Port ${primaryPort} error: ${err?.message || String(err)}; Port ${fallbackPort} error: ${fallbackErr?.message || String(fallbackErr)}`;
         console.error(`[SMTP TEST] Both ports ${primaryPort} and ${fallbackPort} verify failed.`);
       }
+    } else {
+      console.log("SMTP CONNECTION: FAILED");
     }
   }
 

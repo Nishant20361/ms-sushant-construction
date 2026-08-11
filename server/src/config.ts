@@ -54,6 +54,6 @@ export const config = {
 
 const hasEmailConfig = !!(config.smtp.host && config.smtp.user && config.smtp.pass);
 console.log("[EMAIL CHECK]");
-console.log(`EMAIL CONFIGURED: ${hasEmailConfig ? "YES" : "NO"}`);
+console.log(`SMTP CONFIGURED: ${hasEmailConfig ? "YES" : "NO"}`);
 
 
