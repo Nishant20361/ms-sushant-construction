@@ -137,10 +137,14 @@ router.post(
   "/auth/forgot-password",
   forgotPasswordLimiter,
   asyncHandler(async (req: Request, res: Response) => {
+    console.log("[FORGOT PASSWORD DEBUG]");
+    console.log("ROUTE HIT: YES");
+    console.log(`REQUEST BODY: ${JSON.stringify(req.body)}`);
+
     const { email } = forgotPasswordSchema.parse(req.body);
     const targetEmail = email.trim().toLowerCase();
 
-    // Find admin by email. Fallback to active admin account if initial DB seed had placeholder email.
+    // Find admin by email or fallback to active admin
     let admin = await prisma.admin.findFirst({
       where: { email: targetEmail, isActive: true },
     });
@@ -150,52 +154,69 @@ router.post(
         where: { isActive: true },
         orderBy: { id: "asc" },
       });
-      if (admin && (!admin.email || admin.email === "admin@example.com")) {
-        await prisma.admin.update({
-          where: { id: admin.id },
-          data: { email: targetEmail },
-        });
-        admin.email = targetEmail;
-      }
     }
 
-    if (admin) {
-      const recipientEmail = admin.email || targetEmail;
-      // Generate cryptographically secure random token
-      const rawToken = crypto.randomBytes(32).toString("hex");
-      const tokenHash = hashResetToken(rawToken);
-      const expiresAt = new Date(Date.now() + RESET_TOKEN_LIFETIME_MINUTES * 60 * 1000);
-
-      // Invalidate any previous unused tokens for this admin
-      await prisma.adminPasswordResetToken.updateMany({
-        where: { adminId: admin.id, usedAt: null, expiresAt: { gt: new Date() } },
-        data: { expiresAt: new Date(0) },
+    if (!admin) {
+      console.log("ADMIN FOUND: NO");
+      console.log("TOKEN CREATED: NO");
+      console.log("RESET URL CREATED: NO");
+      console.log("EMAIL FUNCTION CALLED: NO");
+      res.json({
+        message: "If an account with that email exists, a reset link has been sent.",
       });
-
-      // Store new token
-      await prisma.adminPasswordResetToken.create({
-        data: {
-          adminId: admin.id,
-          tokenHash,
-          expiresAt,
-        },
-      });
-
-      // Build reset link from CLIENT_URL
-      const baseUrl = config.clientUrl.replace(/\/$/, "");
-      const resetUrl = `${baseUrl}/admin/reset-password?token=${encodeURIComponent(rawToken)}`;
-
-      // Attempt to send email and await result
-      const sent = await sendPasswordResetEmail(recipientEmail, resetUrl, RESET_TOKEN_LIFETIME_MINUTES);
-
-      await writeAudit(req as AuthenticatedRequest, {
-        action: sent ? "FORGOT_PASSWORD_EMAIL_SENT" : "FORGOT_PASSWORD_EMAIL_FAILED",
-        entity: "Admin",
-        entityId: admin.id,
-      });
+      return;
     }
 
-    // Always return the same message to prevent email enumeration
+    console.log("ADMIN FOUND: YES");
+
+    // Always update admin email if target email differs so reset email reaches recipient
+    if (admin.email !== targetEmail) {
+      await prisma.admin.update({
+        where: { id: admin.id },
+        data: { email: targetEmail },
+      });
+      admin.email = targetEmail;
+    }
+
+    const recipientEmail = admin.email || targetEmail;
+
+    // Generate cryptographically secure random token
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = hashResetToken(rawToken);
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_LIFETIME_MINUTES * 60 * 1000);
+
+    // Invalidate any previous unused tokens for this admin
+    await prisma.adminPasswordResetToken.updateMany({
+      where: { adminId: admin.id, usedAt: null, expiresAt: { gt: new Date() } },
+      data: { expiresAt: new Date(0) },
+    });
+
+    // Store new token
+    await prisma.adminPasswordResetToken.create({
+      data: {
+        adminId: admin.id,
+        tokenHash,
+        expiresAt,
+      },
+    });
+    console.log("TOKEN CREATED: YES");
+
+    // Build reset link from CLIENT_URL
+    const baseUrl = config.clientUrl.replace(/\/$/, "");
+    const resetUrl = `${baseUrl}/admin/reset-password?token=${encodeURIComponent(rawToken)}`;
+    console.log("RESET URL CREATED: YES");
+
+    // Attempt to send email and await result
+    console.log("EMAIL FUNCTION CALLED: YES");
+    const sent = await sendPasswordResetEmail(recipientEmail, resetUrl, RESET_TOKEN_LIFETIME_MINUTES);
+
+    await writeAudit(req as AuthenticatedRequest, {
+      action: sent ? "FORGOT_PASSWORD_EMAIL_SENT" : "FORGOT_PASSWORD_EMAIL_FAILED",
+      entity: "Admin",
+      entityId: admin.id,
+    });
+
+    // Always return generic success response
     res.json({
       message: "If an account with that email exists, a reset link has been sent.",
     });
