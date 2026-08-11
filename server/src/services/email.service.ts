@@ -2,6 +2,19 @@ import nodemailer, { Transporter } from "nodemailer";
 import { config } from "../config.js";
 
 /**
+ * Log helper for complete email flow tracking.
+ */
+function logEmailFlow(type: string, recipient: string, success: boolean, error?: string) {
+  console.log("[EMAIL FLOW]");
+  console.log(`TYPE: ${type}`);
+  console.log(`RECIPIENT: ${recipient || "(none)"}`);
+  console.log("STARTED: YES");
+  console.log(`SUCCESS: ${success ? "YES" : "NO"}`);
+  console.log(`FAILED: ${success ? "NO" : "YES"}`);
+  console.log(`ERROR: ${error || "None"}`);
+}
+
+/**
  * Creates a production-ready Nodemailer Transporter.
  * Configured with IPv4 forcing, explicit TLS settings, and 10s timeouts for Render & cloud compatibility.
  * Compatible with Brevo (smtp-relay.brevo.com), Gmail (smtp.gmail.com), and custom SMTP relays.
@@ -35,19 +48,26 @@ function createProductionTransporter(targetPort?: number): Transporter | null {
 /**
  * Helper to send email with automatic port fallback (e.g., 587 -> 465) if network times out.
  */
-async function sendMailWithFallback(mailOptions: nodemailer.SendMailOptions): Promise<boolean> {
+async function sendMailWithFallback(
+  mailOptions: nodemailer.SendMailOptions,
+  emailType: string
+): Promise<boolean> {
   const configuredPort = config.smtp.port || 587;
   const fallbackPort = configuredPort === 465 ? 587 : 465;
+  const recipient = (mailOptions.to as string) || "";
 
   const primaryTransporter = createProductionTransporter(configuredPort);
   if (!primaryTransporter) {
-    console.warn(`[EMAIL] SMTP not configured. Email simulated to <${mailOptions.to}>`);
+    const err = "SMTP not configured (EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD required)";
+    console.warn(`[EMAIL] SMTP not configured. Email simulated to <${recipient}>`);
+    logEmailFlow(emailType, recipient, false, err);
     return false;
   }
 
   try {
     await primaryTransporter.sendMail(mailOptions);
-    console.log(`[EMAIL] Email sent SUCCESS to ${mailOptions.to} via port ${configuredPort}`);
+    console.log(`[EMAIL] Email sent SUCCESS to ${recipient} via port ${configuredPort}`);
+    logEmailFlow(emailType, recipient, true);
     return true;
   } catch (err: any) {
     const isTimeoutOrConnError =
@@ -62,15 +82,21 @@ async function sendMailWithFallback(mailOptions: nodemailer.SendMailOptions): Pr
       if (fallbackTransporter) {
         try {
           await fallbackTransporter.sendMail(mailOptions);
-          console.log(`[EMAIL] Fallback SMTP port ${fallbackPort} sent email SUCCESS to ${mailOptions.to}!`);
+          console.log(`[EMAIL] Fallback SMTP port ${fallbackPort} sent email SUCCESS to ${recipient}!`);
+          logEmailFlow(emailType, recipient, true);
           return true;
-        } catch (fallbackErr) {
+        } catch (fallbackErr: any) {
+          const combinedErr = `Port ${configuredPort} timeout: ${err?.message || String(err)}; Port ${fallbackPort} error: ${fallbackErr?.message || String(fallbackErr)}`;
           console.error(`[EMAIL] Fallback SMTP port ${fallbackPort} also failed:`, fallbackErr);
+          logEmailFlow(emailType, recipient, false, combinedErr);
+          return false;
         }
       }
-    } else {
-      console.error(`[EMAIL] Failed to send email via port ${configuredPort}:`, err);
     }
+
+    const errMsg = err?.message || String(err);
+    console.error(`[EMAIL] Failed to send email via port ${configuredPort}:`, err);
+    logEmailFlow(emailType, recipient, false, errMsg);
     return false;
   }
 }
@@ -200,17 +226,22 @@ M/S Sushant Construction Team
 `;
 
   if (!to) {
-    console.warn(`[EMAIL] No target recipient provided for order email (Order #${order.orderNumber})`);
+    const err = "No recipient address provided for order notification";
+    console.warn(`[EMAIL] ${err} (Order #${order.orderNumber})`);
+    logEmailFlow("ORDER_NOTIFICATION", to, false, err);
     return false;
   }
 
-  return sendMailWithFallback({
-    from,
-    to,
-    subject: `New Order Received #${order.orderNumber} - M/S SUSHANT CONSTRUCTION`,
-    text: plainText,
-    html: htmlContent,
-  });
+  return sendMailWithFallback(
+    {
+      from,
+      to,
+      subject: `New Order Received #${order.orderNumber} - M/S SUSHANT CONSTRUCTION`,
+      text: plainText,
+      html: htmlContent,
+    },
+    "ORDER_NOTIFICATION"
+  );
 }
 
 /**
@@ -259,17 +290,22 @@ M/S Sushant Construction Security Team
 `;
 
   if (!to) {
-    console.warn(`[EMAIL] No target recipient provided for password reset email.`);
+    const err = "No recipient address provided for password reset email";
+    console.warn(`[EMAIL] ${err}`);
+    logEmailFlow("PASSWORD_RESET", to, false, err);
     return false;
   }
 
-  return sendMailWithFallback({
-    from,
-    to,
-    subject: "Reset Password - M/S SUSHANT CONSTRUCTION",
-    text: plainText,
-    html: htmlContent,
-  });
+  return sendMailWithFallback(
+    {
+      from,
+      to,
+      subject: "Reset Password - M/S SUSHANT CONSTRUCTION",
+      text: plainText,
+      html: htmlContent,
+    },
+    "PASSWORD_RESET"
+  );
 }
 
 /**
@@ -324,17 +360,22 @@ M/S Sushant Construction Security Team
 `;
 
   if (!to) {
-    console.warn(`[EMAIL] No target recipient provided for password changed email.`);
+    const err = "No recipient address provided for password changed email";
+    console.warn(`[EMAIL] ${err}`);
+    logEmailFlow("PASSWORD_CHANGED", to, false, err);
     return false;
   }
 
-  return sendMailWithFallback({
-    from,
-    to,
-    subject: "Password Changed Successfully - M/S SUSHANT CONSTRUCTION",
-    text: plainText,
-    html: htmlContent,
-  });
+  return sendMailWithFallback(
+    {
+      from,
+      to,
+      subject: "Password Changed Successfully - M/S SUSHANT CONSTRUCTION",
+      text: plainText,
+      html: htmlContent,
+    },
+    "PASSWORD_CHANGED"
+  );
 }
 
 export interface SmtpTestResponse {
@@ -361,6 +402,7 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
     console.log("CONFIGURED: NO");
     console.log("[SMTP CHECK]");
     console.log("CONNECTED: NO");
+    logEmailFlow("TEST_EMAIL", recipient, false, "Missing required SMTP environment variables (EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD)");
     return {
       success: false,
       smtpConfigured: false,
@@ -394,6 +436,7 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
         console.log("[SMTP CHECK]");
         console.log("CONNECTED: NO");
         const safeError = `SMTP connection failed. Primary port (${primaryPort}): ${err?.message || "Timeout"}; Fallback port (${fallbackPort}): ${fallbackErr?.message || "Timeout"}`;
+        logEmailFlow("TEST_EMAIL", recipient, false, safeError);
         return {
           success: false,
           smtpConfigured: true,
@@ -405,12 +448,14 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
     } else {
       console.log("[SMTP CHECK]");
       console.log("CONNECTED: NO");
+      const safeError = `SMTP connection failed on port ${primaryPort}: ${err?.message || "Timeout"}`;
+      logEmailFlow("TEST_EMAIL", recipient, false, safeError);
       return {
         success: false,
         smtpConfigured: true,
         smtpConnected: false,
         emailSent: false,
-        error: `SMTP connection failed on port ${primaryPort}: ${err?.message || "Timeout"}`,
+        error: safeError,
       };
     }
   }
@@ -448,6 +493,7 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
     });
 
     console.log(`[SMTP TEST] Test email delivered SUCCESS to ${recipient}`);
+    logEmailFlow("TEST_EMAIL", recipient, true);
     return {
       success: true,
       smtpConfigured: true,
@@ -456,13 +502,15 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
       message: "Test email sent successfully",
     };
   } catch (err: any) {
+    const errMsg = `Failed to send email to ${recipient}: ${err?.message || String(err)}`;
     console.error(`[SMTP TEST] Test email send failed to ${recipient}:`, err?.message || err);
+    logEmailFlow("TEST_EMAIL", recipient, false, errMsg);
     return {
       success: false,
       smtpConfigured: true,
       smtpConnected: true,
       emailSent: false,
-      error: `Failed to send email to ${recipient}: ${err?.message || String(err)}`,
+      error: errMsg,
     };
   }
 }

@@ -9,6 +9,7 @@ import { normalizeIndianMobile } from "../utils/validatePhone.js";
 import { serializeProduct, serializeCategory, serializeSettings, serializeOrderForTracking, serializeOrderListForTracking } from "../utils/serializer.js";
 import { orderLimiter, trackLimiter } from "../middleware/rateLimit.js";
 import { sendOrderNotificationEmail, testSmtpConnection } from "../services/email.service.js";
+import { config } from "../config.js";
 
 const router = Router();
 
@@ -236,53 +237,46 @@ subtotal = Math.round(subtotal * 100) / 100;
       }
     );
 
-    // ----- Fire-and-forget: notify the admin (email + in-app bell) -----
-    // The order is already committed; email/notification failures must never
-    // fail the request or lose the order.
-    (async () => {
-      try {
-        // Always use the admin email stored in the database (fully dynamic).
-        // Never fall back to an environment variable — the DB is the source of truth.
-        const admin = await prisma.admin.findFirst({
-          where: { isActive: true },
-          orderBy: { id: "asc" },
-        });
-        const to = admin?.email || "";
+    // ----- Order Notification (email + in-app bell) -----
+    try {
+      const admin = await prisma.admin.findFirst({
+        where: { isActive: true },
+        orderBy: { id: "asc" },
+      });
+      const to = admin?.email || config.smtp.user || process.env.EMAIL_USER || process.env.ADMIN_EMAIL || "";
 
-        const orderItems = order.items ?? [];
-        await sendOrderNotificationEmail(to, {
-          orderNumber: order.orderNumber,
-          customerName: order.customerName,
-          customerMobile: order.customerMobile,
-          deliveryAddress: order.deliveryAddress,
-          subtotal: order.subtotal,
-          status: order.status,
-          createdAt: order.createdAt,
-          items: orderItems.map((it) => ({
-            productName: it.productName,
-            quantity: it.quantity,
-            price: Number(it.price),
-            total: Number(it.total),
-            unit: it.unit,
-          })),
-        });
+      const orderItems = order.items ?? [];
+      await sendOrderNotificationEmail(to, {
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        customerMobile: order.customerMobile,
+        deliveryAddress: order.deliveryAddress,
+        subtotal: order.subtotal,
+        status: order.status,
+        createdAt: order.createdAt,
+        items: orderItems.map((it) => ({
+          productName: it.productName,
+          quantity: it.quantity,
+          price: Number(it.price),
+          total: Number(it.total),
+          unit: it.unit,
+        })),
+      });
 
-        if (admin) {
-          await prisma.notification.create({
-            data: {
-              adminId: admin.id,
-              orderId: order.id,
-              orderNumber: order.orderNumber,
-              customerName: order.customerName,
-              status: order.status,
-            },
-          });
-        }
-      } catch (err) {
-        // Never crash the server because admin notification failed.
-        console.error("[order] Admin notification failed:", err);
+      if (admin) {
+        await prisma.notification.create({
+          data: {
+            adminId: admin.id,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            customerName: order.customerName,
+            status: order.status,
+          },
+        });
       }
-    })();
+    } catch (err) {
+      console.error("[order] Admin notification error:", err);
+    }
 
     res.status(201).json({
       message: "Order placed successfully",

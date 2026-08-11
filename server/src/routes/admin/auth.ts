@@ -138,13 +138,29 @@ router.post(
   forgotPasswordLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { email } = forgotPasswordSchema.parse(req.body);
+    const targetEmail = email.trim().toLowerCase();
 
-    // Find admin by email. Return generic success regardless to prevent enumeration.
-    const admin = await prisma.admin.findFirst({
-      where: { email: email.toLowerCase(), isActive: true },
+    // Find admin by email. Fallback to active admin account if initial DB seed had placeholder email.
+    let admin = await prisma.admin.findFirst({
+      where: { email: targetEmail, isActive: true },
     });
 
+    if (!admin) {
+      admin = await prisma.admin.findFirst({
+        where: { isActive: true },
+        orderBy: { id: "asc" },
+      });
+      if (admin && (!admin.email || admin.email === "admin@example.com")) {
+        await prisma.admin.update({
+          where: { id: admin.id },
+          data: { email: targetEmail },
+        });
+        admin.email = targetEmail;
+      }
+    }
+
     if (admin) {
+      const recipientEmail = admin.email || targetEmail;
       // Generate cryptographically secure random token
       const rawToken = crypto.randomBytes(32).toString("hex");
       const tokenHash = hashResetToken(rawToken);
@@ -165,11 +181,12 @@ router.post(
         },
       });
 
-      // Build reset link
-      const resetUrl = `${config.clientUrl}/admin/reset-password?token=${encodeURIComponent(rawToken)}`;
+      // Build reset link from CLIENT_URL
+      const baseUrl = config.clientUrl.replace(/\/$/, "");
+      const resetUrl = `${baseUrl}/admin/reset-password?token=${encodeURIComponent(rawToken)}`;
 
-      // Attempt to send email (never throws)
-      const sent = await sendPasswordResetEmail(admin.email!, resetUrl, RESET_TOKEN_LIFETIME_MINUTES);
+      // Attempt to send email and await result
+      const sent = await sendPasswordResetEmail(recipientEmail, resetUrl, RESET_TOKEN_LIFETIME_MINUTES);
 
       await writeAudit(req as AuthenticatedRequest, {
         action: sent ? "FORGOT_PASSWORD_EMAIL_SENT" : "FORGOT_PASSWORD_EMAIL_FAILED",
