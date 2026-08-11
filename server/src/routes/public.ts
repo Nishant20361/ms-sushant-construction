@@ -8,9 +8,19 @@ import { generateOrderNumber } from "../utils/orderNumber.js";
 import { normalizeIndianMobile } from "../utils/validatePhone.js";
 import { serializeProduct, serializeCategory, serializeSettings, serializeOrderForTracking, serializeOrderListForTracking } from "../utils/serializer.js";
 import { orderLimiter, trackLimiter } from "../middleware/rateLimit.js";
-import { sendAdminNewOrderEmail } from "../utils/email.js";
+import { sendOrderNotificationEmail, testSmtpConnection } from "../services/email.service.js";
 
 const router = Router();
+
+// GET /api/test-email?to=target_email
+router.get(
+  "/test-email",
+  asyncHandler(async (req, res) => {
+    const targetEmail = typeof req.query.to === "string" ? req.query.to.trim() : undefined;
+    const result = await testSmtpConnection(targetEmail);
+    res.json(result);
+  })
+);
 
 // GET /api/products?category=slug&search=term&page=1&limit=12
 router.get(
@@ -240,7 +250,7 @@ subtotal = Math.round(subtotal * 100) / 100;
         const to = admin?.email || "";
 
         const orderItems = order.items ?? [];
-        await sendAdminNewOrderEmail(to, {
+        await sendOrderNotificationEmail(to, {
           orderNumber: order.orderNumber,
           customerName: order.customerName,
           customerMobile: order.customerMobile,

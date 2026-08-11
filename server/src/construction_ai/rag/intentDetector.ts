@@ -9,20 +9,6 @@
  *  - Otherwise: falls through to the existing rule-based assistant.
  */
 
-/** Keywords that indicate a pure calculator/estimate question. */
-const CALCULATOR_MARKERS = [
-  // size / dimensions
-  "x35", "x36", "x40", "x30", "x50", "by 35", "by 40", "बाई", "गुणा",
-  // quantity
-  "kitna", "kitni", "kitne", "how much", "how many", "कितना", "कितनी", "कितने",
-  "lagega", "लगेगा", "chahiye", "चाहिए", "quantity", "requirement", "bags",
-  // cost / estimate
-  "cost", "price", "लागत", "खर्च", "कीमत", "estimate", "budget", "rate",
-  // floors / quality
-  "floor", "floors", "मंजिल", "फर्श", "quality", "normal", "premium",
-  "sq.ft", "sqft", "square feet",
-];
-
 /** Keywords that indicate a product/comparison/benefit/why/advice question. */
 const RAG_MARKERS = [
   // product / brand
@@ -50,16 +36,19 @@ function hasAny(text: string, list: string[]): boolean {
   return list.some((m) => lower.includes(m.toLowerCase()));
 }
 
-/**
- * True when the message should be handled by the existing calculator /
- * rule-based assistant (house size, quantities, cost, estimates).
- */
 export function isCalculatorQuestion(message: string): boolean {
   const lower = message.toLowerCase();
-  // A dimension pair (e.g. "40x35", "40 by 35") is a strong calculator signal.
+  // 1. Dimension pair (e.g. "40x35", "40 by 35", "30*40")
   if (/(\d+)\s*[x×*]\s*(\d+)/.test(lower)) return true;
   if (/(\d+)\s*(by|बाई|बाइ)\s*(\d+)/.test(lower)) return true;
-  return hasAny(message, CALCULATOR_MARKERS);
+
+  // 2. Specific floor selection input (e.g., "1 floor", "2 floor", "3 floors")
+  if (/(\d+)\s*(floor|floors|मंजिल)/.test(lower)) return true;
+
+  // 3. Specific area input (e.g., "1200 sqft", "1500 sq ft", "1000 square feet")
+  if (/(\d+)\s*(sqft|sq\.ft|sq ft|square feet)/.test(lower)) return true;
+
+  return false;
 }
 
 /**

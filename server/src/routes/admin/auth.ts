@@ -11,7 +11,7 @@ import { loginLimiter, forgotPasswordLimiter } from "../../middleware/rateLimit.
 import { requireAdmin } from "../../middleware/auth.js";
 import { writeAudit } from "../../middleware/audit.js";
 import { issueCsrfToken } from "../../utils/csrf.js";
-import { sendAdminPasswordResetEmail } from "../../utils/email.js";
+import { sendPasswordResetEmail, sendPasswordChangedEmail } from "../../services/email.service.js";
 import { AuthenticatedRequest } from "../../types.js";
 import { Request, Response } from "express";
 
@@ -120,6 +120,13 @@ router.post(
     const passwordHash = await hashPassword(body.newPassword);
     await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash } });
     await writeAudit(req, { action: "CHANGE_PASSWORD", entity: "Admin", entityId: admin.id });
+
+    if (admin.email) {
+      sendPasswordChangedEmail(admin.email, { date: new Date() }).catch((err) => {
+        console.error("[auth] Failed to send password changed email:", err);
+      });
+    }
+
     clearAdminCookie(res);
     res.json({ message: "Password changed. Please log in again." });
   })
@@ -162,7 +169,7 @@ router.post(
       const resetUrl = `${config.clientUrl}/admin/reset-password?token=${encodeURIComponent(rawToken)}`;
 
       // Attempt to send email (never throws)
-      const sent = await sendAdminPasswordResetEmail(admin.email!, resetUrl);
+      const sent = await sendPasswordResetEmail(admin.email!, resetUrl, RESET_TOKEN_LIFETIME_MINUTES);
 
       await writeAudit(req as AuthenticatedRequest, {
         action: sent ? "FORGOT_PASSWORD_EMAIL_SENT" : "FORGOT_PASSWORD_EMAIL_FAILED",
@@ -230,6 +237,12 @@ router.post(
       entity: "Admin",
       entityId: admin.id,
     });
+
+    if (admin.email) {
+      sendPasswordChangedEmail(admin.email, { date: new Date() }).catch((err) => {
+        console.error("[auth] Failed to send password changed email after reset:", err);
+      });
+    }
 
     res.json({ message: "Password has been reset successfully. You can now log in with your new password." });
   })

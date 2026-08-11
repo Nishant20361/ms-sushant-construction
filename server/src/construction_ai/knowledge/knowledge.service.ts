@@ -145,13 +145,18 @@ export async function searchKnowledge(query: string, limit = 10): Promise<Knowle
   }
 
   // Fetch candidates and score them locally (simple, deterministic keyword RAG).
-  const records = await prisma.constructionKnowledge.findMany({ take: 500 });
-  const scored = records
-    .map((r) => ({ r, score: scoreRecord(r, terms) }))
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score);
+  try {
+    const records = await prisma.constructionKnowledge.findMany({ take: 500 });
+    const scored = records
+      .map((r) => ({ r, score: scoreRecord(r, terms) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score);
 
-  return scored.slice(0, limit).map((x) => toSearchResult(x.r, x.score));
+    return scored.slice(0, limit).map((x) => toSearchResult(x.r, x.score));
+  } catch (err) {
+    console.warn("[searchKnowledge] DB query failed, falling back to empty knowledge:", err instanceof Error ? err.message : String(err));
+    return [];
+  }
 }
 
 /** Fetch all records in a category, ordered by title. */

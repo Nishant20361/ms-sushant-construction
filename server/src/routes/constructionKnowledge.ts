@@ -13,38 +13,34 @@ import { askGroq } from "../construction_ai/groq.js";
 const router = Router();
 
 // ------------------------------------------------------------------
-// TEMPORARY Groq / Grok connection test endpoint (verification only).
-// GET /api/construction-ai/test-grok
-// Sends a simple test message and reports whether the Groq API responds.
+// Groq connection test endpoint (verification only).
+// GET /api/construction-ai/test-groq
+// Sends a test message and reports exact status.
 // ------------------------------------------------------------------
-router.get(
-  "/test-grok",
-  asyncHandler(async (_req, res) => {
-    const hasKey = !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim());
-    console.log(`[GROQ TEST] API KEY FOUND: ${hasKey ? "YES" : "NO"}`);
-    if (!hasKey) {
-      console.log("[GROQ TEST] REQUEST SENT: NO");
-      console.log("[GROQ TEST] RESPONSE RECEIVED: NO");
-      res.status(200).json({ success: false, error: "Grok API key missing" });
-      return;
-    }
-    console.log("[GROQ TEST] REQUEST SENT: YES");
-    try {
-      const response = await askGroq("Hello Grok, are you connected successfully?");
-      console.log("[GROQ TEST] RESPONSE RECEIVED: YES");
-      res.status(200).json({
-        success: true,
-        provider: "Grok",
-        message: "Grok API is working",
-        response,
-      });
-    } catch (err) {
-      console.log("[GROQ TEST] RESPONSE RECEIVED: NO");
-      console.error("[GROQ TEST] error:", err instanceof Error ? err.message : String(err));
-      res.status(200).json({ success: false, error: "Grok connection failed" });
-    }
-  })
-);
+const handleGroqTest = asyncHandler(async (_req, res) => {
+  const hasKey = !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim());
+  console.log(`[GROQ CHECK]`);
+  console.log(`GROQ_API_KEY FOUND: ${hasKey ? "YES" : "NO"}`);
+  if (!hasKey) {
+    res.status(200).json({ success: false, error: "GROQ_API_KEY missing" });
+    return;
+  }
+  try {
+    const { text, model } = await askGroq("Reply only:\nGroq connection successful");
+    res.status(200).json({
+      success: true,
+      provider: "Groq",
+      model: model || "llama-3.1-8b-instant",
+      response: text.trim(),
+    });
+  } catch (err: any) {
+    const errMsg = err?.message || "Groq server connection failed";
+    res.status(200).json({ success: false, error: errMsg });
+  }
+});
+
+router.get("/test-groq", handleGroqTest);
+router.get("/test-grok", handleGroqTest);
 
 // GET /api/construction-ai/knowledge/search?q=ACC%20F2R
 // Keyword-based RAG search across the construction knowledge database.

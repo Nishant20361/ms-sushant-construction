@@ -56,34 +56,23 @@ export async function answerWithRAG(message: string): Promise<RAGResult> {
   // 2) Build the prompt.
   const prompt = buildPrompt(trimmed, retrieved.context, knowledgeFound);
 
-  // 3) If no knowledge was found, don't send to AI blindly — return fallback.
-  if (!knowledgeFound) {
-    const fallback = prompt.language === "Hindi" ? FALLBACK_HINDI : FALLBACK_ENGLISH;
-    return {
-      answer: fallback,
-      usedAI: false,
-      knowledgeFound: false,
-      language: prompt.language,
-    };
-  }
-
-  // 4) Send to Groq with the retrieved context.
+  // 3) Send to Groq with the retrieved context (or general civil engineering prompt).
   try {
-    const answer = await askGroq(prompt.user, prompt.system);
+    const { text: answer } = await askGroq(prompt.user, prompt.system);
     return {
       answer,
       usedAI: true,
-      knowledgeFound: true,
+      knowledgeFound,
       language: prompt.language,
     };
   } catch (err) {
     console.error("[RAG] Groq call failed:", err instanceof Error ? err.message : String(err));
-    // Safe local fallback — do not hallucinate.
+    // Safe local fallback — do not crash.
     const fallback = prompt.language === "Hindi" ? FALLBACK_HINDI : FALLBACK_ENGLISH;
     return {
       answer: fallback,
       usedAI: false,
-      knowledgeFound: true,
+      knowledgeFound,
       language: prompt.language,
     };
   }

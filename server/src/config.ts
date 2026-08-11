@@ -4,8 +4,14 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Load .env from project root (one level up from server/src)
+// Load .env from server directory, project root, and process CWD
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config();
+
+const hasGroqKey = !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim());
+console.log("[GROQ CHECK]");
+console.log(`KEY LOADED: ${hasGroqKey ? "YES" : "NO"}`);
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -38,11 +44,16 @@ export const config = {
   },
   cookieName: "ms_sushant_admin_token",
   smtp: {
-    host: process.env.SMTP_HOST || "",
-    port: Number(process.env.SMTP_PORT) || 587,
-    user: process.env.SMTP_USER || "",
-    pass: process.env.SMTP_PASS || "",
-    from: process.env.SMTP_FROM || "",
+    host: process.env.EMAIL_HOST || process.env.SMTP_HOST || "",
+    port: Number(process.env.EMAIL_PORT || process.env.SMTP_PORT) || 587,
+    user: process.env.EMAIL_USER || process.env.SMTP_USER || "",
+    pass: process.env.EMAIL_PASSWORD || process.env.SMTP_PASS || "",
+    from: process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.EMAIL_USER || process.env.SMTP_USER || "",
   },
 };
+
+const hasEmailConfig = !!(config.smtp.host && config.smtp.user && config.smtp.pass);
+console.log("[EMAIL CHECK]");
+console.log(`EMAIL CONFIGURED: ${hasEmailConfig ? "YES" : "NO"}`);
+
 

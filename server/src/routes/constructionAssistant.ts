@@ -8,8 +8,10 @@ import {
   detectLanguage,
   SessionData,
 } from "../construction_ai/assistant.js";
-import { answerWithRAG } from "../construction_ai/rag/ragService.js";
-import { isRAGQuestion } from "../construction_ai/rag/intentDetector.js";
+import { isCalculatorQuestion } from "../construction_ai/rag/intentDetector.js";
+import { getRelevantContext } from "../construction_ai/rag/knowledgeRetriever.js";
+import { answerWithGroq } from "../construction_ai/groq.js";
+import { processAdvancedCalculator } from "../construction_ai/calculators/index.js";
 
 const router = Router();
 
@@ -106,24 +108,70 @@ let result: {
   producedEstimate?: boolean;
 };
 
-// 1) Try the rule-based assistant first (it already covers all Part 2 phases).
-const local = processMessage(data, message);
-const ruleBasedUnderstood = !local.reply.includes(COMPUTE_UNKNOWN_REPLY);
+// 1. Check specialized advanced calculators first (slab, column, brickwall, paint, tile)
+const advCalc = processAdvancedCalculator(message);
 
-if (ruleBasedUnderstood) {
-  result = local;
-} else if (isRAGQuestion(message)) {
-  // 2) RAG complement for product/comparison/benefit/why/advice questions the
-  //    rule-based engine didn't recognize.
-  const rag = await answerWithRAG(message);
-  result = {
-    reply: rag.answer,
-    language: rag.language === "Hindi" ? "Hindi" : "English",
-    producedEstimate: false,
-  };
+if (advCalc.type && advCalc.result) {
+  try {
+    const datasetContext = await getRelevantContext(message);
+    const combinedContext = `[EXACT ADVANCED CALCULATOR RESULT]\n${advCalc.formattedText}\n\n${datasetContext}`;
+    const groqReply = await answerWithGroq(message, combinedContext);
+    const detectedLang = detectLanguage(message);
+    result = {
+      reply: groqReply,
+      language: detectedLang === "Hindi" || data.language === "Hindi" ? "Hindi" : "English",
+      producedEstimate: true,
+    };
+  } catch (err) {
+    console.warn("[constructionAssistant] Groq explanation failed, returning calculator summary directly:", err);
+    result = {
+      reply: advCalc.formattedText,
+      language: detectLanguage(message) === "Hindi" || data.language === "Hindi" ? "Hindi" : "English",
+      producedEstimate: true,
+    };
+  }
 } else {
-  // 3) Otherwise return the rule-based answer (which steers the user back).
-  result = local;
+  // 2. Check general house dimension calculator vs knowledge questions
+  const isCalc = isCalculatorQuestion(message);
+
+  if (isCalc) {
+    const local = processMessage(data, message);
+    const ruleBasedUnderstood =
+      !local.reply.includes(COMPUTE_UNKNOWN_REPLY) &&
+      !local.reply.includes("समझ नहीं आया") &&
+      !local.reply.includes("didn't quite get");
+
+    if (ruleBasedUnderstood) {
+      result = local;
+    } else {
+      try {
+        const context = await getRelevantContext(message);
+        const groqReply = await answerWithGroq(message, context);
+        const detectedLang = detectLanguage(message);
+        result = {
+          reply: groqReply,
+          language: detectedLang === "Hindi" || data.language === "Hindi" ? "Hindi" : "English",
+          producedEstimate: false,
+        };
+      } catch {
+        result = local;
+      }
+    }
+  } else {
+    try {
+      const context = await getRelevantContext(message);
+      const groqReply = await answerWithGroq(message, context);
+      const detectedLang = detectLanguage(message);
+      result = {
+        reply: groqReply,
+        language: detectedLang === "Hindi" || data.language === "Hindi" ? "Hindi" : "English",
+        producedEstimate: false,
+      };
+    } catch (err) {
+      console.error("[constructionAssistant] Groq call failed, using local fallback:", err);
+      result = processMessage(data, message);
+    }
+  }
 }
 
     // Persist the assistant reply + customer message to the database.
