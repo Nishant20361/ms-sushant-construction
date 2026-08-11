@@ -2,25 +2,76 @@ import nodemailer, { Transporter } from "nodemailer";
 import { config } from "../config.js";
 
 /**
- * Returns nodemailer Transporter if host, user, pass are set.
+ * Creates a production-ready Nodemailer Transporter.
+ * Supports IPv4 forcing, explicit TLS settings, and custom timeouts for Render compatibility.
  */
-function getTransporter(): Transporter | null {
-  const { host, port, user, pass } = config.smtp;
+function createProductionTransporter(targetPort?: number): Transporter | null {
+  const { host, user, pass, port: configuredPort } = config.smtp;
   if (!host || !user || !pass) {
     return null;
   }
 
+  const port = targetPort || configuredPort || 587;
+  const isSecure = port === 465;
+
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
+    secure: isSecure,
+    requireTLS: !isSecure, // Require STARTTLS for non-465 ports (587)
     auth: { user, pass },
-    family: 4,
+    family: 4, // Force IPv4 to bypass IPv6 ENETUNREACH issues on cloud servers like Render
     tls: {
-      rejectUnauthorized: false,
+      rejectUnauthorized: false, // Prevents certificate chain verification failures
+      minVersion: "TLSv1.2",
     },
-    connectionTimeout: 15000,
+    connectionTimeout: 10000, // 10s connection timeout
+    greetingTimeout: 10000,   // 10s greeting timeout
+    socketTimeout: 15000,     // 15s socket timeout
   } as any);
+}
+
+/**
+ * Helper to send email with automatic port fallback (e.g., 587 -> 465) if network times out.
+ */
+async function sendMailWithFallback(mailOptions: nodemailer.SendMailOptions): Promise<boolean> {
+  const configuredPort = config.smtp.port || 587;
+  const fallbackPort = configuredPort === 465 ? 587 : 465;
+
+  const primaryTransporter = createProductionTransporter(configuredPort);
+  if (!primaryTransporter) {
+    console.warn(`[EMAIL] SMTP not configured. Email simulated to <${mailOptions.to}>`);
+    return false;
+  }
+
+  try {
+    await primaryTransporter.sendMail(mailOptions);
+    console.log(`[EMAIL] Email sent SUCCESS to ${mailOptions.to} via port ${configuredPort}`);
+    return true;
+  } catch (err: any) {
+    const isTimeoutOrConnError =
+      err?.code === "ETIMEDOUT" ||
+      err?.code === "ENETUNREACH" ||
+      err?.code === "ESOCKET" ||
+      (err?.message && err.message.toLowerCase().includes("timeout"));
+
+    if (isTimeoutOrConnError) {
+      console.warn(`[EMAIL] Primary SMTP port ${configuredPort} failed with network/timeout error. Retrying with fallback port ${fallbackPort}...`);
+      const fallbackTransporter = createProductionTransporter(fallbackPort);
+      if (fallbackTransporter) {
+        try {
+          await fallbackTransporter.sendMail(mailOptions);
+          console.log(`[EMAIL] Fallback SMTP port ${fallbackPort} sent email SUCCESS to ${mailOptions.to}!`);
+          return true;
+        } catch (fallbackErr) {
+          console.error(`[EMAIL] Fallback SMTP port ${fallbackPort} also failed:`, fallbackErr);
+        }
+      }
+    } else {
+      console.error(`[EMAIL] Failed to send email via port ${configuredPort}:`, err);
+    }
+    return false;
+  }
 }
 
 export interface OrderItemEmailData {
@@ -57,7 +108,6 @@ export async function sendOrderNotificationEmail(
   to: string,
   order: OrderEmailData
 ): Promise<boolean> {
-  const t = getTransporter();
   const from = config.smtp.from || config.smtp.user || "no-reply@mssushant.com";
   const dateStr = new Date(order.createdAt).toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",
@@ -148,31 +198,18 @@ M/S Sushant Construction Team
 </div>
 `;
 
-  if (!t) {
-    console.warn(`[EMAIL] SMTP not configured. Order email simulated for Order #${order.orderNumber} to <${to}>`);
-    console.log(`[EMAIL] Order email details:\nCustomer: ${order.customerName}\nTotal: ${formatINR(order.subtotal)}`);
-    return false;
-  }
-
   if (!to) {
     console.warn(`[EMAIL] No target recipient provided for order email (Order #${order.orderNumber})`);
     return false;
   }
 
-  try {
-    await t.sendMail({
-      from,
-      to,
-      subject: `New Order Received #${order.orderNumber} - M/S SUSHANT CONSTRUCTION`,
-      text: plainText,
-      html: htmlContent,
-    });
-    console.log(`[EMAIL] Order email sent SUCCESS to ${to} for Order #${order.orderNumber}`);
-    return true;
-  } catch (err) {
-    console.error(`[EMAIL] Failed to send order email to ${to}:`, err);
-    return false;
-  }
+  return sendMailWithFallback({
+    from,
+    to,
+    subject: `New Order Received #${order.orderNumber} - M/S SUSHANT CONSTRUCTION`,
+    text: plainText,
+    html: htmlContent,
+  });
 }
 
 /**
@@ -183,7 +220,6 @@ export async function sendPasswordResetEmail(
   resetUrl: string,
   expiresInMinutes: number = 15
 ): Promise<boolean> {
-  const t = getTransporter();
   const from = config.smtp.from || config.smtp.user || "no-reply@mssushant.com";
 
   const plainText = `
@@ -221,31 +257,18 @@ M/S Sushant Construction Security Team
 </div>
 `;
 
-  if (!t) {
-    console.warn(`[EMAIL] SMTP not configured. Password reset link simulated for <${to}>`);
-    console.log(`[EMAIL] Reset URL: ${resetUrl}`);
-    return false;
-  }
-
   if (!to) {
     console.warn(`[EMAIL] No target recipient provided for password reset email.`);
     return false;
   }
 
-  try {
-    await t.sendMail({
-      from,
-      to,
-      subject: "Reset Password - M/S SUSHANT CONSTRUCTION",
-      text: plainText,
-      html: htmlContent,
-    });
-    console.log(`[EMAIL] Reset email sent SUCCESS to ${to}`);
-    return true;
-  } catch (err) {
-    console.error(`[EMAIL] Failed to send password reset email to ${to}:`, err);
-    return false;
-  }
+  return sendMailWithFallback({
+    from,
+    to,
+    subject: "Reset Password - M/S SUSHANT CONSTRUCTION",
+    text: plainText,
+    html: htmlContent,
+  });
 }
 
 /**
@@ -255,7 +278,6 @@ export async function sendPasswordChangedEmail(
   to: string,
   details?: { date?: Date; userAgent?: string; ip?: string }
 ): Promise<boolean> {
-  const t = getTransporter();
   const from = config.smtp.from || config.smtp.user || "no-reply@mssushant.com";
   const dateStr = (details?.date || new Date()).toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",
@@ -300,30 +322,18 @@ M/S Sushant Construction Security Team
 </div>
 `;
 
-  if (!t) {
-    console.warn(`[EMAIL] SMTP not configured. Password changed email simulated for <${to}>`);
-    return false;
-  }
-
   if (!to) {
     console.warn(`[EMAIL] No target recipient provided for password changed email.`);
     return false;
   }
 
-  try {
-    await t.sendMail({
-      from,
-      to,
-      subject: "Password Changed Successfully - M/S SUSHANT CONSTRUCTION",
-      text: plainText,
-      html: htmlContent,
-    });
-    console.log(`[EMAIL] Password changed email sent SUCCESS to ${to}`);
-    return true;
-  } catch (err) {
-    console.error(`[EMAIL] Failed to send password changed email to ${to}:`, err);
-    return false;
-  }
+  return sendMailWithFallback({
+    from,
+    to,
+    subject: "Password Changed Successfully - M/S SUSHANT CONSTRUCTION",
+    text: plainText,
+    html: htmlContent,
+  });
 }
 
 export interface SmtpTestResult {
@@ -343,17 +353,20 @@ export interface SmtpTestResult {
 
 /**
  * Perform real SMTP connection verify and send test email.
+ * Tests primary port first, and automatically falls back to alternative port (465 <-> 587) if connection times out.
  */
 export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTestResult> {
-  const { host, port, user, pass, from } = config.smtp;
+  const { host, user, pass, port: configuredPort, from } = config.smtp;
   const recipient = targetEmail || process.env.TEST_EMAIL || user || "admin@example.com";
+  const primaryPort = configuredPort || 587;
+  const fallbackPort = primaryPort === 465 ? 587 : 465;
 
   const diagnostics = {
     host: host || "(Not set)",
-    port: port || 587,
+    port: primaryPort,
     user: user || "(Not set)",
     from: from || user || "(Not set)",
-    secure: port === 465,
+    secure: primaryPort === 465,
     recipient,
     connectionError: null as string | null,
     sendError: null as string | null,
@@ -368,27 +381,34 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
     };
   }
 
-  const testTransporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-    family: 4,
-    tls: {
-      rejectUnauthorized: false,
-    },
-    connectionTimeout: 15000,
-  } as any);
-
+  let activeTransporter = createProductionTransporter(primaryPort)!;
   let smtpConnected = false;
+  let activePort = primaryPort;
+
   try {
-    await testTransporter.verify();
+    await activeTransporter.verify();
     smtpConnected = true;
-    console.log(`[SMTP TEST] Connection verified successfully for ${host}:${port}`);
+    console.log(`[SMTP TEST] Primary SMTP connection verified successfully on port ${primaryPort}`);
   } catch (err: any) {
-    smtpConnected = false;
-    diagnostics.connectionError = err?.message || String(err);
-    console.error("[SMTP TEST] Connection verify failed:", err);
+    console.warn(`[SMTP TEST] Primary port ${primaryPort} verify failed (${err?.message}). Attempting fallback port ${fallbackPort}...`);
+    diagnostics.connectionError = `Port ${primaryPort} failed: ${err?.message || String(err)}`;
+
+    const fallbackTransporter = createProductionTransporter(fallbackPort);
+    if (fallbackTransporter) {
+      try {
+        await fallbackTransporter.verify();
+        smtpConnected = true;
+        activeTransporter = fallbackTransporter;
+        activePort = fallbackPort;
+        diagnostics.port = fallbackPort;
+        diagnostics.secure = fallbackPort === 465;
+        diagnostics.connectionError = null;
+        console.log(`[SMTP TEST] Fallback SMTP connection verified successfully on port ${fallbackPort}`);
+      } catch (fallbackErr: any) {
+        diagnostics.connectionError = `Port ${primaryPort} error: ${err?.message || String(err)}; Port ${fallbackPort} error: ${fallbackErr?.message || String(fallbackErr)}`;
+        console.error(`[SMTP TEST] Both ports ${primaryPort} and ${fallbackPort} verify failed.`);
+      }
+    }
   }
 
   if (!smtpConnected) {
@@ -401,11 +421,11 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
 
   let emailSent = false;
   try {
-    await testTransporter.sendMail({
+    await activeTransporter.sendMail({
       from: from || user,
       to: recipient,
       subject: "Real SMTP Delivery Test - M/S SUSHANT CONSTRUCTION",
-      text: `Hello!\n\nThis is an automated real SMTP delivery test from MS Sushant Construction API.\n\nTime: ${new Date().toISOString()}\nSMTP Host: ${host}\nSMTP Port: ${port}\nUser: ${user}\n\nIf you are reading this email, real email delivery is working perfectly!`,
+      text: `Hello!\n\nThis is an automated real SMTP delivery test from MS Sushant Construction API.\n\nTime: ${new Date().toISOString()}\nSMTP Host: ${host}\nSMTP Port: ${activePort}\nUser: ${user}\n\nIf you are reading this email, real email delivery is working perfectly!`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; max-width: 550px; margin: 0 auto; background: #ffffff;">
           <div style="background: #1e293b; color: #ffffff; padding: 16px; text-align: center; border-radius: 6px 6px 0 0;">
@@ -420,7 +440,7 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
             <table style="width: 100%; font-size: 13px; color: #334155; border-collapse: collapse; margin-top: 12px;">
               <tr><td style="padding: 6px 0; font-weight: bold; width: 140px;">Time:</td><td>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td></tr>
               <tr><td style="padding: 6px 0; font-weight: bold;">SMTP Host:</td><td>${host}</td></tr>
-              <tr><td style="padding: 6px 0; font-weight: bold;">SMTP Port:</td><td>${port}</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: bold;">SMTP Port:</td><td>${activePort}</td></tr>
               <tr><td style="padding: 6px 0; font-weight: bold;">Sender User:</td><td>${user}</td></tr>
               <tr><td style="padding: 6px 0; font-weight: bold;">Recipient:</td><td>${recipient}</td></tr>
             </table>
@@ -432,7 +452,7 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
       `,
     });
     emailSent = true;
-    console.log(`[SMTP TEST] Email successfully delivered to ${recipient}`);
+    console.log(`[SMTP TEST] Email successfully delivered to ${recipient} via port ${activePort}`);
   } catch (err: any) {
     emailSent = false;
     diagnostics.sendError = err?.message || String(err);
@@ -445,4 +465,3 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
     diagnostics,
   };
 }
-
