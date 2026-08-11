@@ -3,7 +3,8 @@ import { config } from "../config.js";
 
 /**
  * Creates a production-ready Nodemailer Transporter.
- * Supports IPv4 forcing, explicit TLS settings, and custom timeouts for Render compatibility.
+ * Configured with IPv4 forcing, explicit TLS settings, and 10s timeouts for Render & cloud compatibility.
+ * Compatible with Brevo (smtp-relay.brevo.com), Gmail (smtp.gmail.com), and custom SMTP relays.
  */
 function createProductionTransporter(targetPort?: number): Transporter | null {
   const { host, user, pass, port: configuredPort } = config.smtp;
@@ -20,14 +21,14 @@ function createProductionTransporter(targetPort?: number): Transporter | null {
     secure: isSecure,
     requireTLS: !isSecure, // Require STARTTLS for non-465 ports (587)
     auth: { user, pass },
-    family: 4, // Force IPv4 to bypass IPv6 ENETUNREACH issues on cloud servers like Render
+    family: 4, // Force IPv4 to bypass IPv6 ENETUNREACH issues on Render
     tls: {
       rejectUnauthorized: false, // Prevents certificate chain verification failures
       minVersion: "TLSv1.2",
     },
     connectionTimeout: 10000, // 10s connection timeout
     greetingTimeout: 10000,   // 10s greeting timeout
-    socketTimeout: 15000,     // 15s socket timeout
+    socketTimeout: 10000,     // 10s socket timeout
   } as any);
 }
 
@@ -336,99 +337,84 @@ M/S Sushant Construction Security Team
   });
 }
 
-export interface SmtpTestResult {
-  SMTP_CONNECTED: "YES" | "NO";
-  EMAIL_SENT: "YES" | "NO";
-  diagnostics: {
-    host: string;
-    port: number;
-    user: string;
-    from: string;
-    secure: boolean;
-    recipient: string;
-    connectionError: string | null;
-    sendError: string | null;
-  };
+export interface SmtpTestResponse {
+  success: boolean;
+  smtpConfigured: boolean;
+  smtpConnected: boolean;
+  emailSent: boolean;
+  message?: string;
+  error?: string;
 }
 
 /**
  * Perform real SMTP connection verify and send test email.
  * Tests primary port first, and automatically falls back to alternative port (465 <-> 587) if connection times out.
  */
-export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTestResult> {
+export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTestResponse> {
   const { host, user, pass, port: configuredPort, from } = config.smtp;
   const recipient = targetEmail || process.env.TEST_EMAIL || user || "admin@example.com";
   const primaryPort = configuredPort || 587;
   const fallbackPort = primaryPort === 465 ? 587 : 465;
 
-  const diagnostics = {
-    host: host || "(Not set)",
-    port: primaryPort,
-    user: user || "(Not set)",
-    from: from || user || "(Not set)",
-    secure: primaryPort === 465,
-    recipient,
-    connectionError: null as string | null,
-    sendError: null as string | null,
-  };
-
   if (!host || !user || !pass) {
-    console.log("SMTP CONFIGURED: NO");
-    console.log("SMTP CONNECTION: FAILED");
-    diagnostics.connectionError = "Missing required environment variables (EMAIL_HOST/SMTP_HOST, EMAIL_USER/SMTP_USER, EMAIL_PASSWORD/SMTP_PASS)";
+    console.log("[EMAIL CHECK]");
+    console.log("CONFIGURED: NO");
+    console.log("[SMTP CHECK]");
+    console.log("CONNECTED: NO");
     return {
-      SMTP_CONNECTED: "NO",
-      EMAIL_SENT: "NO",
-      diagnostics,
+      success: false,
+      smtpConfigured: false,
+      smtpConnected: false,
+      emailSent: false,
+      error: "Missing required SMTP environment variables (EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD)",
     };
   }
 
-  console.log("SMTP CONFIGURED: YES");
+  console.log("[EMAIL CHECK]");
+  console.log("CONFIGURED: YES");
 
   let activeTransporter = createProductionTransporter(primaryPort)!;
-  let smtpConnected = false;
   let activePort = primaryPort;
 
   try {
     await activeTransporter.verify();
-    smtpConnected = true;
-    console.log("SMTP CONNECTION: SUCCESS");
-    console.log(`[SMTP TEST] Primary SMTP connection verified successfully on port ${primaryPort}`);
+    console.log("[SMTP CHECK]");
+    console.log("CONNECTED: YES");
   } catch (err: any) {
     console.warn(`[SMTP TEST] Primary port ${primaryPort} verify failed (${err?.message}). Attempting fallback port ${fallbackPort}...`);
-    diagnostics.connectionError = `Port ${primaryPort} failed: ${err?.message || String(err)}`;
-
     const fallbackTransporter = createProductionTransporter(fallbackPort);
     if (fallbackTransporter) {
       try {
         await fallbackTransporter.verify();
-        smtpConnected = true;
         activeTransporter = fallbackTransporter;
         activePort = fallbackPort;
-        diagnostics.port = fallbackPort;
-        diagnostics.secure = fallbackPort === 465;
-        diagnostics.connectionError = null;
-        console.log("SMTP CONNECTION: SUCCESS");
-        console.log(`[SMTP TEST] Fallback SMTP connection verified successfully on port ${fallbackPort}`);
+        console.log("[SMTP CHECK]");
+        console.log("CONNECTED: YES");
       } catch (fallbackErr: any) {
-        console.log("SMTP CONNECTION: FAILED");
-        diagnostics.connectionError = `Port ${primaryPort} error: ${err?.message || String(err)}; Port ${fallbackPort} error: ${fallbackErr?.message || String(fallbackErr)}`;
-        console.error(`[SMTP TEST] Both ports ${primaryPort} and ${fallbackPort} verify failed.`);
+        console.log("[SMTP CHECK]");
+        console.log("CONNECTED: NO");
+        const safeError = `SMTP connection failed. Primary port (${primaryPort}): ${err?.message || "Timeout"}; Fallback port (${fallbackPort}): ${fallbackErr?.message || "Timeout"}`;
+        return {
+          success: false,
+          smtpConfigured: true,
+          smtpConnected: false,
+          emailSent: false,
+          error: safeError,
+        };
       }
     } else {
-      console.log("SMTP CONNECTION: FAILED");
+      console.log("[SMTP CHECK]");
+      console.log("CONNECTED: NO");
+      return {
+        success: false,
+        smtpConfigured: true,
+        smtpConnected: false,
+        emailSent: false,
+        error: `SMTP connection failed on port ${primaryPort}: ${err?.message || "Timeout"}`,
+      };
     }
   }
 
-  if (!smtpConnected) {
-    return {
-      SMTP_CONNECTED: "NO",
-      EMAIL_SENT: "NO",
-      diagnostics,
-    };
-  }
-
-  let emailSent = false;
   try {
     await activeTransporter.sendMail({
       from: from || user,
@@ -460,17 +446,23 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
         </div>
       `,
     });
-    emailSent = true;
-    console.log(`[SMTP TEST] Email successfully delivered to ${recipient} via port ${activePort}`);
-  } catch (err: any) {
-    emailSent = false;
-    diagnostics.sendError = err?.message || String(err);
-    console.error("[SMTP TEST] Email send failed:", err);
-  }
 
-  return {
-    SMTP_CONNECTED: smtpConnected ? "YES" : "NO",
-    EMAIL_SENT: emailSent ? "YES" : "NO",
-    diagnostics,
-  };
+    console.log(`[SMTP TEST] Test email delivered SUCCESS to ${recipient}`);
+    return {
+      success: true,
+      smtpConfigured: true,
+      smtpConnected: true,
+      emailSent: true,
+      message: "Test email sent successfully",
+    };
+  } catch (err: any) {
+    console.error(`[SMTP TEST] Test email send failed to ${recipient}:`, err?.message || err);
+    return {
+      success: false,
+      smtpConfigured: true,
+      smtpConnected: true,
+      emailSent: false,
+      error: `Failed to send email to ${recipient}: ${err?.message || String(err)}`,
+    };
+  }
 }
