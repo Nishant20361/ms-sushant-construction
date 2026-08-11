@@ -15,6 +15,7 @@ function getTransporter(): Transporter | null {
     port,
     secure: port === 465,
     auth: { user, pass },
+    family: 4,
     tls: {
       rejectUnauthorized: false,
     },
@@ -372,6 +373,7 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
     port,
     secure: port === 465,
     auth: { user, pass },
+    family: 4,
     tls: {
       rejectUnauthorized: false,
     },
