@@ -48,7 +48,7 @@ async function main() {
 
   // Explicit reset: update only the selected admin's password hash.
   const passwordHash = await hashPassword(password);
-  await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash } });
+  await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash, passwordChangedAt: new Date() } });
   console.log(`✔ Admin "${username}" password reset to the value of INITIAL_ADMIN_PASSWORD.`);
 }
 

@@ -118,7 +118,8 @@ router.post(
     const ok = await verifyPassword(body.currentPassword, admin.passwordHash);
     if (!ok) throw new HttpError(400, "Current password is incorrect");
     const passwordHash = await hashPassword(body.newPassword);
-    await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash } });
+    const now = new Date();
+    await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash, passwordChangedAt: now } });
     await writeAudit(req, { action: "CHANGE_PASSWORD", entity: "Admin", entityId: admin.id });
 
     if (admin.email) {
@@ -229,9 +230,10 @@ router.post(
 
     // Hash new password and update
     const passwordHash = await hashPassword(newPassword);
+    const now = new Date();
     await prisma.admin.update({
       where: { id: admin.id },
-      data: { passwordHash },
+      data: { passwordHash, passwordChangedAt: now },
     });
 
     // Mark token as used (single-use)

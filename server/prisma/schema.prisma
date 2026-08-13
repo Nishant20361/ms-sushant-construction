@@ -12,6 +12,7 @@ model Admin {
   username            String                    @unique
   email               String?                   @unique
   passwordHash        String
+  passwordChangedAt   DateTime?
   role                String                    @default("ADMIN")
   isActive            Boolean                   @default(true)
   lastLoginAt         DateTime?

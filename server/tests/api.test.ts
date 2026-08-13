@@ -122,6 +122,49 @@ describe("Admin authentication", () => {
     expect(res.body.admin).toBeDefined();
     expect(res.body.admin.username).toBe("testadmin");
   });
+
+  it("invalidates active sessions across all devices when password is changed", async () => {
+    const { agent: agent1, token: csrf1 } = await getCsrf();
+    const { agent: agent2, token: csrf2 } = await getCsrf();
+
+    await agent1
+      .post("/api/admin/auth/login")
+      .set("X-CSRF-Token", csrf1)
+      .send({ username: "testadmin", password: TEST_PASSWORD });
+
+    await agent2
+      .post("/api/admin/auth/login")
+      .set("X-CSRF-Token", csrf2)
+      .send({ username: "testadmin", password: TEST_PASSWORD });
+
+    const me1Before = await agent1.get("/api/admin/auth/me");
+    expect(me1Before.status).toBe(200);
+
+    const me2Before = await agent2.get("/api/admin/auth/me");
+    expect(me2Before.status).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const newPassword = "new-strong-password-123";
+    const changeRes = await agent1
+      .post("/api/admin/auth/change-password")
+      .set("X-CSRF-Token", csrf1)
+      .send({ currentPassword: TEST_PASSWORD, newPassword });
+    expect(changeRes.status).toBe(200);
+
+    const me2After = await agent2.get("/api/admin/auth/me");
+    expect(me2After.status).toBe(401);
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const { agent: agent3, token: csrf3 } = await getCsrf();
+    await agent3
+      .post("/api/admin/auth/login")
+      .set("X-CSRF-Token", csrf3)
+      .send({ username: "testadmin", password: newPassword });
+    await agent3
+      .post("/api/admin/auth/change-password")
+      .set("X-CSRF-Token", csrf3)
+      .send({ currentPassword: newPassword, newPassword: TEST_PASSWORD });
+  });
 });
 
 describe("Admin product management", () => {

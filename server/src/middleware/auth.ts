@@ -26,6 +26,13 @@ export async function requireAdmin(
     if (!admin || !admin.isActive) {
       return next(new HttpError(401, "Account disabled or removed"));
     }
+    if (admin.passwordChangedAt && payload.iat) {
+      const tokenIssuedAtMs = payload.iat * 1000;
+      const passwordChangedAtMs = admin.passwordChangedAt.getTime();
+      if (tokenIssuedAtMs < passwordChangedAtMs - 1000) {
+        return next(new HttpError(401, "Session expired due to password change"));
+      }
+    }
     req.admin = {
       sub: String(admin.id),
       username: admin.username,

@@ -54,7 +54,7 @@ async function main(): Promise<void> {
   // Update ONLY the password hash. Every other field is preserved.
   await prisma.admin.update({
     where: { id: admin.id },
-    data: { passwordHash },
+    data: { passwordHash, passwordChangedAt: new Date() },
   });
 
   console.log(`✔ Admin "${username}" password reset successfully.`);
