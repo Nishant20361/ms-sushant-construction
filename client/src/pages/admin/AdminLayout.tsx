@@ -91,14 +91,93 @@ export default function AdminLayout() {
 
   return (
     <div className="flex min-h-screen bg-slate-100">
-      {/* Mobile sidebar toggle */}
-      <button
-        onClick={() => setSidebarOpen((v) => !v)}
-        className="fixed left-4 top-4 z-50 rounded-lg bg-slate-900 p-2 text-white md:hidden"
-        aria-label="Toggle admin menu"
-      >
-        {sidebarOpen ? "✕" : "☰"}
-      </button>
+      {/* Mobile top header */}
+      <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-800 bg-slate-900 px-4 text-white md:hidden w-full">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSidebarOpen((v) => !v)}
+            className="rounded-lg bg-slate-800 p-2 text-white hover:bg-slate-700 focus:outline-none"
+            aria-label="Toggle admin menu"
+          >
+            {sidebarOpen ? "✕" : "☰"}
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-brand-600 font-bold text-xs text-white">
+              M
+            </div>
+            <span className="text-sm font-bold tracking-wide">Admin</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Notification bell on mobile */}
+          <div className="relative" ref={bellRef}>
+            <button
+              onClick={openBell}
+              className="relative rounded-lg p-2 text-slate-300 hover:bg-slate-800"
+              aria-label="Notifications"
+            >
+              🔔
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+            {bellOpen && (
+              <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-lg border border-slate-200 bg-white shadow-xl text-slate-800 z-50">
+                <div className="border-b border-slate-100 px-4 py-3">
+                  <p className="text-sm font-semibold text-slate-900">Notifications</p>
+                </div>
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-slate-500">
+                      No notifications yet.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-slate-50">
+                      {notifications.slice(0, 20).map((n) => (
+                        <li
+                          key={n.id}
+                          className={`px-4 py-3 text-sm ${
+                            n.read ? "text-slate-500" : "bg-brand-50 font-medium text-slate-900"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate">{n.customerName}</span>
+                            <span className="badge whitespace-nowrap bg-amber-100 text-amber-700 text-[10px]">
+                              {formatOrderStatus(n.status)}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            {n.orderNumber} ·{" "}
+                            {new Date(n.createdAt).toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <Link
+                  to="/admin/orders"
+                  onClick={() => setBellOpen(false)}
+                  className="block border-t border-slate-100 px-4 py-2.5 text-center text-xs font-medium text-brand-600 hover:bg-slate-50"
+                >
+                  View all orders
+                </Link>
+              </div>
+            )}
+          </div>
+          <Link to="/" className="rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700">
+            Site ↗
+          </Link>
+        </div>
+      </div>
 
       {/* Sidebar */}
       <aside
@@ -116,7 +195,7 @@ export default function AdminLayout() {
           </div>
         </div>
 
-<nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
           {NAV_ITEMS.map((item) => (
             <div key={item.to}>
               <NavLink
@@ -185,8 +264,8 @@ export default function AdminLayout() {
         <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-{/* Main content */}
-      <div className="flex-1 md:ml-0">
+      {/* Main content */}
+      <div className="flex-1 min-w-0 md:ml-0 flex flex-col">
         <div className="hidden h-16 border-b border-slate-200 bg-white px-8 md:flex md:items-center md:justify-between">
           <h1 className="text-lg font-bold text-slate-900">Admin Dashboard</h1>
           <div className="flex items-center gap-4">
@@ -258,7 +337,7 @@ export default function AdminLayout() {
             </Link>
           </div>
         </div>
-        <main className="p-4 md:p-8">
+        <main className="p-3 sm:p-6 md:p-8 flex-1 overflow-x-hidden">
           <Outlet />
         </main>
       </div>

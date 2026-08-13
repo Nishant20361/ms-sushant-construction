@@ -217,8 +217,8 @@ export default function AdminOrders() {
     <div className="space-y-6">
       {/* Edit Modal */}
       {editOpen && editingOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="max-w-3xl rounded-lg bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-4 sm:p-6 shadow-xl">
             <h3 className="text-lg font-bold">Edit Order {editingOrder.orderNumber}</h3>
             <p className="text-sm text-slate-500">Customer: {editingOrder.customerName} · {editingOrder.customerMobile}</p>
             <div className="mt-4 space-y-3">
@@ -281,8 +281,8 @@ export default function AdminOrders() {
 
       {/* Receive Payment Modal */}
       {payOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl bg-white p-4 sm:p-6 shadow-xl">
             <h3 className="text-lg font-bold">Receive Payment</h3>
             <p className="text-sm text-slate-500">
               {payOrder.orderNumber} · {payOrder.customerName} · {payOrder.customerMobile}

@@ -42,15 +42,15 @@ const stats = data.stats;
 
   return (
 <div className="space-y-8">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
         {cards.map((c) => (
-          <div key={c.label} className="card flex items-center gap-4 p-5">
-            <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl ${c.color}`}>
+          <div key={c.label} className="card flex items-center gap-2.5 sm:gap-4 p-3 sm:p-5">
+            <div className={`flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl text-lg sm:text-2xl ${c.color}`}>
               {c.icon}
             </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{c.value}</p>
-              <p className="text-xs font-medium text-slate-500">{c.label}</p>
+            <div className="min-w-0">
+              <p className="text-base sm:text-2xl font-bold text-slate-900 truncate">{c.value}</p>
+              <p className="text-[11px] sm:text-xs font-medium text-slate-500 truncate">{c.label}</p>
             </div>
           </div>
         ))}

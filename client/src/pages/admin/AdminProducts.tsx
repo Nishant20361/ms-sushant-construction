@@ -322,7 +322,7 @@ const [search, setSearch] = useState("");
             )}
 
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Name *</label>
                   <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -342,7 +342,7 @@ const [search, setSearch] = useState("");
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="label">Price (₹) *</label>
                   <input className="input" type="number" min="0" step="any" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />

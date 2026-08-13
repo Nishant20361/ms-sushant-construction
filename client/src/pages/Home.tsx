@@ -316,7 +316,7 @@ const handleAdd = (p: Product, quantity: number) => {
               />
             ) : (
               <>
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 {products.map((p) => (
                     <ProductCard key={p.id} product={p} onAdd={(qty) => handleAdd(p, qty)} />
                   ))}
@@ -604,35 +604,35 @@ const discount = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100)
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-5xl">🧱</div>
+          <div className="flex h-full w-full items-center justify-center text-3xl sm:text-5xl">🧱</div>
         )}
-        <div className="absolute left-2 top-2 flex flex-col gap-1">
+        <div className="absolute left-1.5 top-1.5 sm:left-2 sm:top-2 flex flex-col gap-1">
           {discount > 0 && (
-            <span className="badge bg-red-600 text-white">{discount}% OFF</span>
+            <span className="badge bg-red-600 text-white text-[10px] sm:text-xs px-1.5 py-0.5">{discount}% OFF</span>
           )}
-          {outOfStock && <span className="badge bg-slate-800 text-white">Out of Stock</span>}
+          {outOfStock && <span className="badge bg-slate-800 text-white text-[10px] sm:text-xs px-1.5 py-0.5">Out of Stock</span>}
         </div>
         {p.category && (
-          <span className="absolute right-2 top-2 badge bg-white/90 text-slate-700">
+          <span className="absolute right-1.5 top-1.5 sm:right-2 sm:top-2 badge bg-white/90 text-slate-700 text-[10px] sm:text-xs px-1.5 py-0.5 max-w-[90px] sm:max-w-[120px] truncate">
             {p.category.name}
           </span>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col p-4">
-        <h3 className="font-semibold text-slate-900">{p.name}</h3>
-        <p className="mt-0.5 text-xs text-slate-500">{p.unit}</p>
+      <div className="flex flex-1 flex-col p-3 sm:p-4">
+        <h3 className="font-semibold text-slate-900 text-xs sm:text-sm md:text-base line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem]">{p.name}</h3>
+        <p className="mt-0.5 text-[11px] sm:text-xs text-slate-500">{p.unit}</p>
 
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-lg font-bold text-brand-600">{formatINR(p.price)}</span>
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-1 sm:gap-2">
+          <span className="text-sm sm:text-lg font-bold text-brand-600">{formatINR(p.price)}</span>
           {p.mrp > p.price && (
-            <span className="text-sm text-slate-400 line-through">{formatINR(p.mrp)}</span>
+            <span className="text-[11px] sm:text-sm text-slate-400 line-through">{formatINR(p.mrp)}</span>
           )}
         </div>
 
-        <div className="mt-1 text-xs">
+        <div className="mt-1 text-[11px] sm:text-xs">
           {outOfStock ? (
-            <span className="font-medium text-red-600">Currently unavailable</span>
+            <span className="font-medium text-red-600">Unavailable</span>
           ) : (
             <span className={p.stock < 10 ? "font-medium text-amber-600" : "text-slate-500"}>
               {p.stock < 10 ? `Only ${p.stock} left` : "In stock"}
@@ -640,8 +640,8 @@ const discount = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100)
           )}
         </div>
 
-<div className="mt-4 flex items-center gap-2">
-          <label htmlFor={`qty-${p.id}`} className="text-xs font-medium text-slate-500">
+        <div className="mt-3 flex items-center gap-1 sm:gap-2">
+          <label htmlFor={`qty-${p.id}`} className="text-[11px] sm:text-xs font-medium text-slate-500 shrink-0">
             Qty
           </label>
           <input
@@ -652,10 +652,10 @@ const discount = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100)
             min={isKg ? "0" : "1"}
             max={p.stock}
             step={isKg ? "0.1" : "1"}
-            placeholder="Enter the quantity"
+            placeholder="Qty"
             disabled={outOfStock}
             onChange={(e) => handleQuantityChange(e.target.value)}
-            className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full min-w-0 rounded-md border border-slate-300 px-2 py-1 text-xs sm:text-sm disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={`Quantity for ${p.name}`}
           />
           <span className="text-sm text-slate-600">{p.unit}</span>
