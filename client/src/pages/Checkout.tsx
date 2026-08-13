@@ -53,6 +53,7 @@ export default function Checkout() {
       });
       setPlacedOrder({ orderNumber: res.order.orderNumber, subtotal: res.order.subtotal });
       clearCart();
+      window.scrollTo({ top: 0, behavior: "smooth" });
       success(`Order ${res.order.orderNumber} placed successfully`);
     } catch (e) {
       if (e instanceof ApiRequestError) {

@@ -105,6 +105,7 @@ export default function CartDrawer() {
               <button
                 onClick={() => {
                   closeCart();
+                  window.scrollTo(0, 0);
                   navigate("/checkout");
                 }}
                 className="btn-primary w-full"

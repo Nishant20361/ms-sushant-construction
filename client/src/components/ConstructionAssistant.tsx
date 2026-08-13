@@ -143,7 +143,6 @@ export default function ConstructionAssistant() {
     if (container) {
       container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
     }
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, loading]);
 
   // Cleanup recognition on unmount.

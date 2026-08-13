@@ -1,4 +1,5 @@
-import { Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import CartDrawer from "./components/CartDrawer";
@@ -8,9 +9,18 @@ import Home from "./pages/Home";
 import Checkout from "./pages/Checkout";
 import { AdminRoutes } from "./pages/admin/AdminRoutes";
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <ToastProvider>
+      <ScrollToTop />
       <div className="flex min-h-screen flex-col">
         <Navbar />
         <div className="flex-1">
