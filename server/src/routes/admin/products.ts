@@ -40,7 +40,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { search, categoryId, active, page = "1", limit = "20" } = req.query as Record<string, string>;
     const where: any = {};
-    if (search) where.name = { contains: search };
+    if (search) where.name = { contains: search, mode: "insensitive" };
     if (categoryId) where.categoryId = Number(categoryId);
     if (active === "true") where.isActive = true;
     if (active === "false") where.isActive = false;

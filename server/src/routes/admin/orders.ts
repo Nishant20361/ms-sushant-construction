@@ -30,9 +30,9 @@ router.get(
     if (status) where.status = status;
     if (search) {
       where.OR = [
-        { orderNumber: { contains: search } },
-        { customerName: { contains: search } },
-        { customerMobile: { contains: search } },
+        { orderNumber: { contains: search, mode: "insensitive" } },
+        { customerName: { contains: search, mode: "insensitive" } },
+        { customerMobile: { contains: search, mode: "insensitive" } },
       ];
     }
     // Payment status filter (foundation). The final status is derived from
@@ -102,9 +102,9 @@ router.get(
     if (search?.trim()) {
       const term = search.trim();
       where.OR = [
-        { customerName: { contains: term } },
-        { customerMobile: { contains: term } },
-        { orderNumber: { contains: term } },
+        { customerName: { contains: term, mode: "insensitive" } },
+        { customerMobile: { contains: term, mode: "insensitive" } },
+        { orderNumber: { contains: term, mode: "insensitive" } },
       ];
     }
 

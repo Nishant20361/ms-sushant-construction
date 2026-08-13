@@ -50,6 +50,7 @@ router.get(
     if (search?.trim()) {
       where.name = {
         contains: search.trim(),
+        mode: "insensitive",
       };
     }
 

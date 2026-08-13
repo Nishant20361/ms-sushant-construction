@@ -592,8 +592,8 @@ export async function getCustomerDueReport(params: {
   if (search?.trim()) {
     const term = search.trim();
     where.OR = [
-      { customerName: { contains: term } },
-      { customerMobile: { contains: term } },
+      { customerName: { contains: term, mode: "insensitive" } },
+      { customerMobile: { contains: term, mode: "insensitive" } },
     ];
   }
 
