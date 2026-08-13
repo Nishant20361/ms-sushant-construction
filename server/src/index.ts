@@ -8,6 +8,17 @@ async function bootstrap() {
     console.log(`[server] M/S Sushant Construction API listening on http://localhost:${config.port}`);
     console.log(`[server] Environment: ${config.env}`);
   });
+
+  // Keep Render free-tier PostgreSQL awake — ping every 4 minutes.
+  // Render pauses free DBs after ~5 min of inactivity, causing connection errors.
+  // This silent ping prevents that without affecting any app logic.
+  setInterval(async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      // Ignore — server will reconnect automatically on next real request.
+    }
+  }, 4 * 60 * 1000); // every 4 minutes
 }
 
 bootstrap()
