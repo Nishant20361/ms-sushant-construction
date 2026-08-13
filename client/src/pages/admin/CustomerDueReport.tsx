@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { adminApi } from "../../lib/api";
-import type { CustomerDueReport as CustomerDueReportType } from "../../types";
+import type { CustomerDueReport as CustomerDueReportType, CustomerDueReportRow, CustomerStatement } from "../../types";
 import { formatINR, formatDate } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { useToast } from "../../components/Toast";
@@ -9,7 +9,7 @@ import { downloadFile } from "../../lib/download";
 const PAGE_SIZE = 20;
 
 export default function CustomerDueReport() {
-  const { success } = useToast();
+  const { success, error } = useToast();
   const [report, setReport] = useState<CustomerDueReportType | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -20,6 +20,7 @@ export default function CustomerDueReport() {
   const [appliedFrom, setAppliedFrom] = useState("");
   const [appliedTo, setAppliedTo] = useState("");
   const [page, setPage] = useState(1);
+  const [sendingMobile, setSendingMobile] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -69,6 +70,25 @@ export default function CustomerDueReport() {
       });
   };
 
+  const openWhatsAppDueReminder = async (customer: CustomerDueReportRow) => {
+    setSendingMobile(customer.customerMobile);
+    try {
+      const statement = await adminApi.getCustomerStatement(customer.customerMobile);
+      const message = buildDueReminder(statement);
+      const phone = toWhatsAppPhone(statement.customer.customerMobile);
+      if (!phone) {
+        error("This customer does not have a valid WhatsApp number.");
+        return;
+      }
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+      success("WhatsApp reminder is ready to review and send.");
+    } catch {
+      error("Could not prepare the due reminder. Please try again.");
+    } finally {
+      setSendingMobile(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -80,11 +100,11 @@ export default function CustomerDueReport() {
       <div className="card space-y-3 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1">
-            <label className="label">Search (name / phone / address)</label>
+            <label className="label">Search customer name or mobile number</label>
             <input
               type="search"
               className="input"
-              placeholder="Search customers…"
+              placeholder="Name or mobile number…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -144,6 +164,7 @@ export default function CustomerDueReport() {
                   <th className="py-2 pr-4">Last Payment</th>
                   <th className="py-2 pr-4">Oldest Due</th>
                   <th className="py-2">Newest Due</th>
+                  <th className="py-2 pl-4">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -159,6 +180,16 @@ export default function CustomerDueReport() {
                     <td className="py-2.5 pr-4 text-slate-500">{c.lastPaymentDate ? formatDate(c.lastPaymentDate) : "—"}</td>
                     <td className="py-2.5 pr-4 text-slate-500">{c.oldestDueDate ? formatDate(c.oldestDueDate) : "—"}</td>
                     <td className="py-2.5 text-slate-500">{c.newestDueDate ? formatDate(c.newestDueDate) : "—"}</td>
+                    <td className="py-2.5 pl-4">
+                      <button
+                        type="button"
+                        className="btn-secondary whitespace-nowrap text-xs"
+                        disabled={sendingMobile === c.customerMobile}
+                        onClick={() => openWhatsAppDueReminder(c)}
+                      >
+                        {sendingMobile === c.customerMobile ? "Preparing…" : "💬 WhatsApp Due"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -193,4 +224,36 @@ export default function CustomerDueReport() {
       )}
     </div>
   );
+}
+
+function toWhatsAppPhone(mobile: string): string | null {
+  const digits = mobile.replace(/\D/g, "");
+  if (digits.length === 10) return `91${digits}`;
+  if (digits.length === 12 && digits.startsWith("91")) return digits;
+  return null;
+}
+
+function buildDueReminder(statement: CustomerStatement): string {
+  const dueOrders = statement.orders.filter((order) => order.due > 0.004);
+  const lines = dueOrders.map((order, index) => [
+    `${index + 1}. Order: ${order.orderNumber}`,
+    `   Date: ${formatDate(order.createdAt)}`,
+    `   Total: ${formatINR(order.finalAmount)}`,
+    `   Paid: ${formatINR(order.paid)}`,
+    `   Due: ${formatINR(order.due)}`,
+  ].join("\n"));
+
+  return [
+    `Namaste ${statement.customer.customerName} ji,`,
+    "",
+    "M/S Sushant Construction se aapke pending payment details:",
+    "",
+    ...lines,
+    "",
+    `Total pending due: ${formatINR(statement.customer.totalDue)}`,
+    "",
+    "Kripya apna baki payment jaldi clear karein.",
+    "Dhanyavaad,",
+    "M/S Sushant Construction",
+  ].join("\n");
 }
