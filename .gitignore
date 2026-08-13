@@ -50,6 +50,13 @@ __MACOSX/
 # Temporary / debug scripts
 *.tmp.ts
 
+# One-off migration & verification scripts (contain credentials)
+migrate.ts
+backup.sql
+verify_assistant.ts
+verify_assistant_part2.ts
+verify_rag.ts
+
 # Editor
 .vscode/
 .idea/
