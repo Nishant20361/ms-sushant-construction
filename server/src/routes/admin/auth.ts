@@ -39,10 +39,14 @@ function setAdminCookie(res: Response, token: string): void {
 }
 
 function clearAdminCookie(res: Response): void {
+  const secure = config.isProd;
+  const sameSite: "none" | "strict" = config.isProd ? "none" : "strict";
   res.clearCookie(config.cookieName, {
+    httpOnly: true,
+    secure,
+    sameSite,
     domain: config.cookieDomain || undefined,
     path: "/",
-    sameSite: config.isProd ? "none" : "strict",
   });
 }
 
