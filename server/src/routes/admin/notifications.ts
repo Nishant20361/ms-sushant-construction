@@ -7,6 +7,17 @@ import { AuthenticatedRequest } from "../../types.js";
 
 const router = Router();
 
+// Bell notifications are short-lived UI alerts. Business records (orders,
+// payments, customers) are stored separately and are never removed here.
+const NOTIFICATION_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
+
+async function removeExpiredNotifications(adminId: number): Promise<void> {
+  const expiresBefore = new Date(Date.now() - NOTIFICATION_RETENTION_MS);
+  await prisma.notification.deleteMany({
+    where: { adminId, createdAt: { lt: expiresBefore } },
+  });
+}
+
 function adminIdFrom(req: AuthenticatedRequest): number {
   return Number(req.admin?.sub ?? 0);
 }
@@ -31,6 +42,10 @@ router.get(
     const adminId = adminIdFrom(req);
     const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 20));
     const unreadOnly = req.query.unreadOnly === "true";
+
+    // Cleanup runs whenever the bell is loaded, so expired alerts never show
+    // up or contribute to the unread badge.
+    await removeExpiredNotifications(adminId);
 
     const [items, total, unreadCount] = await Promise.all([
       prisma.notification.findMany({
@@ -57,6 +72,7 @@ router.post(
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const adminId = adminIdFrom(req);
     const body = notificationReadSchema.parse(req.body ?? {});
+    await removeExpiredNotifications(adminId);
     if (body.all) {
       await prisma.notification.updateMany({
         where: { adminId, read: false },
@@ -76,4 +92,3 @@ router.post(
 );
 
 export default router;
-
