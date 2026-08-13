@@ -8,39 +8,8 @@ import {
   getKnowledgeByCategory,
   getKnowledgeByKeyword,
 } from "../construction_ai/knowledge/knowledge.service.js";
-import { askGroq } from "../construction_ai/groq.js";
 
 const router = Router();
-
-// ------------------------------------------------------------------
-// Groq connection test endpoint (verification only).
-// GET /api/construction-ai/test-groq
-// Sends a test message and reports exact status.
-// ------------------------------------------------------------------
-const handleGroqTest = asyncHandler(async (_req, res) => {
-  const hasKey = !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim());
-  console.log(`[GROQ CHECK]`);
-  console.log(`GROQ_API_KEY FOUND: ${hasKey ? "YES" : "NO"}`);
-  if (!hasKey) {
-    res.status(200).json({ success: false, error: "GROQ_API_KEY missing" });
-    return;
-  }
-  try {
-    const { text, model } = await askGroq("Reply only:\nGroq connection successful");
-    res.status(200).json({
-      success: true,
-      provider: "Groq",
-      model: model || "llama-3.1-8b-instant",
-      response: text.trim(),
-    });
-  } catch (err: any) {
-    const errMsg = err?.message || "Groq server connection failed";
-    res.status(200).json({ success: false, error: errMsg });
-  }
-});
-
-router.get("/test-groq", handleGroqTest);
-router.get("/test-grok", handleGroqTest);
 
 // GET /api/construction-ai/knowledge/search?q=ACC%20F2R
 // Keyword-based RAG search across the construction knowledge database.

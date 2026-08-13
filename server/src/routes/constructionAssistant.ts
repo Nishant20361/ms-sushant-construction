@@ -12,6 +12,7 @@ import { isCalculatorQuestion } from "../construction_ai/rag/intentDetector.js";
 import { getRelevantContext } from "../construction_ai/rag/knowledgeRetriever.js";
 import { answerWithGroq } from "../construction_ai/groq.js";
 import { processAdvancedCalculator } from "../construction_ai/calculators/index.js";
+import { assistantLimiter } from "../middleware/rateLimit.js";
 
 const router = Router();
 
@@ -53,6 +54,7 @@ function getOrCreateSession(rawId: string | undefined, languageHint?: string): {
 // Body: { message: string, sessionId?: string, language?: "Hindi"|"English" }
 router.post(
   "/construction-assistant/chat",
+  assistantLimiter,
   asyncHandler(async (req, res) => {
     const body = constructionChatSchema.parse(req.body);
     const message = body.message.trim();
@@ -217,4 +219,3 @@ res.json({
 );
 
 export default router;
-

@@ -22,10 +22,14 @@ dotenv.config({ path: path.join(serverDir, ".env.test") });
 // PostgreSQL test database (isolated from dev/prod). Overridable via env so
 // CI can point at its own Postgres instance. NOTE: the username MUST be part
 // of the URL — an empty user causes PrismaClientInitializationError P1010.
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  process.env.DATABASE_URL ||
-  "postgresql://nishantkumar@localhost:5432/ms_sushant_test?schema=public";
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
+
+if (!TEST_DATABASE_URL) {
+  throw new Error("TEST_DATABASE_URL must be set to an isolated database before running tests.");
+}
+if (TEST_DATABASE_URL === process.env.DATABASE_URL) {
+  throw new Error("TEST_DATABASE_URL must not be the same as DATABASE_URL.");
+}
 
 export default function setup(): () => void {
   // Provision schema via Prisma db push against the isolated test database.
@@ -39,4 +43,3 @@ export default function setup(): () => void {
     // Nothing to clean up for Postgres; tests delete their own rows.
   };
 }
-

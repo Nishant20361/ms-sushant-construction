@@ -80,6 +80,12 @@ export async function askGroq(
   systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
   model: string = "llama-3.1-8b-instant"
 ): Promise<{ text: string; model: string }> {
+  // Tests must be deterministic and must not spend provider quota or depend
+  // on external network availability. Callers already fall back to local data.
+  if (process.env.NODE_ENV === "test") {
+    throw new Error("Groq is disabled in test mode");
+  }
+
   try {
     const client = getGroqClient();
     const messages: GroqMessage[] = [
@@ -139,5 +145,4 @@ export async function answerWithGroq(
   const { text } = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT);
   return text;
 }
-
 

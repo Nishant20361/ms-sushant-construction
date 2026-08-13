@@ -137,48 +137,23 @@ router.post(
   "/auth/forgot-password",
   forgotPasswordLimiter,
   asyncHandler(async (req: Request, res: Response) => {
-    console.log("[FORGOT PASSWORD DEBUG]");
-    console.log("ROUTE HIT: YES");
-    console.log(`REQUEST BODY: ${JSON.stringify(req.body)}`);
-
     const { email } = forgotPasswordSchema.parse(req.body);
     const targetEmail = email.trim().toLowerCase();
 
-    // Find admin by email or fallback to active admin
-    let admin = await prisma.admin.findFirst({
+    // Only an account matching this email may receive a reset token. Never
+    // fall back to another admin or mutate account email from this endpoint.
+    const admin = await prisma.admin.findFirst({
       where: { email: targetEmail, isActive: true },
     });
 
-    if (!admin) {
-      admin = await prisma.admin.findFirst({
-        where: { isActive: true },
-        orderBy: { id: "asc" },
-      });
-    }
-
-    if (!admin) {
-      console.log("ADMIN FOUND: NO");
-      console.log("TOKEN CREATED: NO");
-      console.log("RESET URL CREATED: NO");
-      console.log("EMAIL FUNCTION CALLED: NO");
+    if (!admin || !admin.email) {
       res.json({
         message: "If an account with that email exists, a reset link has been sent.",
       });
       return;
     }
 
-    console.log("ADMIN FOUND: YES");
-
-    // Always update admin email if target email differs so reset email reaches recipient
-    if (admin.email !== targetEmail) {
-      await prisma.admin.update({
-        where: { id: admin.id },
-        data: { email: targetEmail },
-      });
-      admin.email = targetEmail;
-    }
-
-    const recipientEmail = admin.email || targetEmail;
+    const recipientEmail = admin.email;
 
     // Generate cryptographically secure random token
     const rawToken = crypto.randomBytes(32).toString("hex");
@@ -199,15 +174,10 @@ router.post(
         expiresAt,
       },
     });
-    console.log("TOKEN CREATED: YES");
-
     // Build reset link from CLIENT_URL
     const baseUrl = config.clientUrl.replace(/\/$/, "");
     const resetUrl = `${baseUrl}/admin/reset-password?token=${encodeURIComponent(rawToken)}`;
-    console.log("RESET URL CREATED: YES");
-
     // Attempt to send email and await result
-    console.log("EMAIL FUNCTION CALLED: YES");
     const sent = await sendPasswordResetEmail(recipientEmail, resetUrl, RESET_TOKEN_LIFETIME_MINUTES);
 
     await writeAudit(req as AuthenticatedRequest, {
@@ -287,6 +257,4 @@ router.post(
 );
 
 export default router;
-
-
 

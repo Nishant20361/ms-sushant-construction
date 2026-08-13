@@ -1,4 +1,3 @@
-// @ts-nocheck — workspace vite type conflict; validated by `vite build` at runtime
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -21,4 +20,3 @@ export default defineConfig({
     },
   },
 });
-

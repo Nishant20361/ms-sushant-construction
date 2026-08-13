@@ -29,11 +29,22 @@ function required(name: string): string {
   return value;
 }
 
+function clientUrl(): string {
+  const value = process.env.CLIENT_URL?.trim();
+  if (isProd && (!value || !/^https:\/\//i.test(value))) {
+    throw new Error("CLIENT_URL must be an absolute HTTPS URL in production");
+  }
+  return value || "http://localhost:5173";
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? "development",
   isProd,
   port: Number(process.env.PORT) || 5100,
-  clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
+  clientUrl: clientUrl(),
+  // Set TRUST_PROXY=true only behind a reverse proxy which overwrites
+  // X-Forwarded-* headers (for example, Render, Caddy, or Nginx).
+  trustProxy: process.env.TRUST_PROXY === "true" ? 1 : false,
   databaseUrl: process.env.DATABASE_URL || "file:./dev.db",
   jwtSecret: required("JWT_SECRET"),
   cookieDomain: process.env.COOKIE_DOMAIN || "",
@@ -55,5 +66,3 @@ export const config = {
 const hasEmailConfig = !!(config.smtp.host && config.smtp.user && config.smtp.pass);
 console.log("[EMAIL CHECK]");
 console.log(`CONFIGURED: ${hasEmailConfig ? "YES" : "NO"}`);
-
-

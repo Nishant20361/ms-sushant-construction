@@ -8,7 +8,7 @@ import { generateOrderNumber } from "../utils/orderNumber.js";
 import { normalizeIndianMobile } from "../utils/validatePhone.js";
 import { serializeProduct, serializeCategory, serializeSettings, serializeOrderForTracking, serializeOrderListForTracking } from "../utils/serializer.js";
 import { orderLimiter, trackLimiter } from "../middleware/rateLimit.js";
-import { sendOrderNotificationEmail, testSmtpConnection } from "../services/email.service.js";
+import { sendOrderNotificationEmail } from "../services/email.service.js";
 import { config } from "../config.js";
 
 const router = Router();
@@ -26,16 +26,6 @@ function getValidOrderNotificationEmail(adminEmail?: string | null): string {
 
   return configuredEmail ? configuredEmail.trim().toLowerCase() : "";
 }
-
-// GET /api/test-email?to=target_email
-router.get(
-  "/test-email",
-  asyncHandler(async (req, res) => {
-    const targetEmail = typeof req.query.to === "string" ? req.query.to.trim() : undefined;
-    const result = await testSmtpConnection(targetEmail);
-    res.json(result);
-  })
-);
 
 // GET /api/products?category=slug&search=term&page=1&limit=12
 router.get(
@@ -137,11 +127,6 @@ router.post(
   orderLimiter,
   asyncHandler(async (req, res) => {
     const body = createOrderSchema.parse(req.body);
-    console.log("[ORDER DEBUG]");
-    console.log("ORDER ROUTE HIT: YES");
-    console.log(`CUSTOMER: ${body.customerName}`);
-    console.log(`ITEMS COUNT: ${body.items.length}`);
-
     const mobile = normalizeIndianMobile(body.customerMobile);
     if (!mobile) throw new HttpError(400, "Invalid mobile number");
 
@@ -195,18 +180,16 @@ router.post(
           };
         });
 
-        // Lock stock to prevent overselling.
+        // Atomically decrement each stock row. A zero affected-row count means
+        // another checkout consumed the stock after the availability check.
         for (const li of lineItems) {
-          await tx.product.updateMany({
+          const update = await tx.product.updateMany({
             where: { id: li.productId, stock: { gte: li.quantity } },
             data: { stock: { decrement: li.quantity } },
           });
-        }
-        // Re-verify after decrement (in case of race).
-        const after = await tx.product.findMany({ where: { id: { in: productIds } } });
-        const soldOut = after.filter((p) => p.stock < 0);
-        if (soldOut.length) {
-          throw new HttpError(409, "Sorry, stock changed while placing the order. Please retry.");
+          if (update.count !== 1) {
+            throw new HttpError(409, "Sorry, stock changed while placing the order. Please retry.");
+          }
         }
 
         subtotal = Math.round(subtotal * 100) / 100;
@@ -256,12 +239,7 @@ router.post(
       }
     );
 
-    console.log("ORDER CREATED: YES");
-    console.log(`ORDER NUMBER: ${order.orderNumber}`);
-
     // ----- Order Notification (email + in-app bell) -----
-    let adminFound = "NO";
-    let adminEmailStr = "(none)";
     let finalRecipient = "";
 
     try {
@@ -270,19 +248,8 @@ router.post(
         orderBy: { id: "asc" },
       });
 
-      if (admin) {
-        adminFound = "YES";
-        adminEmailStr = admin.email || "(none)";
-      }
-
       finalRecipient = getValidOrderNotificationEmail(admin?.email);
-      console.log(`ADMIN FOUND: ${adminFound}`);
-      console.log(`ADMIN EMAIL: ${adminEmailStr}`);
-
       if (finalRecipient) {
-        console.log("ORDER EMAIL START");
-        console.log(`RECIPIENT: ${finalRecipient}`);
-
         const orderItems = order.items ?? [];
         const sent = await sendOrderNotificationEmail(finalRecipient, {
           orderNumber: order.orderNumber,
@@ -301,13 +268,7 @@ router.post(
           })),
         });
 
-        if (sent) {
-          console.log("ORDER EMAIL SUCCESS");
-        } else {
-          console.log("ORDER EMAIL ERROR: sendOrderNotificationEmail returned false");
-        }
-      } else {
-        console.log("ORDER EMAIL ERROR: No valid recipient email address found");
+        if (!sent) console.warn("[order] Notification email was not sent");
       }
 
       if (admin) {
@@ -321,8 +282,7 @@ router.post(
           },
         });
       }
-    } catch (err: any) {
-      console.log(`ORDER EMAIL ERROR: ${err?.message || String(err)}`);
+    } catch (err: unknown) {
       console.error("[order] Admin notification error:", err);
     }
 
@@ -392,4 +352,3 @@ router.get(
 );
 
 export default router;
-

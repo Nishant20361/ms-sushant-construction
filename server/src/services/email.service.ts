@@ -36,7 +36,7 @@ function createProductionTransporter(targetPort?: number): Transporter | null {
     auth: { user, pass },
     family: 4, // Force IPv4 to bypass IPv6 ENETUNREACH issues on Render
     tls: {
-      rejectUnauthorized: false, // Prevents certificate chain verification failures
+      rejectUnauthorized: true,
       minVersion: "TLSv1.2",
     },
     connectionTimeout: 10000, // 10s connection timeout
@@ -52,6 +52,13 @@ async function sendMailWithFallback(
   mailOptions: nodemailer.SendMailOptions,
   emailType: string
 ): Promise<boolean> {
+  // Integration tests must never contact the real SMTP provider or send
+  // customer/admin notifications. Treat delivery as successful so tests can
+  // exercise the order flow without external side effects.
+  if (config.env === "test") {
+    return true;
+  }
+
   const configuredPort = config.smtp.port || 587;
   const fallbackPort = configuredPort === 465 ? 587 : 465;
   const recipient = (mailOptions.to as string) || "";

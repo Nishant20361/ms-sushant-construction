@@ -25,9 +25,11 @@ const serverDir = path.resolve(__dirname, "..");
 dotenv.config({ path: path.join(serverDir, ".env") });
 dotenv.config({ path: path.join(serverDir, ".env.test") });
 
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  "postgresql://nishantkumar@localhost:5432/ms_sushant_test?schema=public";
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
+
+if (!TEST_DATABASE_URL) {
+  throw new Error("TEST_DATABASE_URL must be set to an isolated database before running tests.");
+}
 
 // Force the test worker to use the isolated test database. Setting it here
 // (before any module that imports PrismaClient is evaluated) guarantees the
@@ -35,4 +37,3 @@ const TEST_DATABASE_URL =
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 process.env.TEST_DATABASE_URL = TEST_DATABASE_URL;
-

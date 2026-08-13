@@ -1,184 +1,117 @@
-# M/S SUSHANT CONSTRUCTION — Full-Stack Website
+<p align="center">
+  <img src="assets/readme-hero.svg" alt="M/S Sushant Construction — Building trust, delivering quality" width="100%" />
+</p>
 
-## 🇮🇳 हिन्दी / 🇬🇧 English
+<h1 align="center">M/S Sushant Construction</h1>
 
----
+<p align="center">
+  A modern construction-material ordering platform with a customer storefront, secure admin workspace, stock control, billing, reports, and a bilingual construction assistant.
+</p>
 
-### 📋 Prerequisites
+<p align="center">
+  <a href="https://github.com/your-github-username">GitHub profile</a>
+  &nbsp;•&nbsp;
+  <a href="https://your-domain.example">Live website</a>
+  &nbsp;•&nbsp;
+  <a href="LICENSE.md">MIT License</a>
+</p>
 
-- **Node.js** v18+ (recommended v20+)
-- **npm** v9+
-- **PostgreSQL** (optional — SQLite works out of the box for local development)
+> **Placeholders:** replace `your-github-username` and `your-domain.example` with your real GitHub profile and website domain before publishing.
 
----
+## Highlights
 
-### 🚀 Setup (Local Development — SQLite)
+| Customer experience | Operations & security |
+| --- | --- |
+| Browse products and categories | Secure admin authentication with HttpOnly cookies |
+| Cart and checkout with server-verified prices | Product, category, stock, order and payment management |
+| Order tracking and responsive mobile UI | CSRF protection, input validation and rate limiting |
+| Hindi, English and Hinglish construction assistant | Bills, analytics, reports, audit logs and email notifications |
+
+## Technology
+
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS
+- **Backend:** Express, TypeScript, Prisma
+- **Database:** PostgreSQL
+- **Quality:** Vitest, ESLint, TypeScript checks and GitHub Actions CI
+
+## Quick start
+
+### Requirements
+
+- Node.js 20+
+- npm 9+
+- PostgreSQL
+
+### Run locally
 
 ```bash
-# 1. Clone the repository
+git clone https://github.com/your-github-username/ms-sushant-construction.git
 cd ms-sushant-construction
-
-# 2. Copy environment file
 cp .env.example .env
-# Edit .env and set:
-#   - JWT_SECRET to a long random string (64+ hex chars)
-#   - INITIAL_ADMIN_PASSWORD to a strong password (min 12 chars)
-
-# 3. Install dependencies
 npm install
-
-# 4. Provision the local SQLite database
-npm run db:push
-
-# 5. Seed the database (creates categories, products, admin, settings)
+npm run db:migrate
 npm run db:seed
-
-# 6. Start both backend and frontend
 npm run dev
 ```
 
-Frontend → http://localhost:5173  
-Admin panel → http://localhost:5173/admin  
-Backend API → http://localhost:5100  
+| Service | Address |
+| --- | --- |
+| Storefront | `http://localhost:5173` |
+| Admin panel | `http://localhost:5173/admin` |
+| API | `http://localhost:5100` |
 
----
+## Environment setup
 
-### 🐘 Switching to PostgreSQL (Production)
+At minimum, set these values in `.env` before deployment:
 
-**One environment change:**
-
-1. `server/prisma/schema.prisma` — change `provider = "sqlite"` to `provider = "postgresql"`.
-2. `.env` — set `DATABASE_URL` to your PostgreSQL connection string, e.g.:
-   ```
-   DATABASE_URL="postgresql://user:pass@host:5432/dbname?schema=public"
-   ```
-3. Run `npm run db:migrate && npm run db:seed`
-**No model changes needed.** The code is fully PostgreSQL-compatible.
-
----
-
-### 🔐 Creating the First Admin
-
-The seed script reads `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` from `.env`.
-
-```bash
-# Set these in .env before running db:seed
-INITIAL_ADMIN_USERNAME=admin
-INITIAL_ADMIN_PASSWORD=your-strong-password-here
-
-# Then run
-npm run db:seed
+```env
+NODE_ENV=production
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?schema=public"
+JWT_SECRET="use-a-long-random-secret"
+CLIENT_URL="https://your-domain.example"
+TRUST_PROXY=true
 ```
 
----
+Also configure your SMTP values (`EMAIL_HOST`, `EMAIL_USER`, `EMAIL_PASSWORD`, and `EMAIL_FROM`) for order notifications and password-reset emails.
 
-### 📦 Available Scripts
+## Commands
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start backend + frontend concurrently |
-| `npm run build` | Build both server and client for production |
-| `npm run lint` | Run ESLint on both workspaces |
-| `npm run typecheck` | TypeScript type checking |
-| `npm run test` | Run backend API tests |
-| `npm run db:migrate` | Run Prisma migrations |
-| `npm run db:seed` | Seed database with demo data |
-| `npm run db:reset` | Reset database (drop all data) |
-| `npm run package` | Create clean source ZIP |
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the API and frontend together |
+| `npm run lint` | Run lint checks |
+| `npm run typecheck` | Run TypeScript validation |
+| `npm test` | Run the isolated integration test suite |
+| `npm run build` | Create production builds |
+| `npm run db:migrate` | Apply database migrations |
+| `npm run db:seed` | Seed initial data |
 
----
+## Production checklist
 
-### 🧪 Testing
+- [ ] Use a managed PostgreSQL database and run migrations.
+- [ ] Set a strong `JWT_SECRET`.
+- [ ] Set `CLIENT_URL` to the exact public HTTPS website URL.
+- [ ] Configure SMTP credentials and send a test order/reset email.
+- [ ] Serve the frontend over HTTPS and proxy `/api` to the server.
+- [ ] Set `TRUST_PROXY=true` only behind a trusted reverse proxy.
+- [ ] Run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
 
-```bash
-npm run test
+## Project structure
+
+```text
+client/       React storefront and admin panel
+server/       Express API, Prisma schema, routes and tests
+assets/       README and project visual assets
+.github/      Continuous-integration workflow
 ```
 
-Tests cover:
-- Admin route returns 401 without login
-- Wrong admin password is rejected
-- Checkout validates bad phone number and invalid quantity
-- Browser cannot change product price (server-enforced)
-- Browser cannot buy more than available stock
-- Public customer data is never exposed
-- Inactive product cannot be ordered
+## Author
 
----
+Built and maintained by **Nishant Kumar**.
 
-### 🛡️ Security Checklist
+- GitHub: `https://github.com/your-github-username`
+- Website: `https://your-domain.example`
 
-- [x] HttpOnly cookies for JWT (no localStorage/sessionStorage)
-- [x] CSRF protection on all state-changing requests
-- [x] Argon2id password hashing (min 12 chars)
-- [x] Rate limiting (login, checkout, general API)
-- [x] Helmet security headers
-- [x] CORS allowlist (no wildcard in production)
-- [x] Zod validation on every API request
-- [x] No raw SQL from user input
-- [x] Generic error messages (no stack traces leaked)
-- [x] Image upload: JPEG/PNG/WebP only, max 5 MB, MIME check, random filenames
-- [x] Order prices verified server-side (never trust browser)
-- [x] DB transaction for order placement with stock locking
-- [x] Public API never exposes customer/order/admin data
-- [x] Secrets never in code (`.env` only)
+## License
 
----
-
-### 📁 Project Structure
-
-```
-ms-sushant-construction/
-├── client/              # React + Vite + Tailwind
-│   ├── src/
-│   │   ├── components/  # Shared UI (Navbar, Footer, Cart, Toast, etc.)
-│   │   ├── context/     # Cart, Settings, Admin Auth contexts
-│   │   ├── lib/         # API client, format utilities
-│   │   └── pages/       # Home, Checkout, Admin pages
-│   └── ...
-├── server/              # Express + Prisma + TypeScript
-│   ├── prisma/          # Schema, migrations, seed
-│   ├── src/
-│   │   ├── middleware/  # Auth, error handler, rate limit, upload, CSRF
-│   │   ├── routes/      # Public + Admin API routes
-│   │   ├── utils/       # Password, token, serializers, validators
-│   │   └── validators/  # Zod schemas
-│   └── ...
-├── scripts/             # Packaging script
-├── uploads/             # Uploaded images (gitignored except .gitkeep)
-├── .env.example
-├── docker-compose.yml   # Optional PostgreSQL
-├── package.json         # npm workspaces root
-└── README.md
-```
-
----
-
-### 📸 ZIP Packaging
-
-```bash
-npm run package
-```
-
-Creates `ms-sushant-construction-source.zip` in the project root.  
-Excludes: `node_modules/`, `.env`, `logs/`, `dist/`, `coverage/`, `.git/`, `server/uploads/`, `dev.db`.
-
----
-
-### 🚀 Deployment Checklist
-
-1. [ ] Switch Prisma to PostgreSQL provider
-2. [ ] Point `DATABASE_URL` to production PostgreSQL
-3. [ ] Generate a strong `JWT_SECRET` (64+ hex chars)
-4. [ ] Set strong `INITIAL_ADMIN_PASSWORD`
-5. [ ] Set `NODE_ENV=production`
-6. [ ] Build frontend: `npm run build --workspace client`
-7. [ ] Build backend: `npm run build --workspace server`
-8. [ ] Configure reverse proxy (Nginx/Caddy) to serve client `dist/` and proxy `/api` to Node
-9. [ ] Ensure `Secure` cookie flag is enabled (requires HTTPS)
-10. [ ] Set `CLIENT_URL` to production frontend URL
-
----
-
-## 📄 License
-
-Private — M/S Sushant Construction
+Released under the [MIT License](LICENSE.md). © 2026 Nishant Kumar.

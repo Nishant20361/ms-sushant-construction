@@ -11,14 +11,15 @@ import constructionAssistantRoutes from "./routes/constructionAssistant.js";
 import constructionKnowledgeRoutes from "./routes/constructionKnowledge.js";
 import adminRoutes from "./routes/admin/index.js";
 import { isUploadedFileSafe, UPLOAD_DIR } from "./middleware/upload.js";
-import { testSmtpConnection } from "./services/email.service.js";
-import { asyncHandler } from "./utils/asyncHandler.js";
 
 export function createApp() {
   const app = express();
 
   // ---------- Security headers ----------
-  app.set("trust proxy", 1);
+  // Trust forwarded headers only when the deployment explicitly opts in. A
+  // blanket proxy setting lets direct callers spoof X-Forwarded-For and evade
+  // IP-based rate limits.
+  app.set("trust proxy", config.trustProxy);
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -79,16 +80,6 @@ export function createApp() {
     res.json({ success: true, status: "ok", service: "ms-sushant-construction", time: new Date().toISOString() });
   });
 
-  // ---------- SMTP Test Diagnostic Endpoint ----------
-  app.get(
-    ["/api/test-email", "/api/public/test-email"],
-    asyncHandler(async (req, res) => {
-      const targetEmail = typeof req.query.to === "string" ? req.query.to.trim() : undefined;
-      const result = await testSmtpConnection(targetEmail);
-      res.json(result);
-    })
-  );
-
   // ---------- Public static uploads (safe allowlist only) ----------
   app.use(
     "/uploads",
@@ -134,4 +125,3 @@ export function createApp() {
 
   return app;
 }
-

@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { defineConfig } from "vitest/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -13,10 +14,11 @@ dotenv.config({ path: path.join(__dirname, ".env.test") });
 // NOTE: never omit the username in the fallback. A bare
 // "postgresql://localhost:5432/..." makes Prisma connect with an EMPTY user
 // and PostgreSQL rejects it (PrismaClientInitializationError P1010).
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  process.env.DATABASE_URL ||
-  "postgresql://nishantkumar@localhost:5432/ms_sushant_test?schema=public";
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
+
+if (!TEST_DATABASE_URL) {
+  throw new Error("TEST_DATABASE_URL must be set to an isolated database before running tests.");
+}
 
 export default defineConfig({
   test: {

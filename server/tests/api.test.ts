@@ -606,8 +606,8 @@ describe("Construction Assistant (local rule-based)", () => {
       .set("X-CSRF-Token", token)
       .send({ message: "छत बनाने में क्या क्या लगेगा", language: "Hindi" });
     expect(res.status).toBe(200);
-    expect(res.body.reply).toContain("Cement");
-    expect(res.body.reply).toContain("TMT steel");
+    expect(res.body.reply).toMatch(/Cement|सीमेंट/i);
+    expect(res.body.reply).toMatch(/TMT steel|सरिया|स्टील/i);
   });
 
   it("answers foundation material query from local knowledge", async () => {
@@ -645,7 +645,7 @@ const q = await agent
       .set("X-CSRF-Token", token)
       .send({ message: "column size kya rakhe?", language: "English" });
     expect(res.status).toBe(200);
-    expect(res.body.reply).toMatch(/structural engineer/i);
+    expect(res.body.reply).toMatch(/structural engineer|स्ट्रक्चरल इंजीनियर/i);
   });
 
   it("explains a cement company from the local dataset", async () => {
