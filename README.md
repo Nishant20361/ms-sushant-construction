@@ -86,6 +86,15 @@ For Render Free, use Brevo's HTTPS API: set `BREVO_API_KEY` and set `EMAIL_FROM`
 
 The committed `client/.env.production` already supplies the two frontend build values. In the Render backend dashboard, set `NODE_ENV=production`, `CLIENT_URL`, `BREVO_API_KEY`, and `EMAIL_FROM`. `TRUST_PROXY` is automatically enabled on Render, though setting it to `true` explicitly is fine.
 
+For the backend Render service, use these commands in the Render dashboard:
+
+```text
+Build Command: npm ci --include=dev && npm run build --workspace server
+Start Command: npm run start --workspace server
+```
+
+`--include=dev` is required at build time because TypeScript and Prisma tooling are development dependencies.
+
 ## Commands
 
 | Command | Purpose |
