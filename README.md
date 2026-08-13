@@ -72,7 +72,19 @@ CLIENT_URL="https://your-domain.example"
 TRUST_PROXY=true
 ```
 
-Also configure your SMTP values (`EMAIL_HOST`, `EMAIL_USER`, `EMAIL_PASSWORD`, and `EMAIL_FROM`) for order notifications and password-reset emails.
+For Render Free, use Brevo's HTTPS API: set `BREVO_API_KEY` and set `EMAIL_FROM` to a sender email verified in Brevo. This avoids Render's blocked SMTP ports. SMTP credentials remain supported for paid hosting.
+
+### Current Render deployment
+
+| Service | Required configuration |
+| --- | --- |
+| Frontend | `https://ms-sushant-construction-1.onrender.com` |
+| Backend | `https://ms-sushant-construction.onrender.com` |
+| Backend `CLIENT_URL` | `https://ms-sushant-construction-1.onrender.com` |
+| Frontend `VITE_API_BASE` | `https://ms-sushant-construction.onrender.com/api` |
+| Frontend `VITE_UPLOADS_BASE` | `https://ms-sushant-construction.onrender.com/uploads` |
+
+The committed `client/.env.production` already supplies the two frontend build values. In the Render backend dashboard, set `NODE_ENV=production`, `CLIENT_URL`, `BREVO_API_KEY`, and `EMAIL_FROM`. `TRUST_PROXY` is automatically enabled on Render, though setting it to `true` explicitly is fine.
 
 ## Commands
 
@@ -91,6 +103,7 @@ Also configure your SMTP values (`EMAIL_HOST`, `EMAIL_USER`, `EMAIL_PASSWORD`, a
 - [ ] Use a managed PostgreSQL database and run migrations.
 - [ ] Set a strong `JWT_SECRET`.
 - [ ] Set `CLIENT_URL` to the exact public HTTPS website URL.
+- [ ] Verify `VITE_API_BASE` targets the deployed backend before building the frontend.
 - [ ] Configure SMTP credentials and send a test order/reset email.
 - [ ] Serve the frontend over HTTPS and proxy `/api` to the server.
 - [ ] Set `TRUST_PROXY=true` only behind a trusted reverse proxy.

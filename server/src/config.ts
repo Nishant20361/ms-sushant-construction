@@ -42,9 +42,9 @@ export const config = {
   isProd,
   port: Number(process.env.PORT) || 5100,
   clientUrl: clientUrl(),
-  // Set TRUST_PROXY=true only behind a reverse proxy which overwrites
-  // X-Forwarded-* headers (for example, Render, Caddy, or Nginx).
-  trustProxy: process.env.TRUST_PROXY === "true" ? 1 : false,
+  // Render always terminates TLS and forwards requests through its trusted
+  // proxy. Other hosts must explicitly opt in with TRUST_PROXY=true.
+  trustProxy: process.env.TRUST_PROXY === "true" || !!process.env.RENDER_SERVICE_ID ? 1 : false,
   databaseUrl: process.env.DATABASE_URL || "file:./dev.db",
   jwtSecret: required("JWT_SECRET"),
   cookieDomain: process.env.COOKIE_DOMAIN || "",
@@ -54,6 +54,9 @@ export const config = {
     email: process.env.ADMIN_EMAIL || process.env.INITIAL_ADMIN_EMAIL || "",
   },
   cookieName: "ms_sushant_admin_token",
+  brevo: {
+    apiKey: process.env.BREVO_API_KEY?.trim() || "",
+  },
   smtp: {
     host: process.env.EMAIL_HOST || process.env.SMTP_HOST || "",
     port: Number(process.env.EMAIL_PORT || process.env.SMTP_PORT) || 587,
@@ -63,6 +66,6 @@ export const config = {
   },
 };
 
-const hasEmailConfig = !!(config.smtp.host && config.smtp.user && config.smtp.pass);
+const hasEmailConfig = !!config.brevo.apiKey || !!(config.smtp.host && config.smtp.user && config.smtp.pass);
 console.log("[EMAIL CHECK]");
-console.log(`CONFIGURED: ${hasEmailConfig ? "YES" : "NO"}`);
+console.log(`CONFIGURED: ${hasEmailConfig ? "YES" : "NO"} (${config.brevo.apiKey ? "BREVO_API" : "SMTP"})`);

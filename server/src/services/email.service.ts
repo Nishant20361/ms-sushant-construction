@@ -45,6 +45,40 @@ function createProductionTransporter(targetPort?: number): Transporter | null {
   } as any);
 }
 
+interface EmailMessage {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}
+
+/** Send through Brevo's HTTPS API. This works on Render's free tier, where
+ * outbound SMTP ports are blocked. */
+async function sendWithBrevo(message: EmailMessage): Promise<void> {
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": config.brevo.apiKey,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: { email: message.from, name: "M/S Sushant Construction" },
+      to: [{ email: message.to }],
+      subject: message.subject,
+      textContent: message.text,
+      htmlContent: message.html,
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    throw new Error(`Brevo API request failed (${response.status}): ${detail || response.statusText}`);
+  }
+}
+
 /**
  * Helper to send email with automatic port fallback (e.g., 587 -> 465) if network times out.
  */
@@ -59,9 +93,33 @@ async function sendMailWithFallback(
     return true;
   }
 
+  const recipient = (mailOptions.to as string) || "";
+  const from = typeof mailOptions.from === "string" ? mailOptions.from : "";
+  const text = typeof mailOptions.text === "string" ? mailOptions.text : "";
+  const html = typeof mailOptions.html === "string" ? mailOptions.html : "";
+
+  if (config.brevo.apiKey) {
+    if (!from) {
+      const err = "EMAIL_FROM must be set to a Brevo-verified sender email when using BREVO_API_KEY";
+      console.error(`[EMAIL] ${err}`);
+      logEmailFlow(emailType, recipient, false, err);
+      return false;
+    }
+    try {
+      await sendWithBrevo({ from, to: recipient, subject: mailOptions.subject || "", text, html });
+      console.log(`[EMAIL] Email sent SUCCESS to ${recipient} via Brevo API`);
+      logEmailFlow(emailType, recipient, true);
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[EMAIL] Brevo API delivery failed:", message);
+      logEmailFlow(emailType, recipient, false, message);
+      return false;
+    }
+  }
+
   const configuredPort = config.smtp.port || 587;
   const fallbackPort = configuredPort === 465 ? 587 : 465;
-  const recipient = (mailOptions.to as string) || "";
 
   const primaryTransporter = createProductionTransporter(configuredPort);
   if (!primaryTransporter) {
@@ -142,7 +200,7 @@ export async function sendOrderNotificationEmail(
   to: string,
   order: OrderEmailData
 ): Promise<boolean> {
-  const from = config.smtp.from || config.smtp.user || "no-reply@mssushant.com";
+  const from = config.smtp.from || config.smtp.user || "";
   const dateStr = new Date(order.createdAt).toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",
     dateStyle: "medium",
@@ -259,7 +317,7 @@ export async function sendPasswordResetEmail(
   resetUrl: string,
   expiresInMinutes: number = 15
 ): Promise<boolean> {
-  const from = config.smtp.from || config.smtp.user || "no-reply@mssushant.com";
+  const from = config.smtp.from || config.smtp.user || "";
 
   const plainText = `
 Reset Password - M/S SUSHANT CONSTRUCTION
@@ -322,7 +380,7 @@ export async function sendPasswordChangedEmail(
   to: string,
   details?: { date?: Date; userAgent?: string; ip?: string }
 ): Promise<boolean> {
-  const from = config.smtp.from || config.smtp.user || "no-reply@mssushant.com";
+  const from = config.smtp.from || config.smtp.user || "";
   const dateStr = (details?.date || new Date()).toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",
     dateStyle: "medium",

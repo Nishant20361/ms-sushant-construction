@@ -10,6 +10,7 @@ client/dist/
 .env
 .env.*
 !.env.example
+!client/.env.production
 
 # Logs
 logs/
@@ -52,4 +53,3 @@ __MACOSX/
 # Editor
 .vscode/
 .idea/
-
