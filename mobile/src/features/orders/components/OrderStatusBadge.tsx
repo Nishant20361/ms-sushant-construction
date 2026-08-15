@@ -1,0 +1,6 @@
+import { StyleSheet, Text } from "react-native";
+const statuses: Record<string, { label: string; background: string; color: string }> = {
+  PENDING: { label: "Pending", background: "#FEF3C7", color: "#92400E" }, CONFIRMED: { label: "Confirmed", background: "#DBEAFE", color: "#1E40AF" }, PROCESSING: { label: "Processing", background: "#EDE9FE", color: "#5B21B6" }, OUT_FOR_DELIVERY: { label: "Out for delivery", background: "#E0F2FE", color: "#075985" }, DELIVERED: { label: "Delivered", background: "#DCFCE7", color: "#166534" }, CANCELLED: { label: "Cancelled", background: "#FEE2E2", color: "#991B1B" },
+};
+export function OrderStatusBadge({ status }: { status: string }) { const presentation = statuses[status] ?? { label: status.replaceAll("_", " ").toLowerCase().replace(/^./, (value) => value.toUpperCase()), background: "#E2E8F0", color: "#334155" }; return <Text accessibilityLabel={`Order status: ${presentation.label}`} style={[styles.badge, { backgroundColor: presentation.background, color: presentation.color }]}>{presentation.label}</Text>; }
+const styles = StyleSheet.create({ badge: { alignSelf: "flex-start", paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999, overflow: "hidden", fontWeight: "800" } });

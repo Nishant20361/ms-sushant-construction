@@ -596,6 +596,129 @@ describe("Public data exposure", () => {
   });
 });
 
+describe("Native public API boundary", () => {
+  it("rejects unbounded or invalid public product pagination", async () => {
+    expect((await supertest(app).get("/api/public/products?limit=51")).status).toBe(400);
+    expect((await supertest(app).get("/api/public/products?page=0")).status).toBe(400);
+    expect((await supertest(app).get("/api/public/products?limit=not-a-number")).status).toBe(400);
+  });
+
+  it("supports whitelisted public product sorting and rejects invalid sort values", async () => {
+    const ascending = await supertest(app).get("/api/public/products?sort=price_asc&limit=12");
+    expect(ascending.status).toBe(200);
+    const prices = ascending.body.products.map((product: any) => product.price);
+    expect(prices).toEqual([...prices].sort((a: number, b: number) => a - b));
+
+    const invalid = await supertest(app).get("/api/public/products?sort=rating_desc");
+    expect(invalid.status).toBe(400);
+  });
+
+  it("supports real in-stock and description/category search filters", async () => {
+    const inStock = await supertest(app).get("/api/public/products?inStock=true&limit=12");
+    expect(inStock.status).toBe(200);
+    expect(inStock.body.products.every((product: any) => product.stock > 0)).toBe(true);
+
+    const categorySearch = await supertest(app).get("/api/public/products?search=Test%20Category&limit=12");
+    expect(categorySearch.status).toBe(200);
+    expect(categorySearch.body.products.length).toBeGreaterThan(0);
+  });
+
+  it("allows the reviewed native assistant endpoint without a CSRF cookie", async () => {
+    const res = await supertest(app)
+      .post("/api/public/construction-assistant/chat")
+      .send({ message: "hello", language: "English" });
+    expect(res.status).toBe(200);
+    expect(res.body.reply).toBeTruthy();
+  });
+
+  it("allows native order creation and ignores legacy customer payment fields", async () => {
+    const product = await prisma.product.findFirst({ where: { isActive: true, stock: { gte: 1 } } });
+    expect(product).toBeDefined();
+
+    // Zod strips unknown legacy fields for compatibility with older website
+    // bundles, and the public route never creates payment records from them.
+    const created = await supertest(app)
+      .post("/api/public/orders")
+      .send({
+        customerName: "Native Customer",
+        customerMobile: "9876543210",
+        cashAmount: 999999,
+        onlineAmount: 999999,
+        deliveryAddress: "Test address",
+        items: [{ productId: product!.id, quantity: 1 }],
+      });
+    expect(created.status).toBe(201);
+    const paymentCount = await prisma.orderPayment.count({ where: { orderId: created.body.order.id } });
+    expect(paymentCount).toBe(0);
+  });
+
+  it("replays the same idempotency key without creating or decrementing twice", async () => {
+    const product = await prisma.product.findFirst({ where: { name: "Test Product" } });
+    await prisma.product.update({ where: { id: product!.id }, data: { stock: 10 } });
+    const payload = { customerName: "Idempotent Customer", customerMobile: "9876543210", deliveryAddress: "Test address", items: [{ productId: product!.id, quantity: 1 }] };
+    const key = "mobile-test-idempotency-one";
+    const first = await supertest(app).post("/api/public/orders").set("Idempotency-Key", key).send(payload);
+    const replay = await supertest(app).post("/api/public/orders").set("Idempotency-Key", key).send(payload);
+    expect(first.status).toBe(201);
+    expect(replay.status).toBe(200);
+    expect(replay.body.order.id).toBe(first.body.order.id);
+    expect(await prisma.order.count({ where: { clientRequestId: key } })).toBe(1);
+    expect(Number((await prisma.product.findUnique({ where: { id: product!.id } }))!.stock)).toBe(9);
+
+    const different = await supertest(app).post("/api/public/orders").set("Idempotency-Key", "mobile-test-idempotency-two").send(payload);
+    expect(different.status).toBe(201);
+    expect(different.body.order.id).not.toBe(first.body.order.id);
+  });
+
+  it("rejects a materially different payload that reuses an idempotency key", async () => {
+    const product = await prisma.product.findFirst({ where: { name: "Test Product" } });
+    await prisma.product.update({ where: { id: product!.id }, data: { stock: 10 } });
+    const key = "mobile-test-idempotency-conflict";
+    const original = { customerName: "Original Attempt", customerMobile: "9876543210", deliveryAddress: "First address", items: [{ productId: product!.id, quantity: 1 }] };
+    const first = await supertest(app).post("/api/public/orders").set("Idempotency-Key", key).send(original);
+    const conflict = await supertest(app).post("/api/public/orders").set("Idempotency-Key", key).send({ ...original, deliveryAddress: "Changed address" });
+    expect(first.status).toBe(201);
+    expect(conflict.status).toBe(409);
+    expect(await prisma.order.count({ where: { clientRequestId: key } })).toBe(1);
+    expect(Number((await prisma.product.findUnique({ where: { id: product!.id } }))!.stock)).toBe(9);
+  });
+
+  it("allows only one concurrent order for one remaining stock unit", async () => {
+    const category = await prisma.category.findFirst({ where: { slug: "test-category" } });
+    const product = await prisma.product.create({ data: { name: "Concurrency Product", unit: "piece", price: 50, mrp: 60, stock: 1, isActive: true, categoryId: category!.id } });
+    const payload = { customerName: "Concurrent Customer", customerMobile: "9876543210", deliveryAddress: "Test address", items: [{ productId: product.id, quantity: 1 }] };
+    const responses = await Promise.all([
+      supertest(app).post("/api/public/orders").set("Idempotency-Key", "mobile-concurrent-key-one").send(payload),
+      supertest(app).post("/api/public/orders").set("Idempotency-Key", "mobile-concurrent-key-two").send(payload),
+    ]);
+    expect(responses.filter((response) => response.status === 201)).toHaveLength(1);
+    expect(responses.filter((response) => response.status === 400 || response.status === 409)).toHaveLength(1);
+    expect(Number((await prisma.product.findUnique({ where: { id: product.id } }))!.stock)).toBe(0);
+  });
+
+  it("collapses concurrent requests sharing one idempotency key", async () => {
+    const product = await prisma.product.findFirst({ where: { name: "Test Product" } });
+    await prisma.product.update({ where: { id: product!.id }, data: { stock: 10 } });
+    const payload = { customerName: "Same Attempt", customerMobile: "9876543210", deliveryAddress: "Test address", items: [{ productId: product!.id, quantity: 1 }] };
+    const key = "mobile-concurrent-same-key";
+    const responses = await Promise.all([
+      supertest(app).post("/api/public/orders").set("Idempotency-Key", key).send(payload),
+      supertest(app).post("/api/public/orders").set("Idempotency-Key", key).send(payload),
+    ]);
+    expect(responses.every((response) => response.status === 200 || response.status === 201)).toBe(true);
+    expect(new Set(responses.map((response) => response.body.order.id)).size).toBe(1);
+    expect(await prisma.order.count({ where: { clientRequestId: key } })).toBe(1);
+    expect(Number((await prisma.product.findUnique({ where: { id: product!.id } }))!.stock)).toBe(9);
+  });
+
+  it("keeps the legacy browser mutation route CSRF protected", async () => {
+    const res = await supertest(app)
+      .post("/api/construction-assistant/chat")
+      .send({ message: "hello", language: "English" });
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("Health endpoint", () => {
   it("returns health status", async () => {
     const res = await supertest(app).get("/api/health");

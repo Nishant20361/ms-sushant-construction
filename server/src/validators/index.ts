@@ -18,10 +18,15 @@ export const createOrderSchema = z.object({
     )
     .min(1, "Cart is empty")
     .max(50, "Too many line items"),
-  // Optional payment info captured at order time. Both are optional and
-  // default to 0, so a customer may pay fully, partially, or not at all.
-  cashAmount: z.coerce.number().min(0, "Cash amount cannot be negative").max(100_000_000).default(0),
-  onlineAmount: z.coerce.number().min(0, "Online amount cannot be negative").max(100_000_000).default(0),
+});
+
+export const publicProductQuerySchema = z.object({
+  category: z.string().trim().max(100).optional(),
+  search: z.string().trim().max(200).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(12),
+  sort: z.enum(["newest", "price_asc", "price_desc", "name_asc", "name_desc"]).default("newest"),
+  inStock: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
 });
 
 // ------------------------- Admin receive payment -----------------------

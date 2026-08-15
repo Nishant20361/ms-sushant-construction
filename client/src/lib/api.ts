@@ -149,8 +149,6 @@ export const publicApi = {
     customerMobile: string;
     deliveryAddress: string;
     notes?: string;
-    cashAmount?: number;
-    onlineAmount?: number;
     items: OrderItemInput[];
   }): Promise<{ message: string; order: { id: number; orderNumber: string; subtotal: number; status: string } }> {
     return request(

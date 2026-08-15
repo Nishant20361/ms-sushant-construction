@@ -1,0 +1,8 @@
+import { Link } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { theme } from "@/theme";
+
+export function AIConstructionCard() {
+  return <View style={styles.card}><View style={styles.icon}><Text style={styles.iconText}>✦</Text></View><Text style={styles.eyebrow}>CONSTRUCTION ASSISTANT</Text><Text style={styles.title}>घर बनाने की planning में मदद चाहिए?</Text><Text style={styles.body}>सीमेंट, सरिया, slab, column, tiles, paint और material estimate के बारे में AI से पूछें.</Text><Link href="/(tabs)/assistant" asChild><Pressable accessibilityRole="button" style={({ pressed }) => [styles.button, pressed && { opacity: 0.78 }]}><Text style={styles.buttonText}>Ask Construction AI</Text><Text style={styles.arrow}>→</Text></Pressable></Link></View>;
+}
+const styles = StyleSheet.create({ card: { marginTop: 30, overflow: "hidden", padding: 22, borderRadius: 22, backgroundColor: "#172554" }, icon: { position: "absolute", right: -18, top: -22, width: 120, height: 120, alignItems: "center", justifyContent: "center", borderRadius: 60, backgroundColor: "rgba(255,255,255,0.07)" }, iconText: { color: "#FDE68A", fontSize: 50 }, eyebrow: { color: "#93C5FD", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 }, title: { maxWidth: 285, marginTop: 10, color: "white", fontSize: 22, lineHeight: 29, fontWeight: "900" }, body: { maxWidth: 310, marginTop: 10, color: "#DBEAFE", lineHeight: 20 }, button: { minHeight: 46, marginTop: 18, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 15, borderRadius: 12, backgroundColor: "white" }, buttonText: { color: "#172554", fontWeight: "900" }, arrow: { color: "#172554", fontSize: 18, fontWeight: "900" } });

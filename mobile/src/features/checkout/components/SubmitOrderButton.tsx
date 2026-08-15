@@ -1,0 +1,4 @@
+import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
+import { theme } from "@/theme";
+export function SubmitOrderButton({ submitting, disabled, onPress }: { submitting: boolean; disabled: boolean; onPress(): void }) { return <Pressable accessibilityRole="button" accessibilityLabel="Place Order" accessibilityState={{ disabled, busy: submitting }} disabled={disabled} onPress={onPress} style={[styles.button, disabled && styles.disabled]}>{submitting ? <><ActivityIndicator color="#fff" /><Text style={styles.text}>Placing Order…</Text></> : <Text style={styles.text}>Place Order</Text>}</Pressable>; }
+const styles = StyleSheet.create({ button: { minHeight: 54, flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: theme.colors.primary }, disabled: { opacity: .55 }, text: { color: "white", fontWeight: "800", fontSize: 16 } });

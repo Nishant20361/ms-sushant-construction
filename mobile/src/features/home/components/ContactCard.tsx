@@ -1,0 +1,18 @@
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { SiteSettings } from "@/types/domain";
+import { theme } from "@/theme";
+import { emailUrl, openExternalUrl, telephoneUrl } from "@/utils/externalLinks";
+
+export function ContactCard({ settings, loading, error, onRetry }: { settings?: SiteSettings | null; loading: boolean; error: boolean; onRetry: () => void }) {
+  const [actionError, setActionError] = useState("");
+  const phone = settings?.phone?.trim() || settings?.businessMobile?.trim() || "";
+  const email = settings?.email?.trim() || settings?.businessEmail?.trim() || "";
+  const maps = settings?.googleMapsUrl?.trim() || "";
+  const act = async (url: string) => setActionError((await openExternalUrl(url)) ? "" : "No compatible app is available for this action.");
+
+  if (loading && !settings) return <View style={[styles.card, styles.skeleton]}><View style={styles.skeletonLine} /><View style={styles.skeletonSmall} /></View>;
+  if (error && !settings) return <Pressable accessibilityRole="button" onPress={onRetry} style={styles.card}><Text style={styles.title}>Contact details are temporarily unavailable.</Text><Text style={styles.retry}>Tap to retry</Text></Pressable>;
+  return <View style={styles.card}><Text style={styles.eyebrow}>NEED HELP?</Text><Text style={styles.title}>Talk to MS Sushant Construction</Text>{settings?.address ? <Text style={styles.address}>{settings.address}</Text> : null}<View style={styles.actions}>{phone ? <Pressable accessibilityRole="button" accessibilityLabel={`Call ${phone}`} onPress={() => void act(telephoneUrl(phone))} style={styles.primary}><Text style={styles.primaryText}>☎  Call</Text></Pressable> : null}{email ? <Pressable accessibilityRole="button" accessibilityLabel={`Email ${email}`} onPress={() => void act(emailUrl(email))} style={styles.secondary}><Text style={styles.secondaryText}>✉  Email</Text></Pressable> : null}{maps ? <Pressable accessibilityRole="button" accessibilityLabel="Open business directions" onPress={() => void act(maps)} style={styles.secondary}><Text style={styles.secondaryText}>⌖  Directions</Text></Pressable> : null}</View>{actionError ? <Text accessibilityRole="alert" style={styles.actionError}>{actionError}</Text> : null}</View>;
+}
+const styles = StyleSheet.create({ card: { minHeight: 150, marginTop: 30, padding: 20, borderRadius: 20, backgroundColor: "#ECFDF5", borderWidth: 1, borderColor: "#A7F3D0" }, skeleton: { justifyContent: "center" }, skeletonLine: { width: "70%", height: 18, borderRadius: 9, backgroundColor: theme.colors.border }, skeletonSmall: { width: "45%", height: 12, marginTop: 10, borderRadius: 6, backgroundColor: theme.colors.border }, eyebrow: { color: theme.colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1 }, title: { marginTop: 7, fontSize: 20, fontWeight: "900", color: theme.colors.text }, address: { marginTop: 7, lineHeight: 19, color: theme.colors.muted }, actions: { marginTop: 16, flexDirection: "row", flexWrap: "wrap", gap: 8 }, primary: { minHeight: 46, justifyContent: "center", paddingHorizontal: 16, borderRadius: 12, backgroundColor: theme.colors.primary }, primaryText: { color: "white", fontWeight: "800" }, secondary: { minHeight: 46, justifyContent: "center", paddingHorizontal: 14, borderWidth: 1, borderColor: theme.colors.primary, borderRadius: 12, backgroundColor: theme.colors.surface }, secondaryText: { color: theme.colors.primaryDark, fontWeight: "800" }, retry: { marginTop: 8, color: theme.colors.primary, fontWeight: "700" }, actionError: { marginTop: 10, color: theme.colors.danger, fontSize: 12 } });

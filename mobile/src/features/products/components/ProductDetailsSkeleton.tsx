@@ -1,0 +1,4 @@
+import { StyleSheet, View } from "react-native";
+import { theme } from "@/theme";
+export function ProductDetailsSkeleton() { return <View style={styles.wrap}><View style={styles.image} /><View style={styles.title} /><View style={styles.price} /><View style={styles.body} /><View style={styles.bodyShort} /></View>; }
+const styles = StyleSheet.create({ wrap: { padding: 16 }, image: { height: 320, borderRadius: 18, backgroundColor: theme.colors.border }, title: { width: "78%", height: 24, marginTop: 22, borderRadius: 12, backgroundColor: theme.colors.border }, price: { width: "42%", height: 18, marginTop: 12, borderRadius: 9, backgroundColor: theme.colors.border }, body: { width: "100%", height: 14, marginTop: 28, borderRadius: 7, backgroundColor: theme.colors.border }, bodyShort: { width: "65%", height: 14, marginTop: 8, borderRadius: 7, backgroundColor: theme.colors.border } });

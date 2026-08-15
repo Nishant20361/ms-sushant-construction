@@ -93,10 +93,24 @@ async function placeOrder(
       customerName: name,
       customerMobile: mobile,
       deliveryAddress: "123, Test Street, City, State 123456",
-      cashAmount: cash,
-      onlineAmount: online,
       items: [{ productId: product!.id, quantity: qty }],
     });
+  if (res.status !== 201) return res;
+
+  if (cash > 0) {
+    const payment = await agent
+      .post(`/api/admin/orders/${res.body.order.id}/payments`)
+      .set("X-CSRF-Token", token)
+      .send({ amount: cash, paymentMode: "CASH" });
+    if (payment.status >= 400) return payment;
+  }
+  if (online > 0) {
+    const payment = await agent
+      .post(`/api/admin/orders/${res.body.order.id}/payments`)
+      .set("X-CSRF-Token", token)
+      .send({ amount: online, paymentMode: "ONLINE" });
+    if (payment.status >= 400) return payment;
+  }
   return res;
 }
 

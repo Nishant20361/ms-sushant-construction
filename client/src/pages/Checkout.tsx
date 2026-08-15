@@ -47,8 +47,6 @@ export default function Checkout() {
         customerMobile: form.customerMobile.trim(),
         deliveryAddress: form.deliveryAddress.trim(),
         notes: form.notes.trim() || undefined,
-        cashAmount: 0,
-        onlineAmount: 0,
         items: items.map((it) => ({ productId: it.productId, quantity: it.quantity })),
       });
       setPlacedOrder({ orderNumber: res.order.orderNumber, subtotal: res.order.subtotal });

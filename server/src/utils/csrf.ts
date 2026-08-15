@@ -42,6 +42,21 @@ export function csrfProtect(req: Request, _res: Response, next: NextFunction): v
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
     return next();
   }
+
+  // Native customers do not authenticate with browser cookies, so the
+  // double-submit-cookie CSRF mechanism is not applicable to these two
+  // explicitly reviewed, unauthenticated mutations. Both endpoints retain
+  // their Zod validation and dedicated rate limiters. The legacy website
+  // routes (/orders and /construction-assistant/chat) and every admin route
+  // remain CSRF protected.
+  const nativePublicMutations = new Set([
+    "/public/orders",
+    "/public/construction-assistant/chat",
+  ]);
+  if (req.method === "POST" && nativePublicMutations.has(req.path)) {
+    return next();
+  }
+
   const cookies = (req.cookies as Record<string, string> | undefined) ?? {};
   const cookieToken = cookies[CSRF_COOKIE];
   const headerToken = req.get(CSRF_HEADER);
@@ -50,4 +65,3 @@ export function csrfProtect(req: Request, _res: Response, next: NextFunction): v
   }
   return next();
 }
-

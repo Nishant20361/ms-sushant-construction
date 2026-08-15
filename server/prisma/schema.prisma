@@ -99,19 +99,21 @@ model ProductImage {
 }
 
 model Order {
-  id              Int         @id @default(autoincrement())
-  orderNumber     String      @unique
-  customerName    String
-  customerMobile  String
-  deliveryAddress String?
-  notes           String?
-  subtotal        Float
-  status          String      @default("PENDING")
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  bill            Bill?
-  items           OrderItem[]
-  payments        OrderPayment[]
+  id                Int            @id @default(autoincrement())
+  orderNumber       String         @unique
+  customerName      String
+  customerMobile    String
+  deliveryAddress   String?
+  notes             String?
+  subtotal          Float
+  status            String         @default("PENDING")
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  clientRequestId   String?        @unique
+  clientRequestHash String?
+  bill              Bill?
+  items             OrderItem[]
+  payments          OrderPayment[]
 
   @@index([status])
   @@index([createdAt])

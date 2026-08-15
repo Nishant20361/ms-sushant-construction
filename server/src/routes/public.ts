@@ -3,13 +3,15 @@ import { prisma } from "../db.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { parseIntegerParam } from "../utils/request.js";
 import { HttpError } from "../utils/httpError.js";
-import { createOrderSchema, orderTrackSchema, orderTrackByMobileSchema } from "../validators/index.js";
+import { createOrderSchema, orderTrackSchema, orderTrackByMobileSchema, publicProductQuerySchema } from "../validators/index.js";
 import { generateOrderNumber } from "../utils/orderNumber.js";
 import { normalizeIndianMobile } from "../utils/validatePhone.js";
 import { serializeProduct, serializeCategory, serializeSettings, serializeOrderForTracking, serializeOrderListForTracking } from "../utils/serializer.js";
 import { orderLimiter, trackLimiter } from "../middleware/rateLimit.js";
 import { sendOrderNotificationEmail } from "../services/email.service.js";
 import { config } from "../config.js";
+import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -31,12 +33,7 @@ function getValidOrderNotificationEmail(adminEmail?: string | null): string {
 router.get(
   "/products",
   asyncHandler(async (req, res) => {
-    const {
-      category,
-      search,
-      page = "1",
-      limit = "12",
-    } = req.query as Record<string, string>;
+    const { category, search, page: pageNum, limit: limitNum, sort, inStock } = publicProductQuerySchema.parse(req.query);
 
     const where: any = { isActive: true };
 
@@ -47,15 +44,24 @@ router.get(
       };
     }
 
-    if (search?.trim()) {
-      where.name = {
-        contains: search.trim(),
-        mode: "insensitive",
-      };
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+        { category: { name: { contains: search, mode: "insensitive" }, isActive: true } },
+      ];
     }
 
-    const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.max(1, Number(limit));
+    if (inStock === true) where.stock = { gt: 0 };
+
+    const orderByBySort = {
+      newest: { createdAt: "desc" },
+      price_asc: { price: "asc" },
+      price_desc: { price: "desc" },
+      name_asc: { name: "asc" },
+      name_desc: { name: "desc" },
+    } as const;
+
     const skip = (pageNum - 1) * limitNum;
 
     const [products, total] = await Promise.all([
@@ -67,9 +73,7 @@ router.get(
             orderBy: { isPrimary: "desc" },
           },
         },
-        orderBy: {
-          createdAt: "desc",
-        },
+        orderBy: orderByBySort[sort],
         skip,
         take: limitNum,
       }),
@@ -131,6 +135,11 @@ router.post(
     const mobile = normalizeIndianMobile(body.customerMobile);
     if (!mobile) throw new HttpError(400, "Invalid mobile number");
 
+    const rawIdempotencyKey = req.get("Idempotency-Key")?.trim();
+    if (rawIdempotencyKey && !/^[A-Za-z0-9._:-]{8,128}$/.test(rawIdempotencyKey)) {
+      throw new HttpError(400, "Invalid order request identifier");
+    }
+
     // Normalize line items (dedupe by productId, sum quantities).
     const map = new Map<number, number>();
     for (const it of body.items) {
@@ -139,9 +148,28 @@ router.post(
     const lineItems = Array.from(map.entries()).map(([productId, quantity]) => ({
       productId,
       quantity,
-    }));
+    })).sort((a, b) => a.productId - b.productId);
 
-    const order = await prisma.$transaction(
+    const requestHash = rawIdempotencyKey ? createHash("sha256").update(JSON.stringify({
+      customerName: body.customerName,
+      customerMobile: mobile,
+      deliveryAddress: body.deliveryAddress,
+      notes: body.notes,
+      items: lineItems,
+    })).digest("hex") : undefined;
+
+    const existing = rawIdempotencyKey ? await prisma.order.findUnique({
+      where: { clientRequestId: rawIdempotencyKey },
+      include: { items: true },
+    }) : null;
+    if (existing && existing.clientRequestHash !== requestHash) {
+      throw new HttpError(409, "This order attempt no longer matches your cart. Please start a new attempt.");
+    }
+
+    let replayed = Boolean(existing);
+    let order = existing;
+    if (!order) try {
+      order = await prisma.$transaction(
       async (tx) => {
         const productIds = lineItems.map((l) => l.productId);
         const products = await tx.product.findMany({
@@ -195,26 +223,6 @@ router.post(
 
         subtotal = Math.round(subtotal * 100) / 100;
 
-        // Validate payment amounts
-        const cashAmount = Math.round((Number(body.cashAmount) || 0) * 100) / 100;
-        const onlineAmount = Math.round((Number(body.onlineAmount) || 0) * 100) / 100;
-        if (cashAmount + onlineAmount > subtotal) {
-          throw new HttpError(
-            400,
-            `Payment amount (${cashAmount + onlineAmount}) cannot exceed the order total (${subtotal}).`
-          );
-        }
-
-        // Build payment records (one per non-zero mode). Only store payments
-        // that were actually made; a fully-due order simply has no records.
-        const paymentRecords = [];
-        if (cashAmount > 0) {
-          paymentRecords.push({ amount: cashAmount, paymentMode: "CASH" });
-        }
-        if (onlineAmount > 0) {
-          paymentRecords.push({ amount: onlineAmount, paymentMode: "ONLINE" });
-        }
-
         return tx.order.create({
           data: {
             orderNumber: generateOrderNumber(),
@@ -223,10 +231,11 @@ router.post(
             deliveryAddress: body.deliveryAddress || null,
             notes: body.notes || null,
             subtotal,
+            clientRequestId: rawIdempotencyKey,
+            clientRequestHash: requestHash,
             items: { create: orderItems },
-            payments: { create: paymentRecords },
           },
-          include: { items: true, payments: true },
+          include: { items: true },
         });
       },
       {
@@ -239,11 +248,20 @@ router.post(
         timeout: 30000,
       }
     );
+    } catch (error) {
+      if (!(rawIdempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+      const concurrent = await prisma.order.findUnique({ where: { clientRequestId: rawIdempotencyKey }, include: { items: true } });
+      if (!concurrent || concurrent.clientRequestHash !== requestHash) throw new HttpError(409, "This order attempt could not be safely confirmed.");
+      order = concurrent;
+      replayed = true;
+    }
+
+    if (!order) throw new HttpError(500, "Order could not be confirmed");
 
     // ----- Order Notification (email + in-app bell) -----
     let finalRecipient = "";
 
-    try {
+    if (!replayed) try {
       const admin = await prisma.admin.findFirst({
         where: { isActive: true },
         orderBy: { id: "asc" },
@@ -287,8 +305,8 @@ router.post(
       console.error("[order] Admin notification error:", err);
     }
 
-    res.status(201).json({
-      message: "Order placed successfully",
+    res.status(replayed ? 200 : 201).json({
+      message: replayed ? "Order already placed" : "Order placed successfully",
       order: {
         id: order.id,
         orderNumber: order.orderNumber,

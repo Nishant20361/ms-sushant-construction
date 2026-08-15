@@ -28,6 +28,8 @@ Rules:
 - Reply in English if the user question is in English.
 - Support Hinglish naturally.
 - Never invent exact structural engineering values (column sizes, beam sizes, exact rebar layouts).
+- Never invent current shop prices or stock. Direct customers to the current Products catalogue unless authoritative context explicitly provides them.
+- Politely redirect non-construction questions back to construction materials and planning.
 - Give approximate information or general rules of thumb.
 - Always include a recommendation to consult a qualified structural engineer for structural design.
 - Ask useful follow-up questions to assist the customer further.
@@ -36,6 +38,7 @@ Rules:
 export const DEFAULT_SYSTEM_PROMPT = CONSTRUCTION_SYSTEM_PROMPT;
 
 let groqInstance: Groq | null = null;
+export const GROQ_REQUEST_TIMEOUT_MS = 20_000;
 
 function getGroqClient(): Groq {
   const apiKey = process.env.GROQ_API_KEY?.trim();
@@ -88,6 +91,8 @@ export async function askGroq(
 
   try {
     const client = getGroqClient();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GROQ_REQUEST_TIMEOUT_MS);
     const messages: GroqMessage[] = [
       { role: "system", content: systemPrompt },
       { role: "user", content: prompt },
@@ -97,7 +102,7 @@ export async function askGroq(
       const response = await client.chat.completions.create({
         model,
         messages,
-      });
+      }, { signal: controller.signal });
       return {
         text: response.choices[0]?.message?.content || "",
         model,
@@ -113,13 +118,15 @@ export async function askGroq(
         const response = await client.chat.completions.create({
           model: fallbackModel,
           messages,
-        });
+        }, { signal: controller.signal });
         return {
           text: response.choices[0]?.message?.content || "",
           model: fallbackModel,
         };
       }
       throw err;
+    } finally {
+      clearTimeout(timeout);
     }
   } catch (err: any) {
     throw categorizeGroqError(err);
@@ -143,6 +150,6 @@ export async function answerWithGroq(
   }
 
   const { text } = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT);
+  if (!text.trim()) throw new Error("Groq returned an empty response");
   return text;
 }
-

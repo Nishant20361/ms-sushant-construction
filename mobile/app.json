@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "MS Sushant Construction",
+    "slug": "ms-sushant-construction",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "mssushantconstruction",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.mssushantconstruction.app",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.mssushantconstruction.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F766E"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#F8FAFC"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
