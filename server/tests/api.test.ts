@@ -615,6 +615,8 @@ describe("Public data exposure", () => {
     const base = { companyName: "Test", tagline: "", logoUrl: null, heroTitle: "", heroSubtitle: "", heroBannerUrl: null, phone: "", whatsappNumber: "", email: "", address: "", googleMapsUrl: "", aboutContent: "", facebookUrl: "", instagramUrl: "", youtubeUrl: "", businessLogoUrl: null };
     // A: disabled with all update values blank; B: disabled may retain an old HTTPS build page.
     expect(settingsSchema.parse({ ...base, androidUpdateEnabled: false, androidLatestVersion: "", androidLatestBuild: 0, androidApkUrl: "", androidUpdateMessage: "" })).toMatchObject({ androidUpdateEnabled: false, androidLatestBuild: 0 });
+    expect(settingsSchema.parse({ ...base, androidUpdateEnabled: false, androidLatestVersion: null, androidLatestBuild: 0, androidApkUrl: null, androidUpdateMessage: null })).toMatchObject({ androidUpdateEnabled: false, androidLatestVersion: "", androidApkUrl: "", androidUpdateMessage: "" });
+    expect(settingsSchema.parse({ ...base, androidUpdateEnabled: false, androidLatestBuild: 0, androidApkUrl: undefined })).toMatchObject({ androidUpdateEnabled: false, androidApkUrl: "" });
     expect(settingsSchema.parse({ ...base, androidUpdateEnabled: false, androidLatestVersion: "1.0.1", androidLatestBuild: 2, androidApkUrl: "", androidUpdateMessage: "" })).toMatchObject({ androidUpdateEnabled: false, androidLatestVersion: "1.0.1", androidLatestBuild: 2 });
     expect(settingsSchema.parse({ ...base, androidUpdateEnabled: false, androidLatestVersion: "old value", androidLatestBuild: 0, androidApkUrl: "https://expo.dev/accounts/example/builds/123", androidUpdateMessage: "Later" })).toMatchObject({ androidUpdateEnabled: false });
 

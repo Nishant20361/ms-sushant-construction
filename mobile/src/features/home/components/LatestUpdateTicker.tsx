@@ -1,21 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { theme } from "@/theme";
+
+const PIXELS_PER_SECOND = 50;
+const RESTART_DELAY_MS = 500;
+const MIN_DURATION_MS = 2_500;
 
 export function LatestUpdateTicker({ enabled, text }: { enabled?: boolean; text?: string }) {
   const message = text?.trim() ?? "";
   const translateX = useRef(new Animated.Value(0)).current;
   const animation = useRef<Animated.CompositeAnimation | null>(null);
   const restartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState(0);
   const [textWidth, setTextWidth] = useState(0);
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
-    return () => subscription.remove();
-  }, []);
 
   useEffect(() => setTextWidth(0), [message]);
 
@@ -23,37 +20,49 @@ export function LatestUpdateTicker({ enabled, text }: { enabled?: boolean; text?
     animation.current?.stop();
     if (restartTimer.current) clearTimeout(restartTimer.current);
     restartTimer.current = null;
-    if (!enabled || !message || reduceMotion || !containerWidth || !textWidth) {
+    if (!enabled || !message || viewportWidth <= 0 || textWidth <= 0) {
       translateX.setValue(0);
       return;
     }
-    const distance = containerWidth + textWidth;
+
     let cancelled = false;
+    const distance = viewportWidth + textWidth;
+    const duration = Math.max(MIN_DURATION_MS, Math.round((distance / PIXELS_PER_SECOND) * 1_000));
     const runPass = () => {
       if (cancelled) return;
-      translateX.setValue(containerWidth);
+      translateX.setValue(viewportWidth);
       animation.current = Animated.timing(translateX, {
         toValue: -textWidth,
-        duration: Math.max(4_000, distance * 20),
+        duration,
         easing: Easing.linear,
         useNativeDriver: true,
       });
       animation.current.start(({ finished }) => {
         if (!finished || cancelled) return;
-        restartTimer.current = setTimeout(runPass, 500);
+        restartTimer.current = setTimeout(runPass, RESTART_DELAY_MS);
       });
     };
     runPass();
-    return () => { cancelled = true; animation.current?.stop(); if (restartTimer.current) clearTimeout(restartTimer.current); restartTimer.current = null; };
-  }, [containerWidth, enabled, message, reduceMotion, textWidth, translateX]);
+    return () => {
+      cancelled = true;
+      animation.current?.stop();
+      if (restartTimer.current) clearTimeout(restartTimer.current);
+      restartTimer.current = null;
+    };
+  }, [enabled, message, textWidth, translateX, viewportWidth]);
 
   if (!enabled || !message) return null;
-  return <><View accessibilityRole="text" accessibilityLabel={`Latest update: ${message}`} style={styles.card}>
-    <View style={styles.label}><Text style={styles.icon}>📢</Text><Text style={styles.labelText}>Latest Update</Text></View>
-    <View onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)} style={styles.track}>
-      {reduceMotion ? <Text style={styles.staticText}>{message}</Text> : textWidth ? <Animated.Text numberOfLines={1} ellipsizeMode="clip" style={[styles.message, { width: textWidth, transform: [{ translateX }] }]}>{message}</Animated.Text> : null}
+  return <>
+    <View accessibilityRole="text" accessibilityLabel={`Latest update: ${message}`} style={styles.card}>
+      <View style={styles.label}><Text style={styles.icon}>📢</Text><Text style={styles.labelText}>Latest Update</Text></View>
+      <View onLayout={(event) => setViewportWidth(Math.round(event.nativeEvent.layout.width))} style={styles.track}>
+        {textWidth > 0 ? <Animated.Text numberOfLines={1} ellipsizeMode="clip" style={[styles.message, { width: textWidth, transform: [{ translateX }] }]}>{message}</Animated.Text> : null}
+      </View>
     </View>
-  </View>{!reduceMotion ? <Text pointerEvents="none" onTextLayout={(event) => setTextWidth(Math.ceil(Math.max(...event.nativeEvent.lines.map((line) => line.width), 0)) + 4)} style={styles.measureText}>{message}</Text> : null}</>;
+    <View collapsable={false} pointerEvents="none" style={styles.measureRow}>
+      <Text numberOfLines={1} ellipsizeMode="clip" onLayout={(event) => setTextWidth(Math.ceil(event.nativeEvent.layout.width))} style={styles.measureText}>{message}</Text>
+    </View>
+  </>;
 }
 
 const styles = StyleSheet.create({
@@ -62,7 +71,7 @@ const styles = StyleSheet.create({
   icon: { fontSize: 15 },
   labelText: { color: "white", fontSize: 11, fontWeight: "900" },
   track: { minHeight: 48, flex: 1, justifyContent: "center", overflow: "hidden" },
-  measureText: { position: "absolute", left: -10_000, top: -10_000, width: 10_000, opacity: 0, flexShrink: 0, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
   message: { position: "absolute", top: 15, left: 0, flexShrink: 0, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
-  staticText: { paddingHorizontal: 10, paddingVertical: 8, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  measureRow: { position: "absolute", left: -10_000, top: -10_000, alignSelf: "flex-start", flexDirection: "row", opacity: 0 },
+  measureText: { flexShrink: 0, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
 });

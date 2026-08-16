@@ -95,8 +95,9 @@ const safeHttpUrl = z
     "URL must start with http:// or https://"
   );
 
-const androidUpdateUrl = z
-  .string()
+const androidUpdateUrl = z.preprocess(
+  (value) => value === null || value === undefined ? "" : value,
+  z.string()
   .trim()
   .max(1000)
   .refine((value) => {
@@ -107,7 +108,13 @@ const androidUpdateUrl = z
     } catch {
       return false;
     }
-  }, "APK URL must be a safe HTTPS URL");
+  }, "APK URL must be a safe HTTPS URL")
+);
+
+const optionalAndroidText = (maxLength: number) => z.preprocess(
+  (value) => value === null || value === undefined ? "" : value,
+  z.string().trim().max(maxLength)
+);
 
 function isDirectAndroidApkUrl(value: string): boolean {
   if (!value) return false;
@@ -172,10 +179,10 @@ export const settingsSchema = z.object({
   latestUpdateEnabled: z.boolean().optional().default(false),
   latestUpdateText: z.string().trim().max(300).optional().default(""),
   androidUpdateEnabled: z.boolean().optional().default(false),
-  androidLatestVersion: z.string().trim().max(40).optional().default(""),
+  androidLatestVersion: optionalAndroidText(40).optional().default(""),
   androidLatestBuild: z.coerce.number().int().min(0).max(2_147_483_647).optional().default(0),
   androidApkUrl: androidUpdateUrl.optional().default(""),
-  androidUpdateMessage: z.string().trim().max(300).optional().default(""),
+  androidUpdateMessage: optionalAndroidText(300).optional().default(""),
 }).superRefine((settings, ctx) => {
   if (!settings.androidUpdateEnabled) return;
 
