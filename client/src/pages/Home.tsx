@@ -7,6 +7,7 @@ import { formatINR, formatOrderStatus, resolveImageUrl } from "../lib/format";
 import { EmptyState, ErrorState, LoadingState } from "../components/Loading";
 import { useToast } from "../components/Toast";
 import ConstructionAssistant from "../components/ConstructionAssistant";
+import { ANDROID_APP_URL } from "../config";
 
 const PAGE_SIZE = 12;
 
@@ -232,6 +233,19 @@ const handleAdd = (p: Product, quantity: number) => {
               className="mt-8 h-56 w-full rounded-xl object-cover"
               loading="lazy"
             />
+          </div>
+        </div>
+      </section>
+
+      {/* ============ APP DOWNLOAD ============ */}
+      <section className="bg-slate-50 py-12">
+        <div className="container-page">
+          <div className="flex flex-col items-start justify-between gap-6 rounded-2xl border border-brand-200 bg-brand-50 p-6 shadow-card sm:flex-row sm:items-center sm:p-8">
+            <div className="flex items-start gap-4">
+              <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-2xl text-white">📱</span>
+              <div><h2 className="text-2xl font-bold text-slate-900">Download Our App</h2><p className="mt-1 text-sm font-medium text-brand-800">हमारा ऐप डाउनलोड करें</p><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Order materials, track orders and get construction assistance directly from your phone.</p></div>
+            </div>
+            {ANDROID_APP_URL ? <a href={ANDROID_APP_URL} className="btn-primary shrink-0 whitespace-nowrap">Download Android App</a> : <span aria-disabled="true" className="btn-primary shrink-0 cursor-not-allowed whitespace-nowrap opacity-60">Download Android App</span>}
           </div>
         </div>
       </section>
