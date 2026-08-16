@@ -12,13 +12,15 @@ export function useHomeData() {
   const settings = useQuery({
     queryKey: queryKeys.settings,
     queryFn: ({ signal }) => publicApi.getSettings(signal),
-    staleTime: 30 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    refetchOnMount: "always",
     enabled: cacheReady,
   });
   const categories = useQuery({
     queryKey: queryKeys.categories,
     queryFn: ({ signal }) => publicApi.getCategories(signal),
-    staleTime: 30 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    refetchOnMount: "always",
     enabled: cacheReady,
   });
   const products = useQuery({

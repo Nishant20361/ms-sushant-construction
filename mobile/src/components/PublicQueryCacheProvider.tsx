@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { queryClient } from "@/services/queryClient";
 
 const CACHE_KEY = "ms-sushant-public-query-cache-v1";
-const CACHE_BUSTER = "public-products-v2";
+const CACHE_BUSTER = "public-content-v3";
 const MAX_AGE = 12 * 60 * 60 * 1000;
 const CacheReadyContext = createContext(false);
 

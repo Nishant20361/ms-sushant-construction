@@ -93,7 +93,7 @@ const load = () => {
     { key: "whatsappNumber", label: "WhatsApp Number", type: "phone" },
     { key: "email", label: "Email", type: "text" },
     { key: "address", label: "Address", type: "textarea" },
-    { key: "googleMapsUrl", label: "Google Maps Embed URL", type: "url" },
+    { key: "googleMapsUrl", label: "Business Location / Google Maps Link", type: "url" },
     { key: "aboutContent", label: "About Us Content", type: "textarea" },
     { key: "facebookUrl", label: "Facebook URL", type: "url" },
     { key: "instagramUrl", label: "Instagram URL", type: "url" },
@@ -202,6 +202,7 @@ const load = () => {
               <label className="label" htmlFor={key}>
                 {label}
               </label>
+              {key === "googleMapsUrl" ? <p className="mb-1 text-xs text-slate-500">Paste the Google Maps share/location link for your shop.</p> : null}
               {type === "textarea" ? (
                 <textarea
                   id={key}
