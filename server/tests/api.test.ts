@@ -3,7 +3,8 @@ import supertest from "supertest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/db.js";
 import { hashPassword } from "../src/utils/password.js";
-import { buildGroqPrompt, detectGroqResponseLanguage } from "../src/construction_ai/groq.js";
+import { buildGroqPrompt, CONSTRUCTION_SYSTEM_PROMPT, detectGroqResponseLanguage, resolveGroqResponseLanguage } from "../src/construction_ai/groq.js";
+import { isAbusiveMessage, respectfulBoundaryReply } from "../src/construction_ai/conversationSafety.js";
 import { serializeCategory, serializeOrderListForTracking, serializeSettings } from "../src/utils/serializer.js";
 import { categorySchema, settingsSchema } from "../src/validators/index.js";
 import { isWholeNumberUnit, quantityMatchesUnit } from "../src/utils/quantity.js";
@@ -823,6 +824,20 @@ describe("Construction Assistant (local rule-based)", () => {
     expect(detectGroqResponseLanguage("How are you?")).toBe("English");
     expect(detectGroqResponseLanguage("Thank you")).toBe("English");
     expect(detectGroqResponseLanguage("What is cement used for?")).toBe("English");
+    expect(resolveGroqResponseLanguage("haan", "Hinglish")).toBe("Hinglish");
+    expect(resolveGroqResponseLanguage("ji", "Hindi")).toBe("Hindi");
+    expect(resolveGroqResponseLanguage("What cement is suitable?", "Hindi")).toBe("English");
+    expect(buildGroqPrompt("Tell me a construction joke", "", "English")).toContain("natural English");
+    expect(CONSTRUCTION_SYSTEM_PROMPT).toContain("family-friendly humour");
+  });
+
+  it("sets a calm language-aware boundary for abusive messages", () => {
+    expect(isAbusiveMessage("you are an asshole")).toBe(true);
+    expect(isAbusiveMessage("tum chutiye ho")).toBe(true);
+    expect(isAbusiveMessage("तुम चूतिया हो")).toBe(true);
+    expect(isAbusiveMessage("cement ka curing kaise kare?")).toBe(false);
+    expect(respectfulBoundaryReply("Hinglish")).toContain("respectful");
+    expect(respectfulBoundaryReply("Hindi")).toContain("सम्मानजनक");
   });
 
   it("uses the latest message language while keeping the same session context", async () => {

@@ -9,7 +9,8 @@ import {
 } from "../construction_ai/assistant.js";
 import { isCalculatorQuestion } from "../construction_ai/rag/intentDetector.js";
 import { getRelevantContext } from "../construction_ai/rag/knowledgeRetriever.js";
-import { answerWithGroq, detectGroqResponseLanguage, type GroqMessage } from "../construction_ai/groq.js";
+import { answerWithGroq, resolveGroqResponseLanguage, type GroqMessage, type GroqResponseLanguage } from "../construction_ai/groq.js";
+import { isAbusiveMessage, respectfulBoundaryReply } from "../construction_ai/conversationSafety.js";
 import { processAdvancedCalculator } from "../construction_ai/calculators/index.js";
 import { assistantLimiter } from "../middleware/rateLimit.js";
 
@@ -22,6 +23,7 @@ const router = Router();
 interface StoredSession {
   data: SessionData;
   history: GroqMessage[];
+  responseLanguage?: GroqResponseLanguage;
   updatedAt: number;
 }
 
@@ -46,7 +48,7 @@ function getOrCreateSession(rawId: string | undefined, languageHint?: string): {
   }
   const data = createInitialSession(languageHint === "Hindi" ? "Hindi" : "English");
   const id = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-  sessions.set(id, { data, history: [], updatedAt: Date.now() });
+  sessions.set(id, { data, history: [], responseLanguage: languageHint as GroqResponseLanguage | undefined, updatedAt: Date.now() });
   return { id, data };
 }
 
@@ -77,8 +79,32 @@ router.post(
 
     // The latest message controls response style; session language is used only
     // by the local fallback engine and never overrides a clear latest message.
-    const messageLanguage = detectGroqResponseLanguage(message);
+    const storedBeforeReply = sessions.get(sessionId);
+    const messageLanguage = resolveGroqResponseLanguage(message, storedBeforeReply?.responseLanguage);
     data.language = messageLanguage === "English" ? "English" : "Hindi";
+    if (storedBeforeReply) storedBeforeReply.responseLanguage = messageLanguage;
+
+    // Keep abuse handling deterministic instead of relying on the provider to
+    // choose a suitable tone. The response is calm, language-aware and does
+    // not send the abusive message to Groq or construction retrieval.
+    if (isAbusiveMessage(message)) {
+      const reply = respectfulBoundaryReply(messageLanguage);
+      const stored = sessions.get(sessionId);
+      if (stored) {
+        const nextHistory: GroqMessage[] = [...stored.history, { role: "user", content: message }, { role: "assistant", content: reply }];
+        stored.history = nextHistory.slice(-8);
+        stored.updatedAt = Date.now();
+      }
+      try {
+        await prisma.constructionQuery.create({
+          data: { customerMessage: message.slice(0, 2000), language: messageLanguage, assistantReply: reply },
+        });
+      } catch (err) {
+        console.error("[construction-assistant] Failed to persist query:", err);
+      }
+      res.json({ reply, language: messageLanguage, sessionId });
+      return;
+    }
 
     // Keep the existing local engine for deterministic calculations, session-state
     // extraction, and provider-outage fallback. Normal online replies always go

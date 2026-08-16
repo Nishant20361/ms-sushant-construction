@@ -21,7 +21,10 @@ export type KnowledgeCategory =
   | "aggregate"
   | "roof"
   | "waterproofing"
-  | "finishing";
+  | "finishing"
+  | "planning"
+  | "site-safety"
+  | "contractor";
 
 export interface MaterialKnowledgeItem {
   id: string;
@@ -839,6 +842,126 @@ export const MATERIAL_KNOWLEDGE: MaterialKnowledgeItem[] = [
     notesEn: ["Material choice depends on budget and use."],
     notesHi: ["Material चुनाव budget और उपयोग पर निर्भर।"],
   },
+  // =====================================================================
+  // HOMEOWNER + CONTRACTOR FIELD GUIDANCE
+  // =====================================================================
+  {
+    id: "plan_before_work",
+    category: "planning",
+    nameEn: "Plan Before Construction Starts",
+    nameHi: "निर्माण शुरू करने से पहले योजना",
+    keywords: ["planning", "plan", "ghar banana", "घर बनाना", "start construction", "construction start", "naksha", "drawing", "estimate"],
+    benefitsEn: ["A clear drawing, scope and budget reduce rework.", "Sequencing decisions early helps coordinate civil, electrical and plumbing work."],
+    benefitsHi: ["स्पष्ट drawing, scope और budget से दोबारा काम कम होता है।", "पहले से sequence तय करने पर civil, electrical और plumbing coordination बेहतर रहता है।"],
+    usageEn: ["Confirm approved drawings, room needs, budget range, site levels and a material plan before excavation."],
+    usageHi: ["खुदाई से पहले approved drawing, कमरे की जरूरत, budget range, site level और material plan confirm करें।"],
+    notesEn: ["Local permissions and structural drawings must be handled by qualified professionals."],
+    notesHi: ["स्थानीय अनुमति और structural drawing qualified professional से ही कराएं।"],
+  },
+  {
+    id: "work_sequence",
+    category: "planning",
+    nameEn: "Typical House Construction Sequence",
+    nameHi: "घर निर्माण का सामान्य क्रम",
+    keywords: ["sequence", "construction sequence", "ghar kaise banta", "घर कैसे बनता", "step by step", "stages", "construction stages"],
+    benefitsEn: ["A sensible sequence avoids opening finished work later.", "Makes labour and material planning easier."],
+    benefitsHi: ["सही क्रम से बाद में finished काम तोड़ना कम होता है।", "Labour और material planning आसान होती है।"],
+    usageEn: ["Common order: drawings and site preparation, foundation/RCC, masonry, concealed services, plaster, waterproofing, flooring, fixtures, paint and handover."],
+    usageHi: ["सामान्य क्रम: drawings/site preparation, foundation/RCC, masonry, concealed services, plaster, waterproofing, flooring, fixtures, paint और handover।"],
+    notesEn: ["Actual sequence varies with design, weather, local rules and engineer instructions."],
+    notesHi: ["असल क्रम design, मौसम, स्थानीय नियम और engineer की instruction के अनुसार बदल सकता है।"],
+  },
+  {
+    id: "material_storage",
+    category: "contractor",
+    nameEn: "Material Storage at Site",
+    nameHi: "साइट पर material storage",
+    keywords: ["storage", "cement storage", "cement ko site", "cement rakhna", "material rakhna", "सीमेंट storage", "site storage", "बारिश में सीमेंट"],
+    benefitsEn: ["Dry, organised storage protects material quality and reduces wastage.", "Separate stacks make stock checks easier."],
+    benefitsHi: ["सूखे और व्यवस्थित storage से material quality बचती है और wastage कम होता है।", "अलग stack रखने पर stock check आसान होता है।"],
+    usageEn: ["Keep cement dry and raised off the floor, protect steel from prolonged water exposure, and stack bricks/blocks safely without blocking access."],
+    usageHi: ["सीमेंट को सूखा और जमीन से ऊपर रखें, steel को लंबे समय तक पानी में न रहने दें, और bricks/blocks को सुरक्षित stack करें।"],
+    notesEn: ["Follow manufacturer instructions and use older acceptable stock first."],
+    notesHi: ["Manufacturer instruction मानें और acceptable पुराना stock पहले use करें।"],
+  },
+  {
+    id: "concrete_curing",
+    category: "planning",
+    nameEn: "Concrete and Plaster Curing",
+    nameHi: "कंक्रीट और प्लास्टर curing",
+    keywords: ["curing", "concrete curing", "paani dena", "क्योरिंग", "slab curing", "plaster curing"],
+    benefitsEn: ["Proper curing supports strength development and reduces shrinkage-crack risk.", "It is as important as using the right material."],
+    benefitsHi: ["उचित curing strength development में मदद करती है और shrinkage crack का risk घटाती है।", "यह सही material चुनने जितनी ही जरूरी है।"],
+    usageEn: ["Start and continue curing according to the concrete/plaster specification, weather and engineer guidance."],
+    usageHi: ["Concrete/plaster specification, मौसम और engineer guidance के अनुसार curing शुरू और जारी रखें।"],
+    notesEn: ["Do not rely on a fixed online schedule for every mix or weather condition."],
+    notesHi: ["हर mix या मौसम के लिए एक ही online schedule पर भरोसा न करें।"],
+  },
+  {
+    id: "quality_checks",
+    category: "contractor",
+    nameEn: "Simple Site Quality Checks",
+    nameHi: "साइट के सरल quality checks",
+    keywords: ["quality check", "site check", "काम सही", "quality", "level", "plumb", "alignment"],
+    benefitsEn: ["Frequent checks catch visible issues before they become expensive rework.", "Improves finish, alignment and communication."],
+    benefitsHi: ["बार-बार check करने से दिखने वाली गलती महंगे rework से पहले पकड़ में आती है।", "Finish, alignment और communication बेहतर होते हैं।"],
+    usageEn: ["Check line, level, plumb, opening sizes, surface preparation and curing records at each stage."],
+    usageHi: ["हर stage पर line, level, plumb, opening size, surface preparation और curing record check करें।"],
+    notesEn: ["Structural quality control and testing must follow the engineer/specification."],
+    notesHi: ["Structural quality control और testing engineer/specification के अनुसार ही हो।"],
+  },
+  {
+    id: "mep_coordination",
+    category: "planning",
+    nameEn: "Electrical and Plumbing Coordination",
+    nameHi: "Electrical और plumbing coordination",
+    keywords: ["electrical", "plumbing", "pipe", "wiring", "conduit", "switch point", "leakage", "coordination"],
+    benefitsEn: ["Planning concealed routes before plaster reduces wall cutting and leakage risk.", "Helps place switches, plumbing points and drain slopes correctly."],
+    benefitsHi: ["Plaster से पहले concealed route plan करने पर wall cutting और leakage risk कम होता है।", "Switch, plumbing point और drain slope सही जगह रखने में मदद मिलती है।"],
+    usageEn: ["Freeze fixture locations, test plumbing lines where required, and document concealed routes before closing work."],
+    usageHi: ["Fixture location final करें, जरूरत के अनुसार plumbing line test करें, और concealed route बंद करने से पहले record करें।"],
+    notesEn: ["Use licensed/qualified electrical and plumbing professionals for final work."],
+    notesHi: ["Final electrical और plumbing काम licensed/qualified professional से कराएं।"],
+  },
+  {
+    id: "waterproofing_workflow",
+    category: "waterproofing",
+    nameEn: "Waterproofing Workflow",
+    nameHi: "waterproofing का सही workflow",
+    keywords: ["waterproofing workflow", "leakage", "सीलन", "terrace leakage", "bathroom leakage", "water test"],
+    benefitsEn: ["Treating preparation, joints, slopes and testing as one system improves durability.", "Finding leaks before finishes avoids costly damage."],
+    benefitsHi: ["Preparation, joint, slope और testing को एक system की तरह करने पर durability बढ़ती है।", "Finish से पहले leak मिलने पर महंगा नुकसान बचता है।"],
+    usageEn: ["Prepare the surface, repair defects, follow the chosen product system, protect the layer and water-test where appropriate."],
+    usageHi: ["Surface तैयार करें, defect repair करें, चुने हुए product system का पालन करें, layer protect करें और जरूरत अनुसार water-test करें।"],
+    notesEn: ["Product compatibility, slope and detailing matter more than applying an extra random coat."],
+    notesHi: ["Random extra coat लगाने से ज्यादा product compatibility, slope और detailing जरूरी है।"],
+  },
+  {
+    id: "budget_and_boq",
+    category: "contractor",
+    nameEn: "Budget and Material Planning",
+    nameHi: "budget और material planning",
+    keywords: ["budget", "boq", "cost planning", "quotation", "estimate", "खर्च", "material list", "contractor"],
+    benefitsEn: ["A stage-wise material list makes purchasing and cash planning clearer.", "Comparing like-for-like quotations prevents false savings."],
+    benefitsHi: ["Stage-wise material list से खरीद और cash planning साफ रहती है।", "एक जैसे scope वाले quotation compare करने पर गलत बचत से बचते हैं।"],
+    usageEn: ["Separate civil, finishing, electrical, plumbing, labour, transport and contingency items; confirm quantities from drawings."],
+    usageHi: ["Civil, finishing, electrical, plumbing, labour, transport और contingency को अलग रखें; quantity drawing से confirm करें।"],
+    notesEn: ["Prices, availability and labour rates are local and change over time; use current quotes."],
+    notesHi: ["Price, availability और labour rate local होते हैं और बदलते रहते हैं; current quote use करें।"],
+  },
+  {
+    id: "site_safety_basics",
+    category: "site-safety",
+    nameEn: "Basic Construction Site Safety",
+    nameHi: "निर्माण साइट की बुनियादी safety",
+    keywords: ["safety", "site safety", "helmet", "scaffolding", "कामगार safety", "सुरक्षा", "electric safety"],
+    benefitsEn: ["Basic safety reduces injuries, stoppages and damage.", "A tidy site is easier to inspect and work in."],
+    benefitsHi: ["बुनियादी safety से चोट, काम रुकना और नुकसान कम होता है।", "साफ site पर inspection और काम आसान रहता है।"],
+    usageEn: ["Use appropriate PPE, safe access, guarded openings, secure scaffolding and safe temporary electrical practices."],
+    usageHi: ["उचित PPE, safe access, guarded opening, सुरक्षित scaffolding और temporary electrical safety रखें।"],
+    notesEn: ["Follow local safety law and competent supervisor instructions; do not treat this as a complete safety plan."],
+    notesHi: ["स्थानीय safety law और competent supervisor की instruction मानें; इसे पूरा safety plan न समझें।"],
+  },
 ];
 
 /** Find material knowledge items whose keywords match the text (any match). */
@@ -852,4 +975,3 @@ export function findMaterialKnowledge(text: string): MaterialKnowledgeItem[] {
   }
   return hits;
 }
-
