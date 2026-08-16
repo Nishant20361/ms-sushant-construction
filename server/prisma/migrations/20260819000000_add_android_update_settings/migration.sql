@@ -1,0 +1,6 @@
+ALTER TABLE "SiteSetting"
+ADD COLUMN "androidUpdateEnabled" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "androidLatestVersion" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "androidLatestBuild" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "androidApkUrl" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "androidUpdateMessage" TEXT NOT NULL DEFAULT '';

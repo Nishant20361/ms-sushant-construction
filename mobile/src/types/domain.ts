@@ -22,6 +22,11 @@ export interface SiteSettings {
   businessLogoUrl: string;
   latestUpdateEnabled: boolean;
   latestUpdateText: string;
+  androidUpdateEnabled: boolean;
+  androidLatestVersion: string;
+  androidLatestBuild: number;
+  androidApkUrl: string;
+  androidUpdateMessage: string;
   updatedAt: string;
 }
 

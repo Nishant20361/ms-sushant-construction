@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { AppUpdatePrompt } from "@/components/AppUpdatePrompt";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { PublicQueryCacheProvider } from "@/components/PublicQueryCacheProvider";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
@@ -13,6 +14,7 @@ function AppNavigation() {
   return <>
     <StatusBar style="dark" />
     <OfflineBanner />
+    <AppUpdatePrompt />
     <Stack screenOptions={{ headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.primaryDark, headerTitleStyle: { fontWeight: "700" }, contentStyle: { backgroundColor: theme.colors.background } }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

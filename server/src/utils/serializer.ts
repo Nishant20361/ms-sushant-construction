@@ -204,6 +204,11 @@ export function serializeSettings(s: any) {
     businessLogoUrl: s.businessLogoUrl ?? "",
     latestUpdateEnabled: s.latestUpdateEnabled ?? false,
     latestUpdateText: s.latestUpdateText ?? "",
+    androidUpdateEnabled: s.androidUpdateEnabled ?? false,
+    androidLatestVersion: s.androidLatestVersion ?? "",
+    androidLatestBuild: s.androidLatestBuild ?? 0,
+    androidApkUrl: s.androidApkUrl ?? "",
+    androidUpdateMessage: s.androidUpdateMessage ?? "",
     updatedAt: s.updatedAt,
   };
 }

@@ -193,6 +193,11 @@ model SiteSetting {
   businessLogoUrl     String?  @default("")
   latestUpdateEnabled Boolean  @default(false)
   latestUpdateText    String   @default("")
+  androidUpdateEnabled Boolean @default(false)
+  androidLatestVersion String  @default("")
+  androidLatestBuild   Int     @default(0)
+  androidApkUrl        String  @default("")
+  androidUpdateMessage String  @default("")
 }
 
 model AdminPasswordResetToken {

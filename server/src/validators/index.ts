@@ -95,6 +95,20 @@ const safeHttpUrl = z
     "URL must start with http:// or https://"
   );
 
+const directAndroidApkUrl = z
+  .string()
+  .trim()
+  .max(1000)
+  .refine((value) => {
+    if (!value) return true;
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && !url.username && !url.password && /\.apk$/i.test(url.pathname);
+    } catch {
+      return false;
+    }
+  }, "APK URL must be a direct HTTPS .apk artifact URL, not an Expo build page");
+
 const mapsUrlSafe = z
   .string()
   .trim()
@@ -145,6 +159,11 @@ export const settingsSchema = z.object({
   businessLogoUrl: z.string().trim().max(500).nullable().transform((v) => v ?? ""),
   latestUpdateEnabled: z.boolean().optional().default(false),
   latestUpdateText: z.string().trim().max(300).optional().default(""),
+  androidUpdateEnabled: z.boolean().optional().default(false),
+  androidLatestVersion: z.string().trim().max(40).regex(/^$|^\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?$/, "Use a valid version such as 1.0.2").optional().default(""),
+  androidLatestBuild: z.coerce.number().int().min(0).max(2_147_483_647).optional().default(0),
+  androidApkUrl: directAndroidApkUrl.optional().default(""),
+  androidUpdateMessage: z.string().trim().max(300).optional().default(""),
 });
 
 // ------------------------- Admin order status -------------------------

@@ -250,6 +250,18 @@ const load = () => {
         <p className="mt-1 text-right text-xs text-slate-500">{settings.latestUpdateText.length}/300</p>
       </div>
 
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-slate-900">Android App Update</h3>
+        <p className="mt-1 text-sm text-slate-500">Enable this only after a newer Android APK has been approved. Paste the direct APK artifact URL, not an Expo build-details page.</p>
+        <label className="mt-4 flex cursor-pointer items-center gap-3"><input type="checkbox" checked={settings.androidUpdateEnabled} onChange={(event) => update("androidUpdateEnabled", event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600" /><span className="text-sm font-semibold text-slate-700">Enable update notification</span></label>
+        <div className="mt-4 grid gap-5 sm:grid-cols-2">
+          <div><label className="label" htmlFor="androidLatestVersion">Latest Android Version</label><input id="androidLatestVersion" className="input" value={settings.androidLatestVersion} onChange={(event) => update("androidLatestVersion", event.target.value)} placeholder="1.0.2" /></div>
+          <div><label className="label" htmlFor="androidLatestBuild">Latest Android Build Number</label><input id="androidLatestBuild" className="input" type="number" min="1" step="1" value={settings.androidLatestBuild || ""} onChange={(event) => update("androidLatestBuild", Number(event.target.value) || 0)} placeholder="3" /></div>
+          <div className="sm:col-span-2"><label className="label" htmlFor="androidApkUrl">Android APK Download URL</label><input id="androidApkUrl" className="input" type="url" value={settings.androidApkUrl} onChange={(event) => update("androidApkUrl", event.target.value)} placeholder="https://.../your-app.apk" /><p className="mt-1 text-xs text-slate-500">Must be a direct HTTPS URL ending in .apk.</p></div>
+          <div className="sm:col-span-2"><label className="label" htmlFor="androidUpdateMessage">Update Message</label><textarea id="androidUpdateMessage" className="input min-h-[80px]" rows={3} maxLength={300} value={settings.androidUpdateMessage} onChange={(event) => update("androidUpdateMessage", event.target.value)} placeholder="A new version is available with improvements and bug fixes." /></div>
+        </div>
+      </div>
+
 {/* Business Invoice Details */}
       <div className="card p-6">
         <h3 className="text-lg font-semibold text-slate-900">Business Invoice Details</h3>

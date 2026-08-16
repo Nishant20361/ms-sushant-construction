@@ -611,6 +611,13 @@ describe("Public data exposure", () => {
     expect(serializeSettings({ ...parsed, updatedAt: new Date() })).toMatchObject({ latestUpdateEnabled: true, latestUpdateText: "New stock available" });
   });
 
+  it("publishes validated Android update metadata without accepting Expo build pages", () => {
+    const base = { companyName: "Test", tagline: "", logoUrl: null, heroTitle: "", heroSubtitle: "", heroBannerUrl: null, phone: "", whatsappNumber: "", email: "", address: "", googleMapsUrl: "", aboutContent: "", facebookUrl: "", instagramUrl: "", youtubeUrl: "", businessLogoUrl: null };
+    const parsed = settingsSchema.parse({ ...base, androidUpdateEnabled: true, androidLatestVersion: "1.0.2", androidLatestBuild: 3, androidApkUrl: "https://expo.dev/artifacts/eas/example-release.apk", androidUpdateMessage: "  Improvements  " });
+    expect(serializeSettings({ ...parsed, updatedAt: new Date() })).toMatchObject({ androidUpdateEnabled: true, androidLatestVersion: "1.0.2", androidLatestBuild: 3, androidApkUrl: "https://expo.dev/artifacts/eas/example-release.apk", androidUpdateMessage: "Improvements" });
+    expect(() => settingsSchema.parse({ ...base, androidApkUrl: "https://expo.dev/accounts/nishant20361/projects/app/builds/123" })).toThrow();
+  });
+
   it("serializes mobile history without private or accounting fields", () => {
     const summary = serializeOrderListForTracking({ id: 1, orderNumber: "MSC-1", status: "PROCESSING", createdAt: new Date(), subtotal: 500, customerName: "Private", customerMobile: "9876543210", deliveryAddress: "Private address", notes: "Private note", items: [{ productName: "Cement", quantity: 1, unit: "bag", price: 500, total: 500 }], bill: { finalAmount: 450, discount: 50 }, payments: [{ amount: 450 }] });
     expect(summary).toMatchObject({ orderNumber: "MSC-1", total: 450, items: [{ productName: "Cement", quantity: 1, unit: "bag" }] });
