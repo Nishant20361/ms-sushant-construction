@@ -48,12 +48,12 @@ export function LatestUpdateTicker({ enabled, text }: { enabled?: boolean; text?
   }, [containerWidth, enabled, message, reduceMotion, textWidth, translateX]);
 
   if (!enabled || !message) return null;
-  return <View accessibilityRole="text" accessibilityLabel={`Latest update: ${message}`} style={styles.card}>
+  return <><View accessibilityRole="text" accessibilityLabel={`Latest update: ${message}`} style={styles.card}>
     <View style={styles.label}><Text style={styles.icon}>📢</Text><Text style={styles.labelText}>Latest Update</Text></View>
     <View onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)} style={styles.track}>
-      {reduceMotion ? <Text style={styles.staticText}>{message}</Text> : <><View pointerEvents="none" style={styles.measure}><Text onTextLayout={(event) => setTextWidth(Math.ceil(Math.max(...event.nativeEvent.lines.map((line) => line.width), 0)) + 4)} style={styles.measureText}>{message}</Text></View>{textWidth ? <Animated.Text style={[styles.message, { width: textWidth, flexShrink: 0, transform: [{ translateX }] }]}>{message}</Animated.Text> : <Text style={styles.loadingText}>{message}</Text>}</>}
+      {reduceMotion ? <Text style={styles.staticText}>{message}</Text> : textWidth ? <Animated.Text numberOfLines={1} ellipsizeMode="clip" style={[styles.message, { width: textWidth, transform: [{ translateX }] }]}>{message}</Animated.Text> : null}
     </View>
-  </View>;
+  </View>{!reduceMotion ? <Text pointerEvents="none" onTextLayout={(event) => setTextWidth(Math.ceil(Math.max(...event.nativeEvent.lines.map((line) => line.width), 0)) + 4)} style={styles.measureText}>{message}</Text> : null}</>;
 }
 
 const styles = StyleSheet.create({
@@ -62,9 +62,7 @@ const styles = StyleSheet.create({
   icon: { fontSize: 15 },
   labelText: { color: "white", fontSize: 11, fontWeight: "900" },
   track: { minHeight: 48, flex: 1, justifyContent: "center", overflow: "hidden" },
-  measure: { position: "absolute", left: -10_000, width: 10_000, opacity: 0.01 },
-  measureText: { alignSelf: "flex-start", color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
-  message: { position: "absolute", top: 15, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
-  loadingText: { paddingHorizontal: 10, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  measureText: { position: "absolute", left: -10_000, top: -10_000, width: 10_000, opacity: 0, flexShrink: 0, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  message: { position: "absolute", top: 15, left: 0, flexShrink: 0, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
   staticText: { paddingHorizontal: 10, paddingVertical: 8, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
 });
