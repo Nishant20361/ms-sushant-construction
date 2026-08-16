@@ -5,7 +5,6 @@ import { constructionChatSchema } from "../validators/index.js";
 import {
   processMessage,
   createInitialSession,
-  detectLanguage,
   SessionData,
 } from "../construction_ai/assistant.js";
 import { isCalculatorQuestion } from "../construction_ai/rag/intentDetector.js";
@@ -45,14 +44,14 @@ function getOrCreateSession(rawId: string | undefined, languageHint?: string): {
       return { id: rawId, data: existing.data };
     }
   }
-  const data = createInitialSession(languageHint === "Hindi" || languageHint === "English" ? languageHint : "English");
+  const data = createInitialSession(languageHint === "Hindi" ? "Hindi" : "English");
   const id = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   sessions.set(id, { data, history: [], updatedAt: Date.now() });
   return { id, data };
 }
 
 // POST /api/construction-assistant/chat
-// Body: { message: string, sessionId?: string, language?: "Hindi"|"English" }
+// Body: { message: string, sessionId?: string, language?: "Hindi"|"English"|"Hinglish"|"Other" }
 router.post(
   "/construction-assistant/chat",
   assistantLimiter,
@@ -76,16 +75,10 @@ router.post(
       body.language ?? undefined
     );
 
-    // If the user didn't specify a language but this is the first message,
-    // detect it from the text.
-    if (!data.dimensions && !data.floors && !data.quality) {
-      const detected = detectLanguage(message);
-      if (body.language && (body.language === "Hindi" || body.language === "English")) {
-        data.language = body.language;
-      } else if (detected) {
-        data.language = detected;
-      }
-    }
+    // The latest message controls response style; session language is used only
+    // by the local fallback engine and never overrides a clear latest message.
+    const messageLanguage = detectGroqResponseLanguage(message);
+    data.language = messageLanguage === "English" ? "English" : "Hindi";
 
     // Keep the existing local engine for deterministic calculations, session-state
     // extraction, and provider-outage fallback. Normal online replies always go
@@ -110,24 +103,23 @@ router.post(
     const context = [calculatorContext, retrievedContext].filter(Boolean).join("\n\n");
     let result: {
       reply: string;
-      language: "Hindi" | "English";
+      language: "Hindi" | "English" | "Hinglish" | "Other";
       conversation?: import("../construction_ai/assistant.js").AssistantResult["conversation"];
       suggestions?: string[];
       producedEstimate?: boolean;
     };
 
     try {
-      const groqLanguage = detectGroqResponseLanguage(message, data.language);
-      const reply = await answerWithGroq(message, context, groqLanguage, stored?.history ?? []);
+      const reply = await answerWithGroq(message, context, messageLanguage, stored?.history ?? []);
       result = {
         reply,
-        language: groqLanguage === "English" ? "English" : "Hindi",
+        language: messageLanguage,
         conversation: local.conversation,
         producedEstimate: advanced.type && advanced.result ? true : local.producedEstimate,
       };
     } catch (error) {
       console.error("[constructionAssistant] Groq call failed, using local fallback:", error);
-      result = fallback;
+      result = { ...fallback, language: messageLanguage };
     }
 
     if (stored) {

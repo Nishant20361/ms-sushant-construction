@@ -785,13 +785,31 @@ describe("Health endpoint", () => {
 });
 
 describe("Construction Assistant (local rule-based)", () => {
-  it("builds explicit English, Hindi, and Hinglish provider language directives", () => {
-    expect(buildGroqPrompt("What is cement used for?", "", "English")).toContain("Reply in clear English when the user's message is English");
+  it("classifies latest-message language style and builds unambiguous provider directives", () => {
+    expect(buildGroqPrompt("What is cement used for?", "", "English")).toContain("Respond entirely in natural English");
     expect(buildGroqPrompt("सीमेंट का उपयोग कहाँ होता है?", "", "Hindi")).toContain("Hindi using Devanagari");
     expect(buildGroqPrompt("cement ka use kaha hota hai?", "", "Hinglish")).toContain("Hinglish using Roman script");
-    expect(detectGroqResponseLanguage("What is cement used for?", "English")).toBe("English");
-    expect(detectGroqResponseLanguage("सीमेंट का उपयोग कहाँ होता है?", "English")).toBe("Hindi");
-    expect(detectGroqResponseLanguage("ghar banane me cement ka use kaha hota hai?", "English")).toBe("Hinglish");
+    expect(detectGroqResponseLanguage("Kaise ho?")).toBe("Hinglish");
+    expect(detectGroqResponseLanguage("Kya kar rahe ho?")).toBe("Hinglish");
+    expect(detectGroqResponseLanguage("Mujhe ghar banana hai")).toBe("Hinglish");
+    expect(detectGroqResponseLanguage("cement kitna lagega?")).toBe("Hinglish");
+    expect(detectGroqResponseLanguage("तुम क्या कर सकते हो?")).toBe("Hindi");
+    expect(detectGroqResponseLanguage("धन्यवाद")).toBe("Hindi");
+    expect(detectGroqResponseLanguage("What can you help me with?")).toBe("English");
+    expect(detectGroqResponseLanguage("Hello")).toBe("English");
+    expect(detectGroqResponseLanguage("How are you?")).toBe("English");
+    expect(detectGroqResponseLanguage("Thank you")).toBe("English");
+    expect(detectGroqResponseLanguage("What is cement used for?")).toBe("English");
+  });
+
+  it("uses the latest message language while keeping the same session context", async () => {
+    const { agent, token } = await getCsrf();
+    const first = await agent.post("/api/construction-assistant/chat").set("X-CSRF-Token", token).send({ message: "Mujhe 40x35 ka ghar banana hai" });
+    expect(first.body.language).toBe("Hinglish");
+    const followUp = await agent.post("/api/construction-assistant/chat").set("X-CSRF-Token", token).send({ message: "How much cement could be required?", sessionId: first.body.sessionId });
+    expect(followUp.status).toBe(200);
+    expect(followUp.body.language).toBe("English");
+    expect(followUp.body.conversation?.area).toBe(1400);
   });
 
   it("answers a Hindi house-size query from the local dataset", async () => {
@@ -952,7 +970,8 @@ it("gives cement recommendation guidance for an application", async () => {
       .set("X-CSRF-Token", token)
       .send({ message: "hello", language: "Hindi" });
     expect(res.status).toBe(200);
-    expect(res.body.reply).toContain("स्वागत");
+    expect(res.body.language).toBe("English");
+    expect(res.body.reply).toContain("Welcome");
   });
 
 it("explains the construction sequence", async () => {

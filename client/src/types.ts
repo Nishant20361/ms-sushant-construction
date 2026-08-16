@@ -272,7 +272,7 @@ export interface ApiError {
 }
 
 // ------------------------- Construction Assistant ---------------------
-export type AssistantLanguage = "Hindi" | "English";
+export type AssistantLanguage = "Hindi" | "English" | "Hinglish" | "Other";
 
 export interface AssistantConversation {
   length: number | null;

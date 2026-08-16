@@ -213,7 +213,7 @@ export const resetPasswordSchema = z.object({
 export const constructionChatSchema = z.object({
   message: z.string().trim().min(1, "Message cannot be empty").max(2000),
   sessionId: z.string().trim().max(100).optional(),
-  language: z.enum(["Hindi", "English"]).optional(),
+  language: z.enum(["Hindi", "English", "Hinglish", "Other"]).optional(),
 });
 
 // ------------------------- Construction Knowledge (Phase 5) --------------
