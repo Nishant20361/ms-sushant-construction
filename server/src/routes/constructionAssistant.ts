@@ -10,7 +10,7 @@ import {
 } from "../construction_ai/assistant.js";
 import { isCalculatorQuestion } from "../construction_ai/rag/intentDetector.js";
 import { getRelevantContext } from "../construction_ai/rag/knowledgeRetriever.js";
-import { answerWithGroq, detectGroqResponseLanguage } from "../construction_ai/groq.js";
+import { answerWithGroq, detectGroqResponseLanguage, type GroqMessage } from "../construction_ai/groq.js";
 import { processAdvancedCalculator } from "../construction_ai/calculators/index.js";
 import { assistantLimiter } from "../middleware/rateLimit.js";
 
@@ -22,6 +22,7 @@ const router = Router();
 // ------------------------------------------------------------------
 interface StoredSession {
   data: SessionData;
+  history: GroqMessage[];
   updatedAt: number;
 }
 
@@ -46,7 +47,7 @@ function getOrCreateSession(rawId: string | undefined, languageHint?: string): {
   }
   const data = createInitialSession(languageHint === "Hindi" || languageHint === "English" ? languageHint : "English");
   const id = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-  sessions.set(id, { data, updatedAt: Date.now() });
+  sessions.set(id, { data, history: [], updatedAt: Date.now() });
   return { id, data };
 }
 
@@ -86,95 +87,53 @@ router.post(
       }
     }
 
-// Decide which engine handles this message.
-//
-// Strategy: the existing rule-based assistant is the primary engine. It already
-// handles house size, material quantity, cost, floors, quality, estimates,
-// comparisons, checklists, why-questions, cost breakdown, room-based estimation,
-// product lookup and construction stage guides using its large local dataset.
-//
-// RAG (Groq + retrieved local knowledge) is used ONLY as a complement: when the
-// rule-based assistant doesn't have a confident answer (returns its generic
-// "didn't understand" fallback), we consult RAG for product/comparison/benefit/
-// advice questions and returned retrieved knowledge.
-const COMPUTE_UNKNOWN_REPLY =
-  data.language === "Hindi"
-    ? "मुझे समझ नहीं आया"
-    : "I didn't quite get that";
-
-let result: {
-  reply: string;
-  language: "Hindi" | "English";
-  conversation?: import("../construction_ai/assistant.js").AssistantResult["conversation"];
-  suggestions?: string[];
-  producedEstimate?: boolean;
-};
-
-// 1. Check specialized advanced calculators first (slab, column, brickwall, paint, tile)
-const advCalc = processAdvancedCalculator(message);
-
-if (advCalc.type && advCalc.result) {
-  try {
-    const datasetContext = await getRelevantContext(message);
-    const combinedContext = `[EXACT ADVANCED CALCULATOR RESULT]\n${advCalc.formattedText}\n\n${datasetContext}`;
-    const groqReply = await answerWithGroq(message, combinedContext, detectGroqResponseLanguage(message, data.language));
-    const detectedLang = detectLanguage(message);
-    result = {
-      reply: groqReply,
-      language: detectedLang === "Hindi" || data.language === "Hindi" ? "Hindi" : "English",
-      producedEstimate: true,
-    };
-  } catch (err) {
-    console.warn("[constructionAssistant] Groq explanation failed, returning calculator summary directly:", err);
-    result = {
-      reply: advCalc.formattedText,
-      language: detectLanguage(message) === "Hindi" || data.language === "Hindi" ? "Hindi" : "English",
-      producedEstimate: true,
-    };
-  }
-} else {
-  // 2. Check general house dimension calculator vs knowledge questions
-  const isCalc = isCalculatorQuestion(message);
-
-  if (isCalc) {
+    // Keep the existing local engine for deterministic calculations, session-state
+    // extraction, and provider-outage fallback. Normal online replies always go
+    // through Groq, with local results supplied as authoritative calculation context.
     const local = processMessage(data, message);
-    const ruleBasedUnderstood =
-      !local.reply.includes(COMPUTE_UNKNOWN_REPLY) &&
-      !local.reply.includes("समझ नहीं आया") &&
-      !local.reply.includes("didn't quite get");
-
-    if (ruleBasedUnderstood) {
-      result = local;
-    } else {
-      try {
-        const context = await getRelevantContext(message);
-        const groqReply = await answerWithGroq(message, context, detectGroqResponseLanguage(message, data.language));
-        const detectedLang = detectLanguage(message);
-        result = {
-          reply: groqReply,
-          language: detectedLang === "Hindi" || data.language === "Hindi" ? "Hindi" : "English",
-          producedEstimate: false,
-        };
-      } catch {
-        result = local;
-      }
-    }
-  } else {
+    const advanced = processAdvancedCalculator(message);
+    const fallback = advanced.type && advanced.result
+      ? { reply: advanced.formattedText, language: data.language, producedEstimate: true }
+      : local;
+    const stored = sessions.get(sessionId);
+    let retrievedContext = "";
     try {
-      const context = await getRelevantContext(message);
-      const groqReply = await answerWithGroq(message, context, detectGroqResponseLanguage(message, data.language));
-      const detectedLang = detectLanguage(message);
-      result = {
-        reply: groqReply,
-        language: detectedLang === "Hindi" || data.language === "Hindi" ? "Hindi" : "English",
-        producedEstimate: false,
-      };
-    } catch (err) {
-      console.error("[constructionAssistant] Groq call failed, using local fallback:", err);
-      result = processMessage(data, message);
+      retrievedContext = await getRelevantContext(message);
+    } catch (error) {
+      console.warn("[constructionAssistant] Knowledge retrieval failed; continuing with Groq conversation:", error);
     }
-  }
-}
+    const calculatorContext = advanced.type && advanced.result
+      ? `[EXACT ADVANCED CALCULATOR RESULT]\n${advanced.formattedText}`
+      : isCalculatorQuestion(message)
+        ? `[LOCAL CALCULATION / SESSION CONTEXT]\n${local.reply}`
+        : "";
+    const context = [calculatorContext, retrievedContext].filter(Boolean).join("\n\n");
+    let result: {
+      reply: string;
+      language: "Hindi" | "English";
+      conversation?: import("../construction_ai/assistant.js").AssistantResult["conversation"];
+      suggestions?: string[];
+      producedEstimate?: boolean;
+    };
+
+    try {
+      const groqLanguage = detectGroqResponseLanguage(message, data.language);
+      const reply = await answerWithGroq(message, context, groqLanguage, stored?.history ?? []);
+      result = {
+        reply,
+        language: groqLanguage === "English" ? "English" : "Hindi",
+        conversation: local.conversation,
+        producedEstimate: advanced.type && advanced.result ? true : local.producedEstimate,
+      };
+    } catch (error) {
+      console.error("[constructionAssistant] Groq call failed, using local fallback:", error);
+      result = fallback;
+    }
+
+    if (stored) {
+      const nextHistory: GroqMessage[] = [...stored.history, { role: "user", content: message }, { role: "assistant", content: result.reply }];
+      stored.history = nextHistory.slice(-8);
+    }
 
     // Persist the assistant reply + customer message to the database.
     // Queries are saved only after the response is generated.
@@ -192,7 +151,6 @@ if (advCalc.type && advCalc.result) {
     }
 
     // Update timestamp to keep session alive.
-    const stored = sessions.get(sessionId);
     if (stored) stored.updatedAt = Date.now();
 
 res.json({

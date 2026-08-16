@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onlineManager } from "@tanstack/react-query";
+import { ApiError, NetworkError, TimeoutError } from "@/services/apiClient";
 import { publicApi } from "@/services/publicApi";
 import type { AssistantResponse } from "@/types/api";
 import type { ChatMessage } from "../types";
@@ -21,7 +22,7 @@ export function useAssistantChat() {
     if (!question || question.length > 2000 || sendingRef.current) return;
     if (appendUser) setMessages((current) => [...current, { id: messageId("user"), role: "user", content: question, createdAt: Date.now(), status: "sent" }]);
     if (!onlineManager.isOnline()) {
-      setMessages((current) => [...current, { id: messageId("assistant"), role: "assistant", content: "You're offline. Connect to the internet and try again.", createdAt: Date.now(), status: "failed", retryQuestion: question }]);
+      setMessages((current) => [...current, { id: messageId("assistant"), role: "assistant", content: assistantErrorMessage(new NetworkError(), question), createdAt: Date.now(), status: "failed", retryQuestion: question }]);
       return;
     }
     sendingRef.current = true; setSending(true);
@@ -39,8 +40,11 @@ export function useAssistantChat() {
         setMessages((current) => [...current, { id: messageId("assistant"), role: "assistant", content: "Request cancelled. You can retry when you're ready.", createdAt: Date.now(), status: "failed", retryQuestion: question }]);
         return;
       }
-      if (__DEV__) console.warn("[ASSISTANT] Request failed", error instanceof Error ? error.name : "unknown");
-      setMessages((current) => [...current, { id: messageId("assistant"), role: "assistant", content: assistantErrorMessage(error), createdAt: Date.now(), status: "failed", retryQuestion: question }]);
+      if (__DEV__) {
+        const kind = error instanceof TimeoutError ? "TIMEOUT" : error instanceof NetworkError ? "NETWORK_ERROR" : error instanceof ApiError ? "BACKEND_ERROR" : "INVALID_RESPONSE";
+        console.warn(`[ASSISTANT] ${kind}`);
+      }
+      setMessages((current) => [...current, { id: messageId("assistant"), role: "assistant", content: assistantErrorMessage(error, question), createdAt: Date.now(), status: "failed", retryQuestion: question }]);
     } finally { if (controller.current === request) { controller.current = undefined; sendingRef.current = false; setSending(false); } }
   }, [sessionId]);
 

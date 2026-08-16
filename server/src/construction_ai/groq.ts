@@ -24,14 +24,12 @@ Help customers with:
 
 Rules:
 - Explain simply like a friendly construction expert.
-- Reply in Hindi if the user question is in Hindi or Hinglish.
-- Reply in English if the user question is in English.
-- Support Hinglish naturally.
+- You can have normal, polite conversation as well as construction conversations. Do not reject greetings, thanks, or everyday small talk.
+- Match the user's latest message language and style whenever practical: English in English, Hindi in Hindi, Hinglish in natural Roman-script Hinglish, and other supported languages in that language.
 - Never invent exact structural engineering values (column sizes, beam sizes, exact rebar layouts).
 - Never invent current shop prices or stock. Direct customers to the current Products catalogue unless authoritative context explicitly provides them.
-- Politely redirect non-construction questions back to construction materials and planning.
 - Give approximate information or general rules of thumb.
-- Always include a recommendation to consult a qualified structural engineer for structural design.
+- For estimates or structural-design questions, clearly state that quantities are approximate and recommend a qualified structural engineer for final structural decisions.
 - Ask useful follow-up questions to assist the customer further.
 `;
 
@@ -81,7 +79,8 @@ export function categorizeGroqError(err: any): Error {
 export async function askGroq(
   prompt: string,
   systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
-  model: string = "llama-3.1-8b-instant"
+  model: string = "llama-3.1-8b-instant",
+  history: GroqMessage[] = []
 ): Promise<{ text: string; model: string }> {
   // Tests must be deterministic and must not spend provider quota or depend
   // on external network availability. Callers already fall back to local data.
@@ -95,6 +94,7 @@ export async function askGroq(
     const timeout = setTimeout(() => controller.abort(), GROQ_REQUEST_TIMEOUT_MS);
     const messages: GroqMessage[] = [
       { role: "system", content: systemPrompt },
+      ...history.filter((message) => message.role !== "system" && message.content.trim()).slice(-8),
       { role: "user", content: prompt },
     ];
 
@@ -151,7 +151,7 @@ export function detectGroqResponseLanguage(message: string, fallback: "Hindi" | 
 
 export function buildGroqPrompt(message: string, context: string = "", language: GroqResponseLanguage = "English"): string {
   const responseLanguage = language === "English"
-    ? "Reply only in clear English. Do not switch to Hindi or Hinglish."
+    ? "Reply in clear English when the user's message is English. If the user uses another supported language, preserve that language instead."
     : language === "Hindi"
       ? "Reply in natural Hindi using Devanagari script."
       : "Reply in natural Hinglish using Roman script.";
@@ -163,10 +163,11 @@ export function buildGroqPrompt(message: string, context: string = "", language:
 export async function answerWithGroq(
   message: string,
   context: string = "",
-  language: GroqResponseLanguage = "English"
+  language: GroqResponseLanguage = "English",
+  history: GroqMessage[] = []
 ): Promise<string> {
   const prompt = buildGroqPrompt(message, context, language);
-  const { text } = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT);
+  const { text } = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT, "llama-3.1-8b-instant", history);
   if (!text.trim()) throw new Error("Groq returned an empty response");
   return text;
 }

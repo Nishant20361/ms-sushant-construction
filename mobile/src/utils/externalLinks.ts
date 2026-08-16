@@ -22,12 +22,14 @@ export const googleMapsDirectionsUrl = (destination: string) => `https://www.goo
 
 function locationFromMapsUrl(rawUrl: string): string {
   const url = new URL(rawUrl);
+  const coordinates = rawUrl.match(/!2d(-?\d+(?:\.\d+)?)!3d(-?\d+(?:\.\d+)?)/);
+  if (coordinates) return `${coordinates[2]},${coordinates[1]}`;
+  const atCoordinates = rawUrl.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if (atCoordinates) return `${atCoordinates[1]},${atCoordinates[2]}`;
   const query = url.searchParams.get("destination") || url.searchParams.get("q") || url.searchParams.get("query");
   if (query?.trim()) return query.trim();
   const pathMatch = url.pathname.match(/\/maps\/(?:place|search|dir)\/([^/]+)/i);
   if (pathMatch?.[1]) return decodeURIComponent(pathMatch[1].replace(/\+/g, " "));
-  const coordinates = rawUrl.match(/!2d(-?\d+(?:\.\d+)?)!3d(-?\d+(?:\.\d+)?)/);
-  if (coordinates) return `${coordinates[2]},${coordinates[1]}`;
   return "";
 }
 

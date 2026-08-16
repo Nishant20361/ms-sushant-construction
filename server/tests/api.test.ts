@@ -786,7 +786,7 @@ describe("Health endpoint", () => {
 
 describe("Construction Assistant (local rule-based)", () => {
   it("builds explicit English, Hindi, and Hinglish provider language directives", () => {
-    expect(buildGroqPrompt("What is cement used for?", "", "English")).toContain("Reply only in clear English");
+    expect(buildGroqPrompt("What is cement used for?", "", "English")).toContain("Reply in clear English when the user's message is English");
     expect(buildGroqPrompt("सीमेंट का उपयोग कहाँ होता है?", "", "Hindi")).toContain("Hindi using Devanagari");
     expect(buildGroqPrompt("cement ka use kaha hota hai?", "", "Hinglish")).toContain("Hinglish using Roman script");
     expect(detectGroqResponseLanguage("What is cement used for?", "English")).toBe("English");
