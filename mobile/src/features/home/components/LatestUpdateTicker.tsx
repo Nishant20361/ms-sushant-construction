@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, ScrollView, StyleSheet, Text, View } from "react-native";
 import { theme } from "@/theme";
 
 const PIXELS_PER_SECOND = 50;
@@ -57,10 +57,10 @@ export function LatestUpdateTicker({ enabled, text }: { enabled?: boolean; text?
       <View style={styles.label}><Text style={styles.icon}>📢</Text><Text style={styles.labelText}>Latest Update</Text></View>
       <View onLayout={(event) => setViewportWidth(Math.round(event.nativeEvent.layout.width))} style={styles.track}>
         {textWidth > 0 ? <Animated.Text numberOfLines={1} ellipsizeMode="clip" style={[styles.message, { width: textWidth, transform: [{ translateX }] }]}>{message}</Animated.Text> : null}
+        <ScrollView horizontal scrollEnabled={false} pointerEvents="none" onContentSizeChange={(width) => { if (width > 0) setTextWidth(Math.ceil(width)); }} style={styles.measureViewport} contentContainerStyle={styles.measureContent}>
+          <Text numberOfLines={1} ellipsizeMode="clip" style={styles.measureText}>{message}</Text>
+        </ScrollView>
       </View>
-    </View>
-    <View collapsable={false} pointerEvents="none" style={styles.measureRow}>
-      <Text numberOfLines={1} ellipsizeMode="clip" onLayout={(event) => setTextWidth(Math.ceil(event.nativeEvent.layout.width))} style={styles.measureText}>{message}</Text>
     </View>
   </>;
 }
@@ -72,6 +72,7 @@ const styles = StyleSheet.create({
   labelText: { color: "white", fontSize: 11, fontWeight: "900" },
   track: { minHeight: 48, flex: 1, justifyContent: "center", overflow: "hidden" },
   message: { position: "absolute", top: 15, left: 0, flexShrink: 0, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
-  measureRow: { position: "absolute", left: -10_000, top: -10_000, alignSelf: "flex-start", flexDirection: "row", opacity: 0 },
+  measureViewport: { position: "absolute", top: 0, left: 0, right: 0, height: 1, opacity: 0 },
+  measureContent: { alignItems: "flex-start" },
   measureText: { flexShrink: 0, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
 });

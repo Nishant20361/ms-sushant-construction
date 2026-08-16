@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   categoryImage: { width: 48, height: 48 },
   icon: { fontSize: 22, color: theme.colors.primaryDark },
   nameRegion: { width: "100%", height: 30, marginTop: 6, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  name: { width: "100%", height: 30, textAlign: "center", textAlignVertical: "center", fontSize: 9.5, lineHeight: 14, fontWeight: "800", color: theme.colors.text, includeFontPadding: false },
+  name: { width: "100%", height: 30, textAlign: "center", textAlignVertical: "center", fontSize: 9.5, lineHeight: 14, fontWeight: "800", color: theme.colors.text, includeFontPadding: false, transform: [{ translateX: -4 }] },
   count: { width: "100%", height: 15, marginTop: 3, textAlign: "center", fontSize: 9.5, lineHeight: 15, color: theme.colors.muted, includeFontPadding: false },
   skeleton: { width: "100%", height: 112, alignItems: "center" },
   skeletonIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.colors.border },
