@@ -95,7 +95,7 @@ const safeHttpUrl = z
     "URL must start with http:// or https://"
   );
 
-const directAndroidApkUrl = z
+const androidUpdateUrl = z
   .string()
   .trim()
   .max(1000)
@@ -103,11 +103,23 @@ const directAndroidApkUrl = z
     if (!value) return true;
     try {
       const url = new URL(value);
-      return url.protocol === "https:" && !url.username && !url.password && /\.apk$/i.test(url.pathname);
+      return url.protocol === "https:" && !url.username && !url.password;
     } catch {
       return false;
     }
-  }, "APK URL must be a direct HTTPS .apk artifact URL, not an Expo build page");
+  }, "APK URL must be a safe HTTPS URL");
+
+function isDirectAndroidApkUrl(value: string): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && /\.apk$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+const androidVersionPattern = /^\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?$/;
 
 const mapsUrlSafe = z
   .string()
@@ -160,10 +172,22 @@ export const settingsSchema = z.object({
   latestUpdateEnabled: z.boolean().optional().default(false),
   latestUpdateText: z.string().trim().max(300).optional().default(""),
   androidUpdateEnabled: z.boolean().optional().default(false),
-  androidLatestVersion: z.string().trim().max(40).regex(/^$|^\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?$/, "Use a valid version such as 1.0.2").optional().default(""),
+  androidLatestVersion: z.string().trim().max(40).optional().default(""),
   androidLatestBuild: z.coerce.number().int().min(0).max(2_147_483_647).optional().default(0),
-  androidApkUrl: directAndroidApkUrl.optional().default(""),
+  androidApkUrl: androidUpdateUrl.optional().default(""),
   androidUpdateMessage: z.string().trim().max(300).optional().default(""),
+}).superRefine((settings, ctx) => {
+  if (!settings.androidUpdateEnabled) return;
+
+  if (!settings.androidLatestVersion || !androidVersionPattern.test(settings.androidLatestVersion)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["androidLatestVersion"], message: "Enter a valid version such as 1.0.2" });
+  }
+  if (!Number.isInteger(settings.androidLatestBuild) || settings.androidLatestBuild < 1) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["androidLatestBuild"], message: "Build number must be a whole number of at least 1" });
+  }
+  if (!isDirectAndroidApkUrl(settings.androidApkUrl)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["androidApkUrl"], message: "APK URL must be a direct HTTPS URL ending in .apk, not an Expo build page" });
+  }
 });
 
 // ------------------------- Admin order status -------------------------

@@ -611,11 +611,25 @@ describe("Public data exposure", () => {
     expect(serializeSettings({ ...parsed, updatedAt: new Date() })).toMatchObject({ latestUpdateEnabled: true, latestUpdateText: "New stock available" });
   });
 
-  it("publishes validated Android update metadata without accepting Expo build pages", () => {
+  it("validates Android update metadata only when the update notification is enabled", () => {
     const base = { companyName: "Test", tagline: "", logoUrl: null, heroTitle: "", heroSubtitle: "", heroBannerUrl: null, phone: "", whatsappNumber: "", email: "", address: "", googleMapsUrl: "", aboutContent: "", facebookUrl: "", instagramUrl: "", youtubeUrl: "", businessLogoUrl: null };
+    // A: disabled with all update values blank; B: disabled may retain an old HTTPS build page.
+    expect(settingsSchema.parse({ ...base, androidUpdateEnabled: false, androidLatestVersion: "", androidLatestBuild: 0, androidApkUrl: "", androidUpdateMessage: "" })).toMatchObject({ androidUpdateEnabled: false, androidLatestBuild: 0 });
+    expect(settingsSchema.parse({ ...base, androidUpdateEnabled: false, androidLatestVersion: "1.0.1", androidLatestBuild: 2, androidApkUrl: "", androidUpdateMessage: "" })).toMatchObject({ androidUpdateEnabled: false, androidLatestVersion: "1.0.1", androidLatestBuild: 2 });
+    expect(settingsSchema.parse({ ...base, androidUpdateEnabled: false, androidLatestVersion: "old value", androidLatestBuild: 0, androidApkUrl: "https://expo.dev/accounts/example/builds/123", androidUpdateMessage: "Later" })).toMatchObject({ androidUpdateEnabled: false });
+
+    // C, F and H: enabled data is normalized and requires a valid version, build and direct APK artifact.
     const parsed = settingsSchema.parse({ ...base, androidUpdateEnabled: true, androidLatestVersion: "1.0.2", androidLatestBuild: 3, androidApkUrl: "https://expo.dev/artifacts/eas/example-release.apk", androidUpdateMessage: "  Improvements  " });
     expect(serializeSettings({ ...parsed, updatedAt: new Date() })).toMatchObject({ androidUpdateEnabled: true, androidLatestVersion: "1.0.2", androidLatestBuild: 3, androidApkUrl: "https://expo.dev/artifacts/eas/example-release.apk", androidUpdateMessage: "Improvements" });
-    expect(() => settingsSchema.parse({ ...base, androidApkUrl: "https://expo.dev/accounts/nishant20361/projects/app/builds/123" })).toThrow();
+    expect(settingsSchema.parse({ ...base, androidUpdateEnabled: true, androidLatestVersion: "2.0.0", androidLatestBuild: "2", androidApkUrl: "https://cdn.example.com/app.apk" }).androidLatestBuild).toBe(2);
+    for (const version of ["1.0.1", "1.1.0", "2.0.0", "1.0.1-beta", "1.0.1+4"]) expect(settingsSchema.parse({ ...base, androidUpdateEnabled: true, androidLatestVersion: version, androidLatestBuild: 1, androidApkUrl: "https://cdn.example.com/app.apk" }).androidLatestVersion).toBe(version);
+
+    // D, E and G: field paths identify the exact invalid Android control.
+    for (const [field, value] of [["androidApkUrl", ""], ["androidApkUrl", "https://expo.dev/accounts/example/projects/app/builds/123"], ["androidLatestBuild", 0], ["androidLatestBuild", -1], ["androidLatestBuild", 1.5], ["androidLatestBuild", "invalid"]] as const) {
+      const result = settingsSchema.safeParse({ ...base, androidUpdateEnabled: true, androidLatestVersion: "1.0.2", androidLatestBuild: 1, androidApkUrl: "https://cdn.example.com/app.apk", [field]: value });
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues.some((issue) => issue.path.join(".") === field)).toBe(true);
+    }
   });
 
   it("serializes mobile history without private or accounting fields", () => {

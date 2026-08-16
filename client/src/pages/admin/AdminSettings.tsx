@@ -5,6 +5,32 @@ import { resolveImageUrl } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { useToast } from "../../components/Toast";
 
+const androidFieldLabels: Record<string, string> = {
+  androidLatestVersion: "Latest Android Version",
+  androidLatestBuild: "Latest Android Build Number",
+  androidApkUrl: "Android APK Download URL",
+  androidUpdateMessage: "Update Message",
+};
+
+function normalizeSettingsForSave(settings: SiteSettings): SiteSettings {
+  const build = Number(settings.androidLatestBuild);
+  return {
+    ...settings,
+    androidUpdateEnabled: Boolean(settings.androidUpdateEnabled),
+    androidLatestVersion: String(settings.androidLatestVersion ?? "").trim(),
+    androidLatestBuild: Number.isFinite(build) ? build : 0,
+    androidApkUrl: String(settings.androidApkUrl ?? "").trim(),
+    androidUpdateMessage: String(settings.androidUpdateMessage ?? "").trim(),
+  };
+}
+
+function validationMessage(requestError: ApiRequestError): string {
+  const issue = requestError.details?.[0];
+  if (!issue) return requestError.message;
+  const label = androidFieldLabels[issue.path] ?? issue.path;
+  return label ? `${label}: ${issue.message}` : issue.message;
+}
+
 export default function AdminSettings() {
   const { success, error } = useToast();
   const [settings, setSettings] = useState<SiteSettings | null>(null);
@@ -69,11 +95,11 @@ const load = () => {
     if (!settings) return;
     setSaving(true);
     try {
-      const res = await adminApi.updateSettings(settings);
+      const res = await adminApi.updateSettings(normalizeSettingsForSave(settings));
       setSettings(res.settings);
       success("Settings saved");
     } catch (e) {
-      if (e instanceof ApiRequestError) error(e.message);
+      if (e instanceof ApiRequestError) error(validationMessage(e));
       else error("Save failed");
     } finally {
       setSaving(false);
