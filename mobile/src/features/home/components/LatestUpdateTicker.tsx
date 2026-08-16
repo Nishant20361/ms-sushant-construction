@@ -2,23 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { theme } from "@/theme";
 
-export function tickerTextWidth(message: string): number {
-  return Array.from(message).reduce((width, character) => width + (/\s/.test(character) ? 5 : /[\u0900-\u097F]/.test(character) ? 14 : 9), 32);
-}
-
 export function LatestUpdateTicker({ enabled, text }: { enabled?: boolean; text?: string }) {
   const message = text?.trim() ?? "";
   const translateX = useRef(new Animated.Value(0)).current;
   const animation = useRef<Animated.CompositeAnimation | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [textWidth, setTextWidth] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const textWidth = tickerTextWidth(message);
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
     const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
     return () => subscription.remove();
   }, []);
+
+  useEffect(() => setTextWidth(0), [message]);
 
   useEffect(() => {
     animation.current?.stop();
@@ -28,12 +26,15 @@ export function LatestUpdateTicker({ enabled, text }: { enabled?: boolean; text?
     }
     translateX.setValue(containerWidth);
     const distance = containerWidth + textWidth;
-    animation.current = Animated.loop(Animated.timing(translateX, {
-      toValue: -textWidth,
-      duration: Math.max(7_000, distance * 24),
-      easing: Easing.linear,
-      useNativeDriver: true,
-    }));
+    animation.current = Animated.loop(Animated.sequence([
+      Animated.timing(translateX, {
+        toValue: -textWidth,
+        duration: Math.max(5_000, distance * 22),
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.delay(450),
+    ]), { resetBeforeIteration: true });
     animation.current.start();
     return () => animation.current?.stop();
   }, [containerWidth, enabled, message, reduceMotion, textWidth, translateX]);
@@ -42,7 +43,7 @@ export function LatestUpdateTicker({ enabled, text }: { enabled?: boolean; text?
   return <View accessibilityRole="text" accessibilityLabel={`Latest update: ${message}`} style={styles.card}>
     <View style={styles.label}><Text style={styles.icon}>📢</Text><Text style={styles.labelText}>Latest Update</Text></View>
     <View onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)} style={styles.track}>
-      {reduceMotion ? <Text style={styles.staticText}>{message}</Text> : <Animated.Text style={[styles.message, { width: textWidth, transform: [{ translateX }] }]}>{message}</Animated.Text>}
+      {reduceMotion ? <Text style={styles.staticText}>{message}</Text> : <><View pointerEvents="none" style={styles.measure}><Text numberOfLines={1} onTextLayout={(event) => setTextWidth(Math.ceil(event.nativeEvent.lines[0]?.width ?? 0) + 4)} style={styles.measureText}>{message}</Text></View>{textWidth ? <Animated.Text style={[styles.message, { width: textWidth, transform: [{ translateX }] }]}>{message}</Animated.Text> : null}</>}
     </View>
   </View>;
 }
@@ -53,6 +54,8 @@ const styles = StyleSheet.create({
   icon: { fontSize: 15 },
   labelText: { color: "white", fontSize: 11, fontWeight: "900" },
   track: { minHeight: 48, flex: 1, justifyContent: "center", overflow: "hidden" },
+  measure: { position: "absolute", width: 10_000, opacity: 0 },
+  measureText: { alignSelf: "flex-start", color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
   message: { position: "absolute", top: 15, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
   staticText: { paddingHorizontal: 10, paddingVertical: 8, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
 });

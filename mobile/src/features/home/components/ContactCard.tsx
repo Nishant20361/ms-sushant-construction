@@ -2,14 +2,13 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { SiteSettings } from "@/types/domain";
 import { theme } from "@/theme";
-import { emailUrl, googleMapsDirectionsUrl, openExternalUrl, telephoneUrl } from "@/utils/externalLinks";
+import { businessDirectionsUrl, emailUrl, openExternalUrl, telephoneUrl } from "@/utils/externalLinks";
 
 export function ContactCard({ settings, loading, error, onRetry }: { settings?: SiteSettings | null; loading: boolean; error: boolean; onRetry: () => void }) {
   const [actionError, setActionError] = useState("");
   const phone = settings?.phone?.trim() || settings?.businessMobile?.trim() || "";
   const email = settings?.email?.trim() || settings?.businessEmail?.trim() || "";
-  const destination = settings?.address?.trim() || settings?.businessAddress?.trim() || "";
-  const maps = destination ? googleMapsDirectionsUrl(destination) : "";
+  const maps = businessDirectionsUrl(settings);
   const act = async (url: string) => setActionError((await openExternalUrl(url)) ? "" : "This action could not be opened. Check the configured contact details and try again.");
 
   if (loading && !settings) return <View style={[styles.card, styles.skeleton]}><View style={styles.skeletonLine} /><View style={styles.skeletonSmall} /></View>;
