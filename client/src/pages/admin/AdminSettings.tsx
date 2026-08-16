@@ -77,7 +77,7 @@ const load = () => {
     setSettings({ ...settings, [key]: value ?? "" });
   };
 
-  const handleUpload = async (field: "logoUrl" | "heroBannerUrl" | "businessLogoUrl", file: File) => {
+  const handleUpload = async (field: "logoUrl" | "heroBannerUrl" | "mobileHeroBannerUrl" | "businessLogoUrl", file: File) => {
     setUploading(true);
     try {
       const res = await adminApi.uploadImage(file);
@@ -187,7 +187,7 @@ const load = () => {
 
           {/* Hero Banner */}
           <div>
-            <label className="label">Hero Banner Image</label>
+            <label className="label">Website Hero Banner Image</label>
             <div className="flex items-center gap-3">
               <div className="h-16 w-24 overflow-hidden rounded-lg bg-slate-100">
                 {settings.heroBannerUrl ? (
@@ -248,6 +248,16 @@ const load = () => {
               )}
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-slate-900">Mobile Home Banner</h3>
+        <p className="mt-1 text-sm text-slate-500">This banner is shown only in the mobile app. It is separate from the website hero banner.</p>
+        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+          <div><label className="label" htmlFor="mobileHeroTitle">Mobile Banner Title</label><input id="mobileHeroTitle" className="input" value={settings.mobileHeroTitle} onChange={(event) => update("mobileHeroTitle", event.target.value)} placeholder="Quality Construction Materials" /></div>
+          <div className="sm:col-span-2"><label className="label" htmlFor="mobileHeroSubtitle">Mobile Banner Description</label><textarea id="mobileHeroSubtitle" className="input min-h-[80px]" rows={3} maxLength={400} value={settings.mobileHeroSubtitle} onChange={(event) => update("mobileHeroSubtitle", event.target.value)} placeholder="Describe your mobile-app materials and services." /></div>
+          <div className="sm:col-span-2"><label className="label">Mobile Banner Image</label><div className="mt-2 flex items-center gap-3"><div className="h-16 w-24 overflow-hidden rounded-lg bg-slate-100">{settings.mobileHeroBannerUrl ? <img src={resolveImageUrl(settings.mobileHeroBannerUrl) ?? ""} alt="Mobile banner" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">Mobile</div>}</div><label className="btn-secondary cursor-pointer">{uploading ? "Uploading…" : "Upload"}<input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) handleUpload("mobileHeroBannerUrl", file); event.target.value = ""; }} /></label>{settings.mobileHeroBannerUrl ? <button onClick={() => update("mobileHeroBannerUrl", null)} className="text-xs font-semibold text-red-600 hover:underline">Remove</button> : null}</div></div>
         </div>
       </div>
 

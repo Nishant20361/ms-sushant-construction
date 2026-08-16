@@ -39,6 +39,9 @@ export interface SiteSettings {
   heroTitle: string;
   heroSubtitle: string;
   heroBannerUrl: string | null;
+  mobileHeroTitle: string;
+  mobileHeroSubtitle: string;
+  mobileHeroBannerUrl: string | null;
   phone: string;
   whatsappNumber: string;
   email: string;
