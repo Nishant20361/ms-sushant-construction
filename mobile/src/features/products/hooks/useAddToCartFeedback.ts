@@ -10,7 +10,7 @@ export function useAddToCartFeedback() {
     const timeout = setTimeout(() => setMessage(""), 1_700);
     return () => clearTimeout(timeout);
   }, [message]);
-  const addProduct = useCallback((product: Product, quantity = 1) => {
+  const addProduct = useCallback((product: Product, quantity: number) => {
       if (product.stock <= 0) return;
       addItem(product, quantity);
       setMessage(`${product.name} added to cart`);

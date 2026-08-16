@@ -3,6 +3,7 @@ import { adminApi, ApiRequestError } from "../../lib/api";
 import type { Category } from "../../types";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { useToast } from "../../components/Toast";
+import { resolveImageUrl } from "../../lib/format";
 
 export default function AdminCategories() {
   const { success, error } = useToast();
@@ -27,14 +28,17 @@ export default function AdminCategories() {
   const [formName, setFormName] = useState("");
   const [formSlug, setFormSlug] = useState("");
   const [formOrder, setFormOrder] = useState("0");
+  const [formImageUrl, setFormImageUrl] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const openAdd = () => {
     setEditing(null);
     setFormName("");
     setFormSlug("");
     setFormOrder("0");
+    setFormImageUrl("");
     setFormError(null);
     setShowForm(true);
   };
@@ -44,6 +48,7 @@ export default function AdminCategories() {
     setFormName(c.name);
     setFormSlug(c.slug);
     setFormOrder(String(c.displayOrder));
+    setFormImageUrl(c.imageUrl ?? "");
     setFormError(null);
     setShowForm(true);
   };
@@ -60,10 +65,10 @@ export default function AdminCategories() {
     setSaving(true);
     try {
       if (editing) {
-        await adminApi.updateCategory(editing.id, { name, slug, displayOrder, isActive: editing.isActive });
+        await adminApi.updateCategory(editing.id, { name, slug, imageUrl: formImageUrl || null, displayOrder, isActive: editing.isActive });
         success("Category updated");
       } else {
-        await adminApi.createCategory({ name, slug, displayOrder, isActive: true });
+        await adminApi.createCategory({ name, slug, imageUrl: formImageUrl || null, displayOrder, isActive: true });
         success("Category created");
       }
       setShowForm(false);
@@ -73,6 +78,19 @@ export default function AdminCategories() {
       else setFormError("Save failed");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const uploadCategoryImage = async (file: File) => {
+    setUploading(true);
+    setFormError(null);
+    try {
+      const result = await adminApi.uploadImage(file);
+      setFormImageUrl(result.url);
+    } catch (e) {
+      setFormError(e instanceof ApiRequestError ? e.message : "Image upload failed");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -90,7 +108,7 @@ export default function AdminCategories() {
 
   const handleToggle = async (c: Category) => {
     try {
-      await adminApi.updateCategory(c.id, { name: c.name, slug: c.slug, displayOrder: c.displayOrder, isActive: !c.isActive });
+      await adminApi.updateCategory(c.id, { name: c.name, slug: c.slug, imageUrl: c.imageUrl, displayOrder: c.displayOrder, isActive: !c.isActive });
       success(c.isActive ? "Category deactivated" : "Category activated");
       load();
     } catch (e) {
@@ -129,7 +147,7 @@ export default function AdminCategories() {
             <tbody className="divide-y divide-slate-100">
               {categories.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-semibold text-slate-900">{c.name}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-900"><div className="flex items-center gap-3">{c.imageUrl ? <img src={resolveImageUrl(c.imageUrl) ?? ""} alt="" className="h-10 w-10 rounded-lg object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-400">◇</div>}<span>{c.name}</span></div></td>
                   <td className="px-4 py-3 font-mono text-slate-500">{c.slug}</td>
                   <td className="px-4 py-3 text-slate-600">{c.displayOrder}</td>
                   <td className="px-4 py-3">
@@ -193,6 +211,17 @@ export default function AdminCategories() {
               <div>
                 <label className="label">Display Order</label>
                 <input className="input" type="number" min="0" value={formOrder} onChange={(e) => setFormOrder(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Category Image</label>
+                <div className="flex items-center gap-3">
+                  {formImageUrl ? <img src={resolveImageUrl(formImageUrl) ?? ""} alt="Category preview" className="h-16 w-16 rounded-xl object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-slate-100 text-slate-400">No image</div>}
+                  <label className="btn-secondary cursor-pointer">
+                    {uploading ? "Uploading…" : formImageUrl ? "Change" : "Upload"}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadCategoryImage(file); event.target.value = ""; }} />
+                  </label>
+                  {formImageUrl ? <button type="button" onClick={() => setFormImageUrl("")} className="text-xs font-semibold text-red-600 hover:underline">Remove</button> : null}
+                </div>
               </div>
             </div>
 

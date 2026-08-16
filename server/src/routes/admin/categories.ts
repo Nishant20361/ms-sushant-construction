@@ -47,6 +47,7 @@ router.post(
       data: {
         name: body.name,
         slug,
+        imageUrl: body.imageUrl,
         displayOrder: body.displayOrder,
         isActive: body.isActive,
       },
@@ -76,7 +77,7 @@ router.put(
 
     const category = await prisma.category.update({
       where: { id },
-      data: { name: body.name, slug, displayOrder: body.displayOrder, isActive: body.isActive },
+      data: { name: body.name, slug, imageUrl: body.imageUrl, displayOrder: body.displayOrder, isActive: body.isActive },
     });
     await writeAudit(req, {
       action: "CATEGORY_UPDATE",
@@ -120,4 +121,3 @@ router.delete(
 );
 
 export default router;
-

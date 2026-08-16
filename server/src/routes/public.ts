@@ -12,6 +12,7 @@ import { sendOrderNotificationEmail } from "../services/email.service.js";
 import { config } from "../config.js";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { quantityMatchesUnit } from "../utils/quantity.js";
 
 const router = Router();
 
@@ -187,9 +188,7 @@ router.post(
           if (!product) throw new HttpError(400, "Invalid product in order.");
           if (!product.isActive) throw new HttpError(400, `"${product.name}" is not available.`);
           // Unit-based validation: bag and piece must be whole numbers.
-          const unit = (product.unit || "").toLowerCase();
-          const requiresInteger = unit === "bag" || unit === "piece";
-          if (requiresInteger && !Number.isInteger(li.quantity)) {
+          if (!quantityMatchesUnit(li.quantity, product.unit)) {
             throw new HttpError(400, `Quantity for "${product.name}" must be a whole number (${product.unit}).`);
           }
           const available = Number(product.stock);

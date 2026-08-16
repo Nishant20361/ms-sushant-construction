@@ -32,9 +32,9 @@ export default function HomeScreen() {
     return () => clearTimeout(timeout);
   }, [cartMessage]);
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, quantity: number) => {
     if (product.stock <= 0) return;
-    addItem(product);
+    addItem(product, quantity);
     setCartMessage(`${product.name} added to cart`);
   };
 
@@ -44,8 +44,8 @@ export default function HomeScreen() {
     <HeroBanner settings={siteSettings} loading={settings.isPending} />
     {hasColdStart && !hasCachedContent ? <ColdStartState onRetry={refreshAll} /> : null}
     {hasColdStart && hasCachedContent ? <View style={styles.coldNotice}><Text style={styles.coldTitle}>Connecting to MS Sushant Construction…</Text><Text style={styles.coldText}>Showing saved content while the server starts.</Text></View> : null}
-    <CategorySection categories={categories.data?.categories} loading={categories.isPending} error={categories.isError} onRetry={() => void categories.refetch()} />
     <LatestUpdateTicker enabled={siteSettings?.latestUpdateEnabled} text={siteSettings?.latestUpdateText} />
+    <CategorySection categories={categories.data?.categories} loading={categories.isPending} error={categories.isError} onRetry={() => void categories.refetch()} />
     <QuickActions />
     <ProductSection products={products.data?.products} loading={products.isPending} error={products.isError} onRetry={() => void products.refetch()} onAdd={addToCart} />
     <AIConstructionCard />

@@ -568,6 +568,7 @@ export interface ProductPayload {
 export interface CategoryPayload {
   name: string;
   slug: string;
+  imageUrl?: string | null;
   displayOrder: number;
   isActive: boolean;
 }

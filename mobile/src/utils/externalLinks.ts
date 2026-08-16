@@ -11,7 +11,6 @@ export async function openExternalUrl(rawUrl: string): Promise<boolean> {
     if (url.protocol === "https:" && !url.hostname) return false;
     if (url.protocol === "tel:" && !/^\+?\d{7,15}$/.test(url.pathname)) return false;
     if (url.protocol === "mailto:" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(decodeURIComponent(url.pathname))) return false;
-    if (!(await Linking.canOpenURL(value))) return false;
     await Linking.openURL(value);
     return true;
   } catch { return false; }
@@ -19,3 +18,4 @@ export async function openExternalUrl(rawUrl: string): Promise<boolean> {
 
 export const telephoneUrl = (value: string) => `tel:${value.replace(/[^+\d]/g, "")}`;
 export const emailUrl = (value: string) => `mailto:${value.trim()}`;
+export const googleMapsDirectionsUrl = (destination: string) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination.trim())}`;

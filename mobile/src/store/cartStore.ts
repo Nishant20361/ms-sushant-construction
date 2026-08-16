@@ -7,7 +7,7 @@ import { normalizeQuantity } from "@/utils/quantity";
 interface CartState {
   items: CartItem[];
   hasHydrated: boolean;
-  addItem(product: Product, quantity?: number): void;
+  addItem(product: Product, quantity: number): void;
   removeItem(productId: number): void;
   updateQuantity(productId: number, quantity: number): void;
   clearCart(): void;
@@ -23,7 +23,7 @@ const safeStorage = {
 export const useCartStore = create<CartState>()(persist((set) => ({
   items: [],
   hasHydrated: false,
-  addItem: (product, quantity = 1) => set((state) => {
+  addItem: (product, quantity) => set((state) => {
     const existing = state.items.find((item) => item.productId === product.id);
     const nextQuantity = normalizeQuantity((existing?.quantity || 0) + quantity, product.unit, product.stock);
     if (existing) return { items: state.items.map((item) => item.productId === product.id ? { ...item, quantity: nextQuantity, price: product.price, maxStock: product.stock } : item) };

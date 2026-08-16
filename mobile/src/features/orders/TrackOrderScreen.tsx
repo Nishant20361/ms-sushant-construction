@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { useTrackOrder, useTrackOrdersByMobile, trackingErrorMessage } from "./hooks/useTrackOrder";
@@ -12,12 +12,13 @@ import type { TrackedOrderSummary } from "@/types/domain";
 
 type TrackMode = "mobile" | "order";
 
-function SummaryCard({ order, pending, onView }: { order: TrackedOrderSummary; pending: boolean; onView(): void }) {
+function SummaryCard({ order, pending, expanded, onView, children }: { order: TrackedOrderSummary; pending: boolean; expanded: boolean; onView(): void; children?: ReactNode }) {
   const itemSummary = order.items.slice(0, 2).map((item) => `${item.productName} (${formatQuantity(item.quantity, item.unit)})`).join(", ");
   return <View style={styles.summaryCard}>
     <View style={styles.summaryTop}><View><Text style={styles.orderNumber}>{order.orderNumber}</Text><Text style={styles.date}>{formatDate(order.createdAt)}</Text></View><OrderStatusBadge status={order.status} /></View>
     {itemSummary ? <Text numberOfLines={2} style={styles.items}>{itemSummary}{order.items.length > 2 ? ` +${order.items.length - 2} more` : ""}</Text> : null}
-    <View style={styles.summaryBottom}><Text style={styles.total}>{formatINR(order.total)}</Text><Pressable accessibilityRole="button" accessibilityLabel={`View and track order ${order.orderNumber}`} disabled={pending} onPress={onView} style={styles.viewButton}><Text style={styles.viewText}>{pending ? "Loading…" : "View / Track"}</Text></Pressable></View>
+    <View style={styles.summaryBottom}><Text style={styles.total}>{formatINR(order.total)}</Text><Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Hide details for" : "View and track"} order ${order.orderNumber}`} disabled={pending} onPress={onView} style={styles.viewButton}><Text style={styles.viewText}>{pending ? "Loading…" : expanded ? "Hide details" : "View Order →"}</Text></Pressable></View>
+    {expanded ? children : null}
   </View>;
 }
 
@@ -27,11 +28,12 @@ export default function TrackOrderScreen() {
   const [mode, setMode] = useState<TrackMode>("mobile");
   const [orderNumber, setOrderNumber] = useState(confirmed?.orderNumber ?? "");
   const [mobile, setMobile] = useState(savedMobile);
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ orderNumber?: string; mobile?: string }>({});
   const lookup = useTrackOrder();
   const history = useTrackOrdersByMobile();
 
-  const resetResults = () => { lookup.reset(); history.reset(); setErrors({}); };
+  const resetResults = () => { setSelectedOrder(null); lookup.reset(); history.reset(); setErrors({}); };
   const chooseMode = (next: TrackMode) => { setMode(next); resetResults(); };
   const normalizedMobile = () => normalizeIndianMobile(mobile);
   const findOrders = () => {
@@ -53,6 +55,13 @@ export default function TrackOrderScreen() {
   const viewOrder = (selectedOrderNumber: string) => {
     const normalized = normalizedMobile();
     if (!normalized || lookup.isPending) return;
+    if (selectedOrder === selectedOrderNumber) {
+      setSelectedOrder(null);
+      lookup.reset();
+      return;
+    }
+    setSelectedOrder(selectedOrderNumber);
+    lookup.reset();
     lookup.mutate({ orderNumber: selectedOrderNumber, mobile: normalized });
   };
 
@@ -68,8 +77,8 @@ export default function TrackOrderScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel={mode === "mobile" ? "Find My Orders" : "Track Order"} accessibilityState={{ disabled: pending, busy: pending }} disabled={pending} onPress={mode === "mobile" ? findOrders : track} style={[styles.button, pending && styles.disabled]}>{pending && !lookup.data && !history.data ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>{mode === "mobile" ? "Find My Orders" : "Track Order"}</Text>}</Pressable>
     </View>
     {(lookup.error || history.error) ? <View accessibilityLiveRegion="polite" style={styles.error}><Text style={styles.errorText}>{trackingErrorMessage(lookup.error || history.error)}</Text></View> : null}
-    {mode === "mobile" && history.data ? <View style={styles.results}><Text style={styles.resultsTitle}>Your Orders</Text>{history.data.orders.length ? history.data.orders.map((order) => <SummaryCard key={order.orderNumber} order={order} pending={lookup.isPending} onView={() => viewOrder(order.orderNumber)} />) : <Text style={styles.empty}>We couldn't find any orders for this mobile number.</Text>}</View> : null}
-    {lookup.data ? <OrderTrackingCard order={lookup.data.order} /> : null}
+    {mode === "mobile" && history.data ? <View style={styles.results}><Text style={styles.resultsTitle}>Your Orders</Text>{history.data.orders.length ? history.data.orders.map((order) => { const expanded = selectedOrder === order.orderNumber; const detail = expanded && lookup.data?.order.orderNumber === order.orderNumber ? <OrderTrackingCard order={lookup.data.order} /> : null; return <SummaryCard key={order.orderNumber} order={order} pending={expanded && lookup.isPending} expanded={expanded} onView={() => viewOrder(order.orderNumber)}>{detail}</SummaryCard>; }) : <Text style={styles.empty}>We couldn't find any orders for this mobile number.</Text>}</View> : null}
+    {mode === "order" && lookup.data ? <OrderTrackingCard order={lookup.data.order} /> : null}
   </Screen>;
 }
 

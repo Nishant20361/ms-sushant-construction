@@ -67,6 +67,7 @@ export const changePasswordSchema = z.object({
 export const categorySchema = z.object({
   name: z.string().trim().min(2, "Category name is required").max(100),
   slug: z.string().trim().min(2).max(100).optional(),
+  imageUrl: z.string().trim().max(500).refine((value) => !value || /^https:\/\/[^\s]+$/i.test(value), "Category image must use a valid HTTPS URL").nullable().optional().transform((value) => value || null),
   displayOrder: z.coerce.number().int().min(0).max(9999).default(0),
   isActive: z.coerce.boolean().default(true),
 });

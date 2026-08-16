@@ -48,6 +48,7 @@ export function serializeCategory(c: any) {
     id: c.id,
     name: c.name,
     slug: c.slug,
+    imageUrl: c.imageUrl ?? null,
     displayOrder: c.displayOrder,
     isActive: c.isActive,
     productCount: c._count?.products ?? undefined,

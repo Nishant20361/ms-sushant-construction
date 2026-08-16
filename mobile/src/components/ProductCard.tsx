@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import type { Product } from "@/types/domain";
 import { theme } from "@/theme";
@@ -9,8 +9,12 @@ import { formatINR } from "@/utils/format";
 import { FALLBACK_IMAGE, IMAGE_BLURHASH, resolveImageUrl } from "@/utils/images";
 import { publicApi } from "@/services/publicApi";
 import { queryKeys } from "@/services/queryKeys";
+import { ProductQuantityInput } from "@/components/ProductQuantityInput";
+import { validateQuantityInput } from "@/utils/quantity";
 
-function ProductCardComponent({ product, onAdd, style }: { product: Product; onAdd?: () => void; style?: StyleProp<ViewStyle> }) {
+function ProductCardComponent({ product, onAdd, style }: { product: Product; onAdd?: (quantity: number) => void; style?: StyleProp<ViewStyle> }) {
+  const [quantityText, setQuantityText] = useState("");
+  const validation = validateQuantityInput(quantityText, product.unit, product.stock);
   const source = resolveImageUrl(product.imageUrl, 400) || FALLBACK_IMAGE;
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -26,7 +30,7 @@ function ProductCardComponent({ product, onAdd, style }: { product: Product; onA
         <Text numberOfLines={2} style={styles.name}>{product.name}</Text>
         <Text style={styles.price}>{formatINR(product.price)} / {product.unit}</Text>
       </Pressable>
-    {onAdd ? <Pressable accessibilityRole="button" accessibilityLabel={`Add ${product.name} to cart`} disabled={product.stock <= 0} style={({ pressed }) => [styles.add, product.stock <= 0 && styles.disabled, pressed && product.stock > 0 && styles.addPressed]} onPress={onAdd}><Text style={styles.addText}>{product.stock > 0 ? "+ Add to cart" : "Out of stock"}</Text></Pressable> : null}
+    {onAdd ? <><ProductQuantityInput value={quantityText} unit={product.unit} maxStock={product.stock} onChange={setQuantityText} /><Pressable accessibilityRole="button" accessibilityLabel={`Add ${product.name} to cart`} disabled={product.stock <= 0 || validation.quantity === null} style={({ pressed }) => [styles.add, (product.stock <= 0 || validation.quantity === null) && styles.disabled, pressed && validation.quantity !== null && styles.addPressed]} onPress={() => { if (validation.quantity !== null) { onAdd(validation.quantity); setQuantityText(""); } }}><Text style={styles.addText}>{product.stock > 0 ? "Add to cart" : "Out of stock"}</Text></Pressable></> : null}
   </View>;
 }
 export const ProductCard = memo(ProductCardComponent);

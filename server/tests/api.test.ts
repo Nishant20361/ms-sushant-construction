@@ -4,8 +4,9 @@ import { createApp } from "../src/app.js";
 import { prisma } from "../src/db.js";
 import { hashPassword } from "../src/utils/password.js";
 import { buildGroqPrompt, detectGroqResponseLanguage } from "../src/construction_ai/groq.js";
-import { serializeOrderListForTracking, serializeSettings } from "../src/utils/serializer.js";
-import { settingsSchema } from "../src/validators/index.js";
+import { serializeCategory, serializeOrderListForTracking, serializeSettings } from "../src/utils/serializer.js";
+import { categorySchema, settingsSchema } from "../src/validators/index.js";
+import { isWholeNumberUnit, quantityMatchesUnit } from "../src/utils/quantity.js";
 
 let app: ReturnType<typeof createApp>;
 
@@ -582,6 +583,23 @@ describe("Admin permanent order delete (temporary cleanup feature)", () => {
 });
 
 describe("Public data exposure", () => {
+  it("validates and serializes optional category images", () => {
+    const parsed = categorySchema.parse({ name: "Cement", slug: "cement", imageUrl: " https://res.cloudinary.com/example/image/upload/category.webp ", displayOrder: 1, isActive: true });
+    expect(parsed.imageUrl).toBe("https://res.cloudinary.com/example/image/upload/category.webp");
+    expect(serializeCategory({ id: 1, ...parsed, createdAt: new Date(), updatedAt: new Date() }).imageUrl).toBe(parsed.imageUrl);
+    expect(serializeCategory({ id: 2, name: "Steel", slug: "steel", imageUrl: null }).imageUrl).toBeNull();
+    expect(() => categorySchema.parse({ name: "Unsafe", slug: "unsafe", imageUrl: "javascript:alert(1)" })).toThrow();
+  });
+
+  it("accepts fractional kg quantities and rejects fractional count-based units", () => {
+    expect(quantityMatchesUnit(1.25, "kg")).toBe(true);
+    expect(quantityMatchesUnit(1.25, "bag")).toBe(false);
+    expect(quantityMatchesUnit(0.5, "sheet")).toBe(false);
+    expect(quantityMatchesUnit(1.5, "bag (50 kg)")).toBe(false);
+    expect(quantityMatchesUnit(2.5, "piece (12 m)")).toBe(false);
+    expect(isWholeNumberUnit("unit")).toBe(true);
+  });
+
   it("publishes default-safe announcement settings and validates trimmed admin input", () => {
     const parsed = settingsSchema.parse({
       companyName: "Test", tagline: "", logoUrl: null, heroTitle: "", heroSubtitle: "", heroBannerUrl: null,
