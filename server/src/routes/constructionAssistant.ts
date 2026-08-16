@@ -10,7 +10,7 @@ import {
 } from "../construction_ai/assistant.js";
 import { isCalculatorQuestion } from "../construction_ai/rag/intentDetector.js";
 import { getRelevantContext } from "../construction_ai/rag/knowledgeRetriever.js";
-import { answerWithGroq } from "../construction_ai/groq.js";
+import { answerWithGroq, detectGroqResponseLanguage } from "../construction_ai/groq.js";
 import { processAdvancedCalculator } from "../construction_ai/calculators/index.js";
 import { assistantLimiter } from "../middleware/rateLimit.js";
 
@@ -117,7 +117,7 @@ if (advCalc.type && advCalc.result) {
   try {
     const datasetContext = await getRelevantContext(message);
     const combinedContext = `[EXACT ADVANCED CALCULATOR RESULT]\n${advCalc.formattedText}\n\n${datasetContext}`;
-    const groqReply = await answerWithGroq(message, combinedContext);
+    const groqReply = await answerWithGroq(message, combinedContext, detectGroqResponseLanguage(message, data.language));
     const detectedLang = detectLanguage(message);
     result = {
       reply: groqReply,
@@ -148,7 +148,7 @@ if (advCalc.type && advCalc.result) {
     } else {
       try {
         const context = await getRelevantContext(message);
-        const groqReply = await answerWithGroq(message, context);
+        const groqReply = await answerWithGroq(message, context, detectGroqResponseLanguage(message, data.language));
         const detectedLang = detectLanguage(message);
         result = {
           reply: groqReply,
@@ -162,7 +162,7 @@ if (advCalc.type && advCalc.result) {
   } else {
     try {
       const context = await getRelevantContext(message);
-      const groqReply = await answerWithGroq(message, context);
+      const groqReply = await answerWithGroq(message, context, detectGroqResponseLanguage(message, data.language));
       const detectedLang = detectLanguage(message);
       result = {
         reply: groqReply,

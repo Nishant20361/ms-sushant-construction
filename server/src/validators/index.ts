@@ -142,6 +142,8 @@ export const settingsSchema = z.object({
   businessMobile: z.string().trim().max(30).optional().default(""),
   businessEmail: optionalEmail.optional().default(""),
   businessLogoUrl: z.string().trim().max(500).nullable().transform((v) => v ?? ""),
+  latestUpdateEnabled: z.boolean().optional().default(false),
+  latestUpdateText: z.string().trim().max(300).optional().default(""),
 });
 
 // ------------------------- Admin order status -------------------------

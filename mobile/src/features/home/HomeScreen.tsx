@@ -12,6 +12,7 @@ import { ContactCard } from "./components/ContactCard";
 import { HeroBanner } from "./components/HeroBanner";
 import { HomeHeader } from "./components/HomeHeader";
 import { HomeSearchBar } from "./components/HomeSearchBar";
+import { LatestUpdateTicker } from "./components/LatestUpdateTicker";
 import { ProductSection } from "./components/ProductSection";
 import { QuickActions } from "./components/QuickActions";
 import { TrustSection } from "./components/TrustSection";
@@ -44,6 +45,7 @@ export default function HomeScreen() {
     {hasColdStart && !hasCachedContent ? <ColdStartState onRetry={refreshAll} /> : null}
     {hasColdStart && hasCachedContent ? <View style={styles.coldNotice}><Text style={styles.coldTitle}>Connecting to MS Sushant Construction…</Text><Text style={styles.coldText}>Showing saved content while the server starts.</Text></View> : null}
     <CategorySection categories={categories.data?.categories} loading={categories.isPending} error={categories.isError} onRetry={() => void categories.refetch()} />
+    <LatestUpdateTicker enabled={siteSettings?.latestUpdateEnabled} text={siteSettings?.latestUpdateText} />
     <QuickActions />
     <ProductSection products={products.data?.products} loading={products.isPending} error={products.isError} onRetry={() => void products.refetch()} onAdd={addToCart} />
     <AIConstructionCard />

@@ -435,7 +435,7 @@ const handleAdd = (p: Product, quantity: number) => {
               <p className="mt-1 text-sm text-slate-500">Click on an order to see details.</p>
               <ul className="mt-4 divide-y divide-slate-100">
                 {trackedOrders.map((o) => (
-                  <li key={o.id}>
+                  <li key={o.orderNumber}>
                     <button
                       onClick={() => handleSelectTrackedOrder(o.orderNumber)}
                       className="flex w-full items-center justify-between gap-2 px-2 py-3 text-left transition hover:bg-slate-50"
@@ -450,7 +450,7 @@ const handleAdd = (p: Product, quantity: number) => {
                         <span className="badge bg-brand-100 text-brand-800">
                           {formatOrderStatus(o.status)}
                         </span>
-                        <p className="mt-1 text-xs font-semibold text-slate-700">{formatINR(o.subtotal)}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-700">{formatINR(o.total)}</p>
                       </div>
                     </button>
                   </li>
@@ -790,14 +790,6 @@ function OrderDetailCard({ order }: { order: TrackedOrder }) {
         )}
       </div>
 
-      {/* Delivery address */}
-      {order.deliveryAddress && (
-        <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm">
-          <span className="font-medium text-slate-600">Delivery Address:</span>
-          <p className="mt-1 text-slate-700">{order.deliveryAddress}</p>
-        </div>
-      )}
     </div>
   );
 }
-

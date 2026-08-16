@@ -166,30 +166,32 @@ model OrderItem {
 }
 
 model SiteSetting {
-  id              Int      @id @default(autoincrement())
-  companyName     String   @default("M/S SUSHANT CONSTRUCTION")
-  tagline         String   @default("Your trusted construction material supplier")
-  logoUrl         String?
-  heroTitle       String   @default("Quality Construction Materials")
-  heroSubtitle    String   @default("Cement, steel, roofing sheets and more at the best prices.")
-  heroBannerUrl   String?
-  phone           String   @default("")
-  whatsappNumber  String   @default("")
-  email           String   @default("")
-  address         String   @default("")
-  googleMapsUrl   String   @default("")
-  aboutContent    String   @default("")
-  facebookUrl     String   @default("")
-  instagramUrl    String   @default("")
-  youtubeUrl      String   @default("")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  businessName    String?  @default("")
-  businessAddress String?  @default("")
-  gstNumber       String?  @default("")
-  businessMobile  String?  @default("")
-  businessEmail   String?  @default("")
-  businessLogoUrl String?  @default("")
+  id                  Int      @id @default(autoincrement())
+  companyName         String   @default("M/S SUSHANT CONSTRUCTION")
+  tagline             String   @default("Your trusted construction material supplier")
+  logoUrl             String?
+  heroTitle           String   @default("Quality Construction Materials")
+  heroSubtitle        String   @default("Cement, steel, roofing sheets and more at the best prices.")
+  heroBannerUrl       String?
+  phone               String   @default("")
+  whatsappNumber      String   @default("")
+  email               String   @default("")
+  address             String   @default("")
+  googleMapsUrl       String   @default("")
+  aboutContent        String   @default("")
+  facebookUrl         String   @default("")
+  instagramUrl        String   @default("")
+  youtubeUrl          String   @default("")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  businessName        String?  @default("")
+  businessAddress     String?  @default("")
+  gstNumber           String?  @default("")
+  businessMobile      String?  @default("")
+  businessEmail       String?  @default("")
+  businessLogoUrl     String?  @default("")
+  latestUpdateEnabled Boolean  @default(false)
+  latestUpdateText    String   @default("")
 }
 
 model AdminPasswordResetToken {
@@ -222,11 +224,11 @@ model AdminAuditLog {
 }
 
 model ConstructionQuery {
-  id             Int      @id @default(autoincrement())
+  id              Int      @id @default(autoincrement())
   customerMessage String
-  language       String   @default("English")
-  assistantReply String
-  createdAt      DateTime @default(now())
+  language        String   @default("English")
+  assistantReply  String
+  createdAt       DateTime @default(now())
 
   @@index([createdAt])
   @@index([language])

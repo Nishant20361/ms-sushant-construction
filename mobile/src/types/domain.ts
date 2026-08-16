@@ -20,6 +20,8 @@ export interface SiteSettings {
   businessMobile: string;
   businessEmail: string;
   businessLogoUrl: string;
+  latestUpdateEnabled: boolean;
+  latestUpdateText: string;
   updatedAt: string;
 }
 
@@ -71,7 +73,14 @@ export interface TrackedOrder {
   createdAt: string;
   subtotal: number;
   customerName: string;
-  deliveryAddress: string | null;
   items: TrackedOrderItem[];
   bill: TrackedBill | null;
+}
+
+export interface TrackedOrderSummary {
+  orderNumber: string;
+  status: string;
+  createdAt: string;
+  total: number;
+  items: Array<Pick<TrackedOrderItem, "productName" | "quantity" | "unit">>;
 }

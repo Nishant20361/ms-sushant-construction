@@ -46,7 +46,7 @@ const load = () => {
     }
   };
 
-  const update = (key: keyof SiteSettings, value: string | null) => {
+  const update = (key: keyof SiteSettings, value: SiteSettings[keyof SiteSettings] | null) => {
     if (!settings) return;
     setSettings({ ...settings, [key]: value ?? "" });
   };
@@ -207,7 +207,7 @@ const load = () => {
                   id={key}
                   className="input min-h-[80px]"
                   rows={3}
-                  value={settings[key] ?? ""}
+                  value={String(settings[key] ?? "")}
                   onChange={(e) => update(key, e.target.value)}
                 />
               ) : (
@@ -215,13 +215,38 @@ const load = () => {
                   id={key}
                   className="input"
                   type={type === "url" ? "url" : type === "phone" ? "tel" : "text"}
-                  value={settings[key] ?? ""}
+                  value={String(settings[key] ?? "")}
                   onChange={(e) => update(key, e.target.value)}
                 />
               )}
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-slate-900">Latest Update / Announcement</h3>
+        <p className="mt-1 text-sm text-slate-500">Show a short update below categories in the mobile app.</p>
+        <label className="mt-4 flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={settings.latestUpdateEnabled}
+            onChange={(event) => update("latestUpdateEnabled", event.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
+          />
+          <span className="text-sm font-semibold text-slate-700">Enable latest update</span>
+        </label>
+        <label className="label mt-4" htmlFor="latestUpdateText">Announcement text</label>
+        <textarea
+          id="latestUpdateText"
+          className="input min-h-[84px]"
+          rows={3}
+          maxLength={300}
+          value={settings.latestUpdateText}
+          onChange={(event) => update("latestUpdateText", event.target.value)}
+          placeholder="Example: ACC Cement new stock is now available."
+        />
+        <p className="mt-1 text-right text-xs text-slate-500">{settings.latestUpdateText.length}/300</p>
       </div>
 
 {/* Business Invoice Details */}
@@ -277,7 +302,7 @@ const load = () => {
                   id={key}
                   className="input min-h-[80px]"
                   rows={3}
-                  value={settings[key] ?? ""}
+                  value={String(settings[key] ?? "")}
                   onChange={(e) => update(key, e.target.value)}
                 />
               ) : (
@@ -285,7 +310,7 @@ const load = () => {
                   id={key}
                   className="input"
                   type={type === "phone" ? "tel" : "text"}
-                  value={settings[key] ?? ""}
+                  value={String(settings[key] ?? "")}
                   onChange={(e) => update(key, e.target.value)}
                 />
               )}

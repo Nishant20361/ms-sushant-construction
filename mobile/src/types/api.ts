@@ -1,4 +1,4 @@
-import type { Category, Product, SiteSettings, TrackedOrder } from "./domain";
+import type { Category, Product, SiteSettings, TrackedOrder, TrackedOrderSummary } from "./domain";
 
 export type ProductSort = "newest" | "price_asc" | "price_desc" | "name_asc" | "name_desc";
 export interface ProductQuery {
@@ -23,7 +23,7 @@ export interface CreateOrderResponse {
   order: { id: number; orderNumber: string; customerName: string; subtotal: number; status: string; createdAt: string };
 }
 export interface TrackOrdersByMobileResponse {
-  orders: Array<Pick<TrackedOrder, "orderNumber" | "status" | "createdAt" | "subtotal" | "customerName" | "items" | "bill"> & { id: number }>;
+  orders: TrackedOrderSummary[];
 }
 export type AssistantLanguage = "Hindi" | "English";
 export interface AssistantRequest { message: string; sessionId?: string; language?: AssistantLanguage }

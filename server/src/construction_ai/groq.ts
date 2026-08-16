@@ -140,15 +140,32 @@ export async function askGroq(
  * @param context Retrieved knowledge / dataset context.
  * @returns AI generated answer string.
  */
+export type GroqResponseLanguage = "Hindi" | "English" | "Hinglish";
+
+export function detectGroqResponseLanguage(message: string, fallback: "Hindi" | "English"): GroqResponseLanguage {
+  if (/[\u0900-\u097F]/.test(message)) return "Hindi";
+  const romanHindiWords = message.toLowerCase().match(/\b(aur|bana|banane|batao|ghar|hai|hain|ka|karna|ke|ki|kitna|kya|lagega|lagta|me|mein|nahi|samjhao|use|usme)\b/g) ?? [];
+  if (romanHindiWords.length > 0) return "Hinglish";
+  return fallback === "Hindi" ? "Hinglish" : "English";
+}
+
+export function buildGroqPrompt(message: string, context: string = "", language: GroqResponseLanguage = "English"): string {
+  const responseLanguage = language === "English"
+    ? "Reply only in clear English. Do not switch to Hindi or Hinglish."
+    : language === "Hindi"
+      ? "Reply in natural Hindi using Devanagari script."
+      : "Reply in natural Hinglish using Roman script.";
+  let prompt = `Question: ${message}\n\nRESPONSE LANGUAGE REQUIREMENT: ${responseLanguage}`;
+  if (context && context.trim()) prompt += `\n\nRELEVANT CONSTRUCTION KNOWLEDGE & DATASET CONTEXT:\n${context}`;
+  return prompt;
+}
+
 export async function answerWithGroq(
   message: string,
-  context: string = ""
+  context: string = "",
+  language: GroqResponseLanguage = "English"
 ): Promise<string> {
-  let prompt = `Question: ${message}`;
-  if (context && context.trim()) {
-    prompt += `\n\nRELEVANT CONSTRUCTION KNOWLEDGE & DATASET CONTEXT:\n${context}`;
-  }
-
+  const prompt = buildGroqPrompt(message, context, language);
   const { text } = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT);
   if (!text.trim()) throw new Error("Groq returned an empty response");
   return text;

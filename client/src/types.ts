@@ -54,6 +54,8 @@ export interface SiteSettings {
   businessMobile: string;
   businessEmail: string;
   businessLogoUrl: string;
+  latestUpdateEnabled: boolean;
+  latestUpdateText: string;
 }
 
 export interface CartItem {
@@ -224,7 +226,6 @@ export interface TrackedOrder {
   createdAt: string;
   subtotal: number;
   customerName: string;
-  deliveryAddress: string | null;
   items: {
     productName: string;
     quantity: number;
@@ -236,20 +237,15 @@ export interface TrackedOrder {
 }
 
 export interface TrackedOrderSummary {
-  id: number;
   orderNumber: string;
   status: OrderStatus;
   createdAt: string;
-  subtotal: number;
-  customerName: string;
+  total: number;
   items: {
     productName: string;
     quantity: number;
     unit: string;
-    price: number;
-    total: number;
   }[];
-  bill: TrackedBill | null;
 }
 
 export interface TrackedBill {

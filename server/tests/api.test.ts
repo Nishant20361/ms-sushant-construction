@@ -3,6 +3,9 @@ import supertest from "supertest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/db.js";
 import { hashPassword } from "../src/utils/password.js";
+import { buildGroqPrompt, detectGroqResponseLanguage } from "../src/construction_ai/groq.js";
+import { serializeOrderListForTracking, serializeSettings } from "../src/utils/serializer.js";
+import { settingsSchema } from "../src/validators/index.js";
 
 let app: ReturnType<typeof createApp>;
 
@@ -579,6 +582,23 @@ describe("Admin permanent order delete (temporary cleanup feature)", () => {
 });
 
 describe("Public data exposure", () => {
+  it("publishes default-safe announcement settings and validates trimmed admin input", () => {
+    const parsed = settingsSchema.parse({
+      companyName: "Test", tagline: "", logoUrl: null, heroTitle: "", heroSubtitle: "", heroBannerUrl: null,
+      phone: "", whatsappNumber: "", email: "", address: "", googleMapsUrl: "", aboutContent: "",
+      facebookUrl: "", instagramUrl: "", youtubeUrl: "", businessLogoUrl: null,
+      latestUpdateEnabled: true, latestUpdateText: "  New stock available  ",
+    });
+    expect(parsed.latestUpdateText).toBe("New stock available");
+    expect(serializeSettings({ ...parsed, updatedAt: new Date() })).toMatchObject({ latestUpdateEnabled: true, latestUpdateText: "New stock available" });
+  });
+
+  it("serializes mobile history without private or accounting fields", () => {
+    const summary = serializeOrderListForTracking({ id: 1, orderNumber: "MSC-1", status: "PROCESSING", createdAt: new Date(), subtotal: 500, customerName: "Private", customerMobile: "9876543210", deliveryAddress: "Private address", notes: "Private note", items: [{ productName: "Cement", quantity: 1, unit: "bag", price: 500, total: 500 }], bill: { finalAmount: 450, discount: 50 }, payments: [{ amount: 450 }] });
+    expect(summary).toMatchObject({ orderNumber: "MSC-1", total: 450, items: [{ productName: "Cement", quantity: 1, unit: "bag" }] });
+    for (const field of ["id", "customerName", "customerMobile", "deliveryAddress", "notes", "subtotal", "bill", "payments", "price"]) expect(JSON.stringify(summary)).not.toContain(`\"${field}\"`);
+  });
+
   it("does not expose customer data in public API", async () => {
     const res = await supertest(app).get("/api/products");
     expect(res.status).toBe(200);
@@ -597,6 +617,24 @@ describe("Public data exposure", () => {
 });
 
 describe("Native public API boundary", () => {
+  it("returns privacy-minimized order summaries for mobile history", async () => {
+    const res = await supertest(app).get("/api/public/orders/track-by-mobile?customerMobile=9876543210");
+    expect(res.status).toBe(200);
+    expect(res.body.orders.length).toBeGreaterThan(0);
+    expect(res.body.orders[0]).toEqual(expect.objectContaining({ orderNumber: expect.any(String), status: expect.any(String), createdAt: expect.any(String), total: expect.any(Number), items: expect.any(Array) }));
+    const body = JSON.stringify(res.body);
+    for (const field of ["customerName", "customerMobile", "deliveryAddress", "notes", "subtotal", "bill", "payments", "price"]) expect(body).not.toContain(`\"${field}\"`);
+  });
+
+  it("keeps detailed customer tracking free of private and internal fields", async () => {
+    const order = await prisma.order.findFirst({ where: { customerMobile: "9876543210" }, orderBy: { createdAt: "desc" } });
+    expect(order).not.toBeNull();
+    const res = await supertest(app).get(`/api/public/orders/track?orderNumber=${encodeURIComponent(order!.orderNumber)}&customerMobile=9876543210`);
+    expect(res.status).toBe(200);
+    const body = JSON.stringify(res.body);
+    for (const field of ["deliveryAddress", "notes", "customerMobile", "id", "payments"]) expect(body).not.toContain(`\"${field}\"`);
+  });
+
   it("rejects unbounded or invalid public product pagination", async () => {
     expect((await supertest(app).get("/api/public/products?limit=51")).status).toBe(400);
     expect((await supertest(app).get("/api/public/products?page=0")).status).toBe(400);
@@ -729,6 +767,15 @@ describe("Health endpoint", () => {
 });
 
 describe("Construction Assistant (local rule-based)", () => {
+  it("builds explicit English, Hindi, and Hinglish provider language directives", () => {
+    expect(buildGroqPrompt("What is cement used for?", "", "English")).toContain("Reply only in clear English");
+    expect(buildGroqPrompt("सीमेंट का उपयोग कहाँ होता है?", "", "Hindi")).toContain("Hindi using Devanagari");
+    expect(buildGroqPrompt("cement ka use kaha hota hai?", "", "Hinglish")).toContain("Hinglish using Roman script");
+    expect(detectGroqResponseLanguage("What is cement used for?", "English")).toBe("English");
+    expect(detectGroqResponseLanguage("सीमेंट का उपयोग कहाँ होता है?", "English")).toBe("Hindi");
+    expect(detectGroqResponseLanguage("ghar banane me cement ka use kaha hota hai?", "English")).toBe("Hinglish");
+  });
+
   it("answers a Hindi house-size query from the local dataset", async () => {
     const { agent, token } = await getCsrf();
     const res = await agent

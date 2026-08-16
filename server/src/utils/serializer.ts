@@ -114,12 +114,7 @@ export function serializeOrderPayment(p: any) {
   };
 }
 
-/**
- * Safe public view of an order for the tracking endpoint. NEVER exposes
- * admin-only data (notes, deliveryAddress, customerMobile are intentionally
- * included only where the customer already knows them: mobile is used for
- * verification and address is the customer's own address).
- */
+/** Safe customer-facing order view. Verification fields and private delivery data are omitted. */
 export function serializeOrderForTracking(o: any) {
   return {
     orderNumber: o.orderNumber,
@@ -127,7 +122,6 @@ export function serializeOrderForTracking(o: any) {
     createdAt: o.createdAt,
     subtotal: toNumber(o.subtotal),
     customerName: o.customerName,
-    deliveryAddress: o.deliveryAddress,
     items: (o.items ?? []).map((it: any) => ({
       productName: it.productName,
       quantity: it.quantity,
@@ -145,20 +139,15 @@ export function serializeOrderForTracking(o: any) {
  */
 export function serializeOrderListForTracking(o: any) {
   return {
-    id: o.id,
     orderNumber: o.orderNumber,
     status: o.status,
     createdAt: o.createdAt,
-    subtotal: toNumber(o.subtotal),
-    customerName: o.customerName,
+    total: o.bill ? toNumber(o.bill.finalAmount) : toNumber(o.subtotal),
     items: (o.items ?? []).map((it: any) => ({
       productName: it.productName,
       quantity: it.quantity,
       unit: it.unit,
-      price: toNumber(it.price),
-      total: toNumber(it.total),
     })),
-    bill: serializeBillForTracking(o.bill),
   };
 }
 
@@ -212,7 +201,8 @@ export function serializeSettings(s: any) {
     businessMobile: s.businessMobile ?? "",
     businessEmail: s.businessEmail ?? "",
     businessLogoUrl: s.businessLogoUrl ?? "",
+    latestUpdateEnabled: s.latestUpdateEnabled ?? false,
+    latestUpdateText: s.latestUpdateText ?? "",
     updatedAt: s.updatedAt,
   };
 }
-

@@ -362,7 +362,14 @@ router.get(
 
     const orders = await prisma.order.findMany({
       where: { customerMobile: mobile },
-      include: { items: true, bill: true },
+      select: {
+        orderNumber: true,
+        status: true,
+        createdAt: true,
+        subtotal: true,
+        items: { select: { productName: true, quantity: true, unit: true } },
+        bill: { select: { finalAmount: true } },
+      },
       orderBy: { createdAt: "desc" },
     });
 
