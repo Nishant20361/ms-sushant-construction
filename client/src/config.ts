@@ -13,5 +13,8 @@ export function isDirectAndroidApkUrl(value: string | undefined): boolean {
   }
 }
 
+const PUBLIC_ANDROID_APK_URL = "https://github.com/Nishant20361/ms-sushant-construction/releases/download/v1.0.1/application-371b3d7f-76a1-4fcd-ade2-12c73daf0778.apk";
 const configuredAndroidAppUrl = (import.meta.env.VITE_ANDROID_APP_URL as string | undefined)?.trim();
-export const ANDROID_APP_URL = isDirectAndroidApkUrl(configuredAndroidAppUrl) ? configuredAndroidAppUrl : "";
+export const ANDROID_APP_URL = isDirectAndroidApkUrl(configuredAndroidAppUrl)
+  ? configuredAndroidAppUrl
+  : PUBLIC_ANDROID_APK_URL;

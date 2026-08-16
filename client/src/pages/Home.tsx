@@ -245,7 +245,7 @@ const handleAdd = (p: Product, quantity: number) => {
               <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-2xl text-white">📱</span>
               <div><h2 className="text-2xl font-bold text-slate-900">Download Our App</h2><p className="mt-1 text-sm font-medium text-brand-800">हमारा ऐप डाउनलोड करें</p><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Order materials, track orders and get construction assistance directly from your phone.</p></div>
             </div>
-            {ANDROID_APP_URL ? <a href={ANDROID_APP_URL} className="btn-primary shrink-0 whitespace-nowrap">Download Android App</a> : <span aria-disabled="true" className="btn-primary shrink-0 cursor-not-allowed whitespace-nowrap opacity-60">Download Android App</span>}
+            <a href={ANDROID_APP_URL} target="_self" rel="noopener noreferrer" className="btn-primary shrink-0 whitespace-nowrap">Download Android App</a>
           </div>
         </div>
       </section>
