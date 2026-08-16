@@ -179,7 +179,7 @@ const openPrintView = () => {
                   <p className="text-sm text-slate-500">
                     {order.customerName} · {order.customerMobile}
                   </p>
-                  <p className="text-sm text-slate-500">{order.deliveryAddress}</p>
+                  <p className="text-sm text-slate-500">{order.deliveryAddress || "Address not provided"}</p>
                 </div>
                 <div className="text-right">
                   <span className="badge bg-brand-100 text-brand-800">

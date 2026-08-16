@@ -13,8 +13,7 @@ export function validateCheckout(values: { customerName: string; customerMobile:
   if (name.length < 2) errors.customerName = "Enter your full name.";
   else if (name.length > 120) errors.customerName = "Name must be 120 characters or fewer.";
   if (!normalizeIndianMobile(values.customerMobile)) errors.customerMobile = "Enter a valid 10-digit mobile number.";
-  if (!address) errors.deliveryAddress = "Enter a delivery address.";
-  else if (address.length > 500) errors.deliveryAddress = "Address must be 500 characters or fewer.";
+  if (address.length > 500) errors.deliveryAddress = "Address must be 500 characters or fewer.";
   if (values.notes.trim().length > 1000) errors.notes = "Notes must be 1,000 characters or fewer.";
   return errors;
 }

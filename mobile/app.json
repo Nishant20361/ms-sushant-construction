@@ -30,6 +30,16 @@
           "resizeMode": "contain",
           "backgroundColor": "#F8FAFC"
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow MS Sushant Construction to use the microphone for voice questions.",
+          "speechRecognitionPermission": "Allow MS Sushant Construction to convert your voice question to text.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
       ]
     ],
     "experiments": {
