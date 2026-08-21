@@ -46,6 +46,8 @@ Rules:
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = CONSTRUCTION_SYSTEM_PROMPT;
+export const GROQ_PRIMARY_MODEL = "openai/gpt-oss-20b";
+export const GROQ_FALLBACK_MODEL = "groq/compound-mini";
 
 let groqInstance: Groq | null = null;
 let lastApiKey: string | null = null;
@@ -175,10 +177,10 @@ export function categorizeGroqError(err: any, model?: string, durationMs?: numbe
 export async function askGroq(
   prompt: string,
   systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
-  model: string = process.env.GROQ_PRIMARY_MODEL?.trim() || "llama-3.1-8b-instant",
+  model: string = process.env.GROQ_PRIMARY_MODEL?.trim() || GROQ_PRIMARY_MODEL,
   history: GroqMessage[] = []
 ): Promise<{ text: string; model: string }> {
-  if (process.env.NODE_ENV === "test") {
+  if (process.env.NODE_ENV === "test" && process.env.GROQ_ALLOW_TEST_REQUESTS !== "true") {
     throw new Error("Groq is disabled in test mode");
   }
 
@@ -189,14 +191,8 @@ export async function askGroq(
     { role: "user", content: prompt },
   ];
 
-  const candidateModels = Array.from(
-    new Set([
-      model,
-      process.env.GROQ_FALLBACK_MODEL?.trim() || "groq/compound-mini",
-      "llama-3.3-70b-versatile",
-      "groq/compound",
-    ].filter(Boolean))
-  );
+  const fallbackModel = process.env.GROQ_FALLBACK_MODEL?.trim() || GROQ_FALLBACK_MODEL;
+  const candidateModels = Array.from(new Set([model, fallbackModel]));
 
   let lastError: any = null;
 
@@ -300,7 +296,7 @@ export async function answerWithGroq(
   history: GroqMessage[] = []
 ): Promise<string> {
   const prompt = buildGroqPrompt(message, context, language);
-  const { text } = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT, "llama-3.1-8b-instant", history);
+  const { text } = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT, undefined, history);
   if (!text.trim()) throw new Error("Groq returned an empty response");
   return text;
 }
