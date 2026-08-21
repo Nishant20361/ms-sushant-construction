@@ -262,7 +262,7 @@ export function detectGroqResponseLanguage(message: string, _fallback?: "Hindi" 
   const tokens = normalized.match(/[a-z]+/g) ?? [];
   const hinglishScore = new Set(tokens.filter((token) => HINGLISH_TOKENS.has(token))).size;
   if (hinglishScore >= 1) return "Hinglish";
-  if (/[^\x00-\x7F]/.test(normalized)) return "Other";
+  if ([...normalized].some((char) => char.codePointAt(0)! > 0x7f)) return "Other";
   return "English";
 }
 
