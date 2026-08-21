@@ -60,6 +60,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c351bcea-0517-4c18-9278-c83ece52e0e1"
+      }
+    },
+    "owner": "nishant20361"
   }
 }
