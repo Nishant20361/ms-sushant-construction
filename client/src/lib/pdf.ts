@@ -1,0 +1,451 @@
+import type {
+  SalesReport,
+  CustomerDueReport,
+  CustomerStatement,
+  ProductHistory,
+} from "../types";
+import { formatINR, formatDate } from "./format";
+
+/** Escape HTML entities to prevent XSS in generated PDF templates. */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[c]!)
+  );
+}
+
+/** Sanitize string for safe filenames (no paths, slashes, or special chars). */
+export function safeFilename(input: unknown, fallback: string): string {
+  const safe = String(input ?? "")
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
+    .slice(0, 60);
+  const base = safe || fallback;
+  return base.endsWith(".pdf") ? base : `${base}.pdf`;
+}
+
+function row(cells: string[]): string {
+  return `<tr>${cells.map((x) => `<td>${x}</td>`).join("")}</tr>`;
+}
+
+function table(heads: string[], rows: string[]): string {
+  return `
+    <table>
+      <thead>
+        <tr>${heads.map((x) => `<th>${escapeHtml(x)}</th>`).join("")}</tr>
+      </thead>
+      <tbody>
+        ${
+          rows.length
+            ? rows.join("")
+            : `<tr><td colspan="${heads.length}" class="empty">No matching records</td></tr>`
+        }
+      </tbody>
+    </table>
+  `;
+}
+
+function kpis(items: [string, string][]): string {
+  return `
+    <section class="kpis">
+      ${items
+        .map(
+          ([k, v]) => `
+        <div>
+          <span>${escapeHtml(k)}</span>
+          <strong>${v}</strong>
+        </div>
+      `
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function renderDocument(title: string, subtitle: string, bodyHtml: string): string {
+  const generatedAt = formatDate(new Date().toISOString());
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 14mm 10mm;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, "Noto Sans Devanagari", "Segoe UI", sans-serif;
+      color: #0f172a;
+      font-size: 10px;
+      line-height: 1.4;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      border-bottom: 3px solid #0f766e;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    .company {
+      font-size: 12px;
+      font-weight: bold;
+      color: #0f766e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 3px 0 2px;
+      color: #0f172a;
+    }
+    .meta {
+      color: #64748b;
+      font-size: 9px;
+    }
+    h2 {
+      font-size: 12px;
+      margin: 16px 0 4px;
+      color: #0f766e;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .section-desc {
+      color: #64748b;
+      font-size: 8.5px;
+      margin: 0 0 8px;
+    }
+    .kpis {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 12px;
+    }
+    .kpis div {
+      flex: 1;
+      min-width: 110px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 6px 8px;
+      background: #f8fafc;
+    }
+    .kpis span {
+      display: block;
+      color: #64748b;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .kpis strong {
+      font-size: 11.5px;
+      color: #0f172a;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      page-break-inside: auto;
+    }
+    tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+    th {
+      background: #f1f5f9;
+      text-align: left;
+      color: #334155;
+      font-weight: 600;
+      font-size: 8.5px;
+      border: 1px solid #cbd5e1;
+      padding: 5px 6px;
+    }
+    td {
+      border: 1px solid #e2e8f0;
+      padding: 5px 6px;
+      vertical-align: top;
+      font-size: 9px;
+    }
+    .text-right { text-align: right; }
+    .empty { text-align: center; padding: 16px; color: #64748b; }
+    .highlight { color: #047857; font-weight: bold; }
+    .warn { color: #b45309; }
+    .danger { color: #dc2626; font-weight: bold; }
+    .success { color: #047857; font-weight: bold; }
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 8px;
+      font-weight: bold;
+    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-warn { background: #fef3c7; color: #92400e; }
+    footer {
+      margin-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 6px;
+      color: #94a3b8;
+      font-size: 8px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="company">M/S Sushant Construction</div>
+    <h1>${escapeHtml(title)}</h1>
+    <div class="meta">${escapeHtml(subtitle)} · Generated ${generatedAt}</div>
+  </header>
+  ${bodyHtml}
+  <footer>Generated by Sushant Control System</footer>
+</body>
+</html>`;
+}
+
+/** Open clean printable PDF document with document title set to filename without extension. */
+export function downloadPdfHtml(htmlContent: string, filename: string): void {
+  const cleanTitle = filename.replace(/\.pdf$/i, "");
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("Please allow popups for this website to download/print the PDF report.");
+    return;
+  }
+  printWindow.document.write(htmlContent);
+  printWindow.document.title = cleanTitle;
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+  }, 300);
+}
+
+// ---------------------------------------------------------------------------
+// Report Generators
+// ---------------------------------------------------------------------------
+
+/** Sales Report PDF (Daily, Weekly, Monthly) with two sequential accounting sections. */
+export function generateSalesPdfHtml(report: SalesReport): string {
+  const s = report.summary;
+  const c = report.collections;
+  const orders = report.orders;
+  const oldDues =
+    report.previousDuePayments && report.previousDuePayments.length > 0
+      ? report.previousDuePayments
+      : report.payments.filter((p) => !p.saleCreatedInPeriod);
+
+  const periodTitle =
+    report.reportType === "daily"
+      ? "Daily"
+      : report.reportType === "weekly"
+      ? "Weekly"
+      : "Monthly";
+
+  const section1Kpis = kpis([
+    ["Total Sales During Period", formatINR(s.totalSales)],
+    ["Orders Placed", String(s.totalOrders)],
+    ["Collected Against Sales", formatINR(c.currentPeriodSalesCollected ?? c.totalCollected)],
+    ["Outstanding On Sales", formatINR(s.outstandingAmount)],
+    ["Paid / Partial / Due Orders", `${s.paidOrders} / ${s.partiallyPaidOrders} / ${s.dueOrders}`],
+  ]);
+
+  const section1Table = table(
+    ["Date & Time", "Order #", "Customer", "Order / Payment Status", "Total", "Paid", "Remaining Due"],
+    orders.map((o) =>
+      row([
+        formatDate(o.createdAt),
+        escapeHtml(o.orderNumber),
+        `${escapeHtml(o.customerName)}<br><span class="meta">${escapeHtml(o.customerMobile)}</span>`,
+        `${escapeHtml(o.status.replace(/_/g, " "))}<br><span class="meta">${escapeHtml(o.paymentStatus.replace(/_/g, " "))}</span>`,
+        formatINR(o.finalAmount),
+        formatINR(o.totalPaid),
+        formatINR(o.remainingDue),
+      ])
+    )
+  );
+
+  const section2Title =
+    report.reportType === "daily"
+      ? "SECTION 2 — PREVIOUS DUES PAID TODAY"
+      : report.reportType === "weekly"
+      ? "SECTION 2 — PREVIOUS DUES PAID DURING SELECTED WEEK"
+      : "SECTION 2 — PREVIOUS DUES PAID DURING SELECTED MONTH";
+
+  const section2Kpis = kpis([
+    ["Total Old Dues Collected", formatINR(c.olderSalesCollected)],
+    ["Total Collections In Period", formatINR(c.totalCollected)],
+    ["Due Cleared Amount", formatINR(c.dueClearedAmount)],
+    ["Old Orders Cleared", `${c.dueClearedCount} orders`],
+  ]);
+
+  const section2Table = table(
+    [
+      "Payment Date",
+      "Customer / Mobile",
+      "Order #",
+      "Original Sale Date",
+      "Original Bill",
+      "Paid Before Payment",
+      "Due Before Payment",
+      "Paid In Period",
+      "Total Paid After",
+      "Remaining Due",
+      "Mode",
+      "Status / Due Cleared",
+    ],
+    oldDues.map((p) =>
+      row([
+        formatDate(p.paymentDate),
+        `${escapeHtml(p.customerName)}<br><span class="meta">${escapeHtml(p.customerMobile)}</span>`,
+        escapeHtml(p.orderNumber),
+        formatDate(p.orderCreatedAt),
+        formatINR(p.originalBillAmount),
+        formatINR(p.previouslyPaidBeforePayment),
+        `<span class="warn">${formatINR(p.dueBeforePayment)}</span>`,
+        `<strong class="highlight">${formatINR(p.amount)}</strong>`,
+        formatINR(p.totalPaidAfterPayment),
+        `<strong class="${p.remainingBalanceAfterPayment > 0 ? "danger" : "success"}">${formatINR(p.remainingBalanceAfterPayment)}</strong>`,
+        escapeHtml(p.paymentMode),
+        `<span class="badge ${p.dueCleared ? "badge-success" : "badge-warn"}">${p.dueCleared ? "DUE CLEARED" : "PARTIAL / DUE REMAINING"}</span>`,
+      ])
+    )
+  );
+
+  const body = `
+    <h2>SECTION 1 — SALES DURING SELECTED PERIOD</h2>
+    ${section1Kpis}
+    ${section1Table}
+    <h2>${section2Title}</h2>
+    <p class="section-desc">Payments received during this period against sales created before ${escapeHtml(report.periodLabel)}. These payments settle older debt and do not increase period sales.</p>
+    ${section2Kpis}
+    ${section2Table}
+  `;
+
+  return renderDocument(`${periodTitle} Sales Report`, report.periodLabel, body);
+}
+
+/** Customer Due Report PDF */
+export function generateCustomerDuePdfHtml(report: CustomerDueReport, searchFilter = ""): string {
+  const summary = report.summary;
+  const customers = report.customers;
+
+  const headerKpis = kpis([
+    ["Total Customers", String(summary.totalCustomers)],
+    ["Total Pending Due", formatINR(summary.totalPendingDue)],
+    ["Search Filter", searchFilter || "All Customers"],
+  ]);
+
+  const dueTable = table(
+    ["Customer Name", "Phone", "Address", "Total Orders", "Total Purchase", "Total Paid", "Remaining Due", "Last Payment Date"],
+    customers.map((c) =>
+      row([
+        escapeHtml(c.customerName),
+        escapeHtml(c.customerMobile),
+        escapeHtml(c.address || "—"),
+        String(c.totalOrders),
+        formatINR(c.totalPurchase),
+        formatINR(c.totalPaid),
+        `<strong class="danger">${formatINR(c.remainingDue)}</strong>`,
+        c.lastPaymentDate ? formatDate(c.lastPaymentDate) : "—",
+      ])
+    )
+  );
+
+  const body = `
+    ${headerKpis}
+    <h2>Customer Dues Detail</h2>
+    ${dueTable}
+  `;
+
+  return renderDocument("Customer Due Report", searchFilter ? `Filter: ${searchFilter}` : "All Customers", body);
+}
+
+/** Customer Statement PDF */
+export function generateCustomerStatementPdfHtml(statement: CustomerStatement): string {
+  const c = statement.customer;
+  const ledger = statement.ledger;
+
+  const headerKpis = kpis([
+    ["Customer Name", c.customerName],
+    ["Mobile Number", c.customerMobile],
+    ["Total Purchase", formatINR(c.totalPurchase)],
+    ["Total Paid", formatINR(c.totalPaid)],
+    ["Remaining Balance", formatINR(c.totalDue)],
+    ["Total Orders", String(c.totalOrders)],
+  ]);
+
+  const ledgerTable = table(
+    ["Date", "Order #", "Type / Mode", "Debit", "Credit", "Balance"],
+    ledger.map((e) =>
+      row([
+        formatDate(e.date),
+        escapeHtml(e.orderNumber),
+        e.type === "ORDER"
+          ? `<span class="badge badge-warn">ORDER</span>`
+          : `<span class="badge badge-success">${escapeHtml(e.mode ?? "PAYMENT")}</span>`,
+        e.debit ? formatINR(e.debit) : "—",
+        e.credit ? `<strong class="highlight">${formatINR(e.credit)}</strong>` : "—",
+        `<strong>${formatINR(e.balance)}</strong>`,
+      ])
+    )
+  );
+
+  const body = `
+    ${headerKpis}
+    <h2>Complete Customer Ledger</h2>
+    ${ledgerTable}
+  `;
+
+  return renderDocument("Customer Statement", `${c.customerName} (${c.customerMobile})`, body);
+}
+
+/** Product History PDF */
+export function generateProductHistoryPdfHtml(history: ProductHistory): string {
+  const p = history.product;
+  const s = history.stats;
+  const orders = history.recentOrders;
+
+  const headerKpis = kpis([
+    ["Product Name", p.name],
+    ["Category", p.category ?? "Uncategorized"],
+    ["Current Stock", `${p.stock} ${p.unit}`],
+    ["Total Quantity Sold", String(s.totalQuantitySold)],
+    ["Total Revenue", formatINR(s.revenue)],
+    ["Unique Customers", String(s.customersPurchased)],
+    ["Avg Selling Price", formatINR(s.averageSellingPrice)],
+  ]);
+
+  const ordersTable = table(
+    ["Date & Time", "Order #", "Customer", "Quantity", "Avg Rate", "Total Amount", "Status"],
+    orders.map((o) =>
+      row([
+        formatDate(o.createdAt),
+        escapeHtml(o.orderNumber),
+        escapeHtml(o.customerName),
+        `${o.quantity} ${p.unit}`,
+        formatINR(o.total / (o.quantity || 1)),
+        `<strong class="highlight">${formatINR(o.total)}</strong>`,
+        escapeHtml(o.status.replace(/_/g, " ")),
+      ])
+    )
+  );
+
+  const body = `
+    ${headerKpis}
+    <h2>Recent Product Sales</h2>
+    ${ordersTable}
+  `;
+
+  return renderDocument("Product History Report", `${p.name} (${p.category ?? "Uncategorized"})`, body);
+}

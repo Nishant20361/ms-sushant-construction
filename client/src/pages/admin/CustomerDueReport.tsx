@@ -5,6 +5,7 @@ import { formatINR, formatDate } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { useToast } from "../../components/Toast";
 import { downloadFile } from "../../lib/download";
+import { generateCustomerDuePdfHtml, downloadPdfHtml, safeFilename } from "../../lib/pdf";
 
 const PAGE_SIZE = 20;
 
@@ -125,6 +126,19 @@ export default function CustomerDueReport() {
         <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
           <button onClick={() => downloadExport("csv")} className="btn-secondary text-sm">⬇️ CSV</button>
           <button onClick={() => downloadExport("xlsx")} className="btn-secondary text-sm">⬇️ Excel</button>
+          <button
+            onClick={() => {
+              if (!report) return;
+              const html = generateCustomerDuePdfHtml(report, appliedSearch);
+              const dateStr = new Date().toISOString().slice(0, 10);
+              const filename = safeFilename(`customer-due-report-${dateStr}`, "customer-due-report");
+              downloadPdfHtml(html, filename);
+              success("PDF report ready for download.");
+            }}
+            className="btn-secondary text-sm"
+          >
+            📄 Download PDF
+          </button>
         </div>
       </div>
 

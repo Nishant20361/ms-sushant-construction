@@ -3,6 +3,7 @@ import { adminApi } from "../../lib/api";
 import type { CustomerStatement as CustomerStatementType } from "../../types";
 import { formatINR, formatDate } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
+import { generateCustomerStatementPdfHtml, downloadPdfHtml, safeFilename } from "../../lib/pdf";
 
 export default function CustomerStatement() {
   const [mobile, setMobile] = useState("");
@@ -27,9 +28,26 @@ export default function CustomerStatement() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">🧾 Customer Statement</h2>
-        <p className="text-sm text-slate-500">Complete ledger, orders, payments, and remaining balance for any customer.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">🧾 Customer Statement</h2>
+          <p className="text-sm text-slate-500">Complete ledger, orders, payments, and remaining balance for any customer.</p>
+        </div>
+        {statement && (
+          <button
+            onClick={() => {
+              const html = generateCustomerStatementPdfHtml(statement);
+              const filename = safeFilename(
+                `customer-statement-${statement.customer.customerMobile || statement.customer.customerName}`,
+                "customer-statement"
+              );
+              downloadPdfHtml(html, filename);
+            }}
+            className="btn-secondary text-sm"
+          >
+            📄 Download PDF
+          </button>
+        )}
       </div>
 
       {/* Search */}

@@ -3,6 +3,7 @@ import { adminApi } from "../../lib/api";
 import type { ProductHistory as ProductHistoryType } from "../../types";
 import { formatINR, formatDate } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
+import { generateProductHistoryPdfHtml, downloadPdfHtml, safeFilename } from "../../lib/pdf";
 
 interface ProductOption {
   id: number;
@@ -44,9 +45,26 @@ export default function ProductHistory() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">🧱 Product History</h2>
-        <p className="text-sm text-slate-500">Quantity sold, revenue, customers, last sold date, and average selling price for each product.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">🧱 Product History</h2>
+          <p className="text-sm text-slate-500">Quantity sold, revenue, customers, last sold date, and average selling price for each product.</p>
+        </div>
+        {history && (
+          <button
+            onClick={() => {
+              const html = generateProductHistoryPdfHtml(history);
+              const filename = safeFilename(
+                `product-history-${history.product.name || history.product.id}`,
+                "product-history"
+              );
+              downloadPdfHtml(html, filename);
+            }}
+            className="btn-secondary text-sm"
+          >
+            📄 Download PDF
+          </button>
+        )}
       </div>
 
       {/* Picker */}

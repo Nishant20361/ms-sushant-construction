@@ -6,6 +6,7 @@ import { formatINR, formatDate, resolveImageUrl } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { downloadFile } from "../../lib/download";
 import { useToast } from "../../components/Toast";
+import { generateSalesPdfHtml, downloadPdfHtml, safeFilename } from "../../lib/pdf";
 
 const STATUS_OPTIONS = ["PENDING", "CONFIRMED", "PROCESSING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"] as const;
 const STATUS_COLORS: Record<string, string> = {
@@ -191,6 +192,26 @@ const s = report?.summary;
           </button>
           <button onClick={() => handleExport("csv")} className="btn-secondary text-sm">
             ⬇️ Export CSV
+          </button>
+          <button
+            onClick={() => {
+              if (!report) return;
+              const html = generateSalesPdfHtml(report);
+              let filename = "sales-report.pdf";
+              if (tab === "daily") {
+                filename = safeFilename(`daily-sales-report-${date}`, "daily-sales-report");
+              } else if (tab === "weekly") {
+                filename = safeFilename(`weekly-sales-report-${from}-to-${to}`, "weekly-sales-report");
+              } else if (tab === "monthly") {
+                const mStr = String(month).padStart(2, "0");
+                filename = safeFilename(`monthly-sales-report-${year}-${mStr}`, "monthly-sales-report");
+              }
+              downloadPdfHtml(html, filename);
+              success("PDF report ready for download.");
+            }}
+            className="btn-secondary text-sm"
+          >
+            📄 Download PDF
           </button>
         </div>
       </div>
