@@ -48,101 +48,192 @@ Rules:
 export const DEFAULT_SYSTEM_PROMPT = CONSTRUCTION_SYSTEM_PROMPT;
 
 let groqInstance: Groq | null = null;
-export const GROQ_REQUEST_TIMEOUT_MS = 20_000;
+let lastApiKey: string | null = null;
+export const GROQ_REQUEST_TIMEOUT_MS = 25_000;
+
+export type GroqErrorCategory =
+  | "MISSING_KEY"
+  | "UNAUTHORIZED"
+  | "FORBIDDEN"
+  | "MODEL_NOT_FOUND"
+  | "RATE_LIMIT"
+  | "PAYLOAD_TOO_LARGE"
+  | "VALIDATION_ERROR"
+  | "BAD_REQUEST"
+  | "SERVER_ERROR"
+  | "TIMEOUT"
+  | "NETWORK_ERROR";
+
+export class GroqError extends Error {
+  public readonly status?: number;
+  public readonly code?: string;
+  public readonly errorType?: string;
+  public readonly model?: string;
+  public readonly durationMs?: number;
+  public readonly category: GroqErrorCategory;
+
+  constructor(opts: {
+    message: string;
+    status?: number;
+    code?: string;
+    errorType?: string;
+    model?: string;
+    durationMs?: number;
+    category: GroqErrorCategory;
+  }) {
+    super(opts.message);
+    this.name = "GroqError";
+    this.status = opts.status;
+    this.code = opts.code;
+    this.errorType = opts.errorType;
+    this.model = opts.model;
+    this.durationMs = opts.durationMs;
+    this.category = opts.category;
+  }
+}
 
 function getGroqClient(): Groq {
   const apiKey = process.env.GROQ_API_KEY?.trim();
   if (!apiKey) {
-    throw new Error("GROQ_API_KEY missing");
+    throw new GroqError({
+      message: "GROQ_API_KEY missing",
+      category: "MISSING_KEY",
+    });
   }
-  if (!groqInstance) {
+  if (!groqInstance || lastApiKey !== apiKey) {
     groqInstance = new Groq({ apiKey });
+    lastApiKey = apiKey;
   }
   return groqInstance;
 }
 
-export function categorizeGroqError(err: any): Error {
-  const status = err?.status || err?.statusCode;
-  const msg = err?.message || String(err);
+export function categorizeGroqError(err: any, model?: string, durationMs?: number): GroqError {
+  if (err instanceof GroqError) return err;
+
+  const status = typeof err?.status === "number" ? err.status : typeof err?.statusCode === "number" ? err.statusCode : undefined;
+  const msg = String(err?.message || err || "");
+  const code = typeof err?.code === "string" ? err.code : typeof err?.error?.code === "string" ? err.error.code : undefined;
+  const errorType = typeof err?.type === "string" ? err.type : typeof err?.error?.type === "string" ? err.error.type : err?.name;
+
+  let category: GroqErrorCategory = "NETWORK_ERROR";
+  let safeMessage = "Groq network or connection failed";
 
   if (msg.includes("GROQ_API_KEY missing") || msg.includes("missing or empty")) {
-    return new Error("GROQ_API_KEY missing");
+    category = "MISSING_KEY";
+    safeMessage = "GROQ_API_KEY missing";
+  } else if (err?.name === "AbortError" || msg.includes("aborted") || msg.includes("timeout")) {
+    category = "TIMEOUT";
+    safeMessage = "Groq request timed out";
+  } else if (status === 401 || msg.includes("invalid_api_key") || msg.includes("Unauthorized")) {
+    category = "UNAUTHORIZED";
+    safeMessage = "Invalid Groq API key (401)";
+  } else if (status === 403 || msg.includes("permission_denied")) {
+    category = "FORBIDDEN";
+    safeMessage = "Groq access forbidden or restricted (403)";
+  } else if (status === 404 || code === "model_not_found" || msg.includes("does not exist") || msg.includes("model_not_found")) {
+    category = "MODEL_NOT_FOUND";
+    safeMessage = `Groq model '${model || "unknown"}' not found or unavailable (404)`;
+  } else if (status === 413 || msg.includes("payload_too_large")) {
+    category = "PAYLOAD_TOO_LARGE";
+    safeMessage = "Groq request payload too large (413)";
+  } else if (status === 422 || msg.includes("validation")) {
+    category = "VALIDATION_ERROR";
+    safeMessage = "Groq request validation error (422)";
+  } else if (status === 429 || msg.includes("rate_limit") || code === "rate_limit_exceeded") {
+    category = "RATE_LIMIT";
+    safeMessage = "Groq rate limit or quota exceeded (429)";
+  } else if (status === 400 || msg.includes("bad_request")) {
+    category = "BAD_REQUEST";
+    safeMessage = "Groq malformed request (400)";
+  } else if (typeof status === "number" && status >= 500) {
+    category = "SERVER_ERROR";
+    safeMessage = `Groq server error (${status})`;
   }
-  if (
-    status === 401 ||
-    msg.includes("invalid_api_key") ||
-    msg.includes("Invalid API Key") ||
-    msg.includes("Unauthorized") ||
-    msg.includes("401")
-  ) {
-    return new Error("Invalid Groq API key");
-  }
-  if (
-    status === 429 ||
-    msg.includes("rate_limit") ||
-    msg.includes("Rate limit") ||
-    msg.includes("429")
-  ) {
-    return new Error("Groq rate limit exceeded");
-  }
-  return new Error("Groq server connection failed");
+
+  // Production-safe diagnostic log: NEVER log GROQ_API_KEY, headers, or prompt text
+  console.error("[Groq] request failed", {
+    model: model || "unknown",
+    status: status ?? null,
+    category,
+    code: code ?? null,
+    errorType: errorType ?? null,
+    message: safeMessage,
+    durationMs: durationMs ?? null,
+  });
+
+  return new GroqError({
+    message: safeMessage,
+    status,
+    code,
+    errorType,
+    model,
+    durationMs,
+    category,
+  });
 }
 
 export async function askGroq(
   prompt: string,
   systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
-  model: string = "llama-3.1-8b-instant",
+  model: string = process.env.GROQ_PRIMARY_MODEL?.trim() || "llama-3.1-8b-instant",
   history: GroqMessage[] = []
 ): Promise<{ text: string; model: string }> {
-  // Tests must be deterministic and must not spend provider quota or depend
-  // on external network availability. Callers already fall back to local data.
   if (process.env.NODE_ENV === "test") {
     throw new Error("Groq is disabled in test mode");
   }
 
-  try {
-    const client = getGroqClient();
+  const client = getGroqClient();
+  const messages: GroqMessage[] = [
+    { role: "system", content: systemPrompt },
+    ...history.filter((message) => message.role !== "system" && message.content.trim()).slice(-8),
+    { role: "user", content: prompt },
+  ];
+
+  const candidateModels = Array.from(
+    new Set([
+      model,
+      process.env.GROQ_FALLBACK_MODEL?.trim() || "groq/compound-mini",
+      "llama-3.3-70b-versatile",
+      "groq/compound",
+    ].filter(Boolean))
+  );
+
+  let lastError: any = null;
+
+  for (let i = 0; i < candidateModels.length; i++) {
+    const currentModel = candidateModels[i];
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), GROQ_REQUEST_TIMEOUT_MS);
-    const messages: GroqMessage[] = [
-      { role: "system", content: systemPrompt },
-      ...history.filter((message) => message.role !== "system" && message.content.trim()).slice(-8),
-      { role: "user", content: prompt },
-    ];
+    const startMs = Date.now();
 
     try {
-      const response = await client.chat.completions.create({
-        model,
-        messages,
-      }, { signal: controller.signal });
-      return {
-        text: response.choices[0]?.message?.content || "",
-        model,
-      };
-    } catch (err: any) {
-      // Model fallback if primary model fails with model error
-      if (
-        model === "llama-3.1-8b-instant" &&
-        (err?.status === 404 || err?.status === 400 || err?.message?.includes("model"))
-      ) {
-        console.warn(`[Groq] Model ${model} failed, retrying with fallback llama-3.3-70b-versatile...`);
-        const fallbackModel = "llama-3.3-70b-versatile";
-        const response = await client.chat.completions.create({
-          model: fallbackModel,
-          messages,
-        }, { signal: controller.signal });
-        return {
-          text: response.choices[0]?.message?.content || "",
-          model: fallbackModel,
-        };
+      if (i > 0) {
+        console.warn(`[Groq] Retrying with fallback model: ${currentModel}...`);
       }
-      throw err;
+      const response = await client.chat.completions.create(
+        {
+          model: currentModel,
+          messages,
+        },
+        { signal: controller.signal }
+      );
+      const text = response.choices[0]?.message?.content || "";
+      return { text, model: currentModel };
+    } catch (err: any) {
+      const durationMs = Date.now() - startMs;
+      const categorized = categorizeGroqError(err, currentModel, durationMs);
+      lastError = categorized;
+
+      // Non-model errors like missing key or auth failures shouldn't retry other models
+      if (categorized.category === "MISSING_KEY" || categorized.category === "UNAUTHORIZED") {
+        throw categorized;
+      }
     } finally {
       clearTimeout(timeout);
     }
-  } catch (err: any) {
-    throw categorizeGroqError(err);
   }
+
+  throw lastError;
 }
 
 /**
