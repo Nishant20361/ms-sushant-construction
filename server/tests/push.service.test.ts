@@ -1,0 +1,2 @@
+import {describe,expect,it} from "vitest";import {isExpoPushToken,stockTransition} from "../src/services/push.service.js";
+describe("push helpers",()=>{it("validates Expo tokens",()=>{expect(isExpoPushToken("ExponentPushToken[abc_123]")).toBe(true);expect(isExpoPushToken("token-or-secret")).toBe(false)});it("emits stock events only at boundaries",()=>{expect(stockTransition(11,10,10)).toBe("LOW_STOCK");expect(stockTransition(8,7,10)).toBeNull();expect(stockTransition(2,0,10)).toBe("OUT_OF_STOCK");expect(stockTransition(0,0,10)).toBeNull()})});

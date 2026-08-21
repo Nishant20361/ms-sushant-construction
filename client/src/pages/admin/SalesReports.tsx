@@ -166,11 +166,10 @@ const s = report?.summary;
         { label: "Delivered", value: String(s!.deliveredOrders), icon: "✅" },
         { label: "Cancelled", value: String(s!.cancelledOrders), icon: "❌" },
         { label: "Total Sales", value: formatINR(s!.totalSales), icon: "💰" },
+        { label: "Collected Against These Sales", value: formatINR(s!.totalCollected), icon: "💳" },
+        { label: "Outstanding", value: formatINR(s!.outstandingAmount), icon: "📉" },
         { label: "Total Discount", value: formatINR(s!.totalDiscount), icon: "🏷️" },
-        { label: "Cash Collection", value: formatINR(s!.cashCollection), icon: "💵" },
-        { label: "Online Collection", value: formatINR(s!.onlineCollection), icon: "🏦" },
-        { label: "Due Collection", value: formatINR(s!.dueCollection), icon: "⏳" },
-        { label: "Remaining Due", value: formatINR(s!.remainingDue), icon: "📉" },
+        { label: "Paid / Partial / Due", value: `${s!.paidOrders} / ${s!.partiallyPaidOrders} / ${s!.dueOrders}`, icon: "🧾" },
         { label: "Unique Customers", value: String(s!.uniqueCustomers), icon: "👥" },
         { label: "Products Sold", value: String(s!.productsSold), icon: "🧱" },
         { label: "Qty Sold", value: String(s!.totalQuantitySold), icon: "⚖️" },
@@ -326,41 +325,191 @@ const s = report?.summary;
       ) : !report ? (
         <div className="card p-10 text-center text-slate-500">No report data.</div>
       ) : (
-        <>
-          {/* Summary cards */}
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-            {summaryCards.map((c) => (
-              <div key={c.label} className="card flex items-center gap-3 p-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-xl">{c.icon}</div>
-                <div>
-                  <p className="text-lg font-bold text-slate-900">{c.value}</p>
-                  <p className="text-xs font-medium text-slate-500">{c.label}</p>
-                </div>
+        <div className="space-y-10">
+          {/* ========================================================= */}
+          {/* SECTION 1 — SALES DURING SELECTED PERIOD                  */}
+          {/* ========================================================= */}
+          <section className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+              <div>
+                <span className="badge bg-brand-50 font-semibold text-brand-700">SECTION 1</span>
+                <h3 className="mt-1 text-xl font-bold text-slate-900">Sales During Selected Period</h3>
+                <p className="text-sm text-slate-500">
+                  Orders placed within {report.periodLabel}. Only DELIVERED orders increase Total Sales.
+                </p>
               </div>
-            ))}
-          </div>
+              <div className="text-right">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Period Sales</span>
+                <p className="text-2xl font-black text-brand-700">{formatINR(report.summary.totalSales)}</p>
+              </div>
+            </div>
 
-          {/* Orders */}
-          <div>
-            <h3 className="mb-2 text-lg font-semibold text-slate-900">
-              Orders ({filteredOrders.length})
-            </h3>
-            {filteredOrders.length === 0 ? (
-              <div className="card p-8 text-center text-slate-500">No orders match.</div>
-            ) : (
-              <div className="space-y-4">
-                {filteredOrders.map((o) => (
-                  <ReportOrderCard
-                    key={o.id}
-                    order={o}
-                    expanded={expanded.has(o.id)}
-                    onToggle={() => toggleExpand(o.id)}
-                  />
-                ))}
+            {/* Summary cards */}
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+              {summaryCards.map((c) => (
+                <div key={c.label} className="card flex items-center gap-3 p-4 bg-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-xl">{c.icon}</div>
+                  <div>
+                    <p className="text-lg font-bold text-slate-900">{c.value}</p>
+                    <p className="text-xs font-medium text-slate-500">{c.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="card flex flex-wrap gap-2 p-4 bg-white">
+              <span className="text-sm font-semibold text-slate-700">Order statuses:</span>
+              {Object.entries(report.summary.statusCounts).map(([status, count]) => (
+                <span key={status} className="badge bg-slate-100 text-slate-700">
+                  {status.replace(/_/g, " ")} {count}
+                </span>
+              ))}
+            </div>
+
+            {/* Orders list */}
+            <div className="space-y-3">
+              <h4 className="text-base font-semibold text-slate-900">
+                Period Orders & Invoices ({filteredOrders.length})
+              </h4>
+              {filteredOrders.length === 0 ? (
+                <div className="card p-8 text-center text-slate-500 bg-white">
+                  No orders matched this period.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredOrders.map((o) => (
+                    <ReportOrderCard
+                      key={o.id}
+                      order={o}
+                      expanded={expanded.has(o.id)}
+                      onToggle={() => toggleExpand(o.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ========================================================= */}
+          {/* SECTION 2 — PREVIOUS DUES PAID DURING SELECTED PERIOD     */}
+          {/* ========================================================= */}
+          <section className="space-y-4 rounded-2xl border border-amber-200/80 bg-amber-50/30 p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/80 pb-3">
+              <div>
+                <span className="badge bg-amber-100 font-semibold text-amber-800">SECTION 2</span>
+                <h3 className="mt-1 text-xl font-bold text-slate-900">
+                  {tab === "daily"
+                    ? "Previous Dues Paid Today"
+                    : tab === "weekly"
+                    ? "Previous Dues Paid During Selected Week"
+                    : "Previous Dues Paid During Selected Month"}
+                </h3>
+                <p className="text-sm text-slate-500">
+                  Payments received during this period against sales created <strong>before</strong> {report.periodLabel}. These payments settle older debt and do not increase period sales.
+                </p>
               </div>
-            )}
-          </div>
-        </>
+              <div className="text-right">
+                <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">Older Dues Collected</span>
+                <p className="text-2xl font-black text-amber-700">{formatINR(report.collections.olderSalesCollected)}</p>
+              </div>
+            </div>
+
+            {/* Section 2 KPI metrics */}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="card p-4 bg-white">
+                <p className="text-lg font-bold text-slate-900">{formatINR(report.collections.olderSalesCollected)}</p>
+                <p className="text-xs font-medium text-slate-500">Total Old Dues Collected</p>
+              </div>
+              <div className="card p-4 bg-white">
+                <p className="text-lg font-bold text-slate-900">
+                  {formatINR(report.collections.cashCollected)} / {formatINR(report.collections.onlineCollected)}
+                </p>
+                <p className="text-xs font-medium text-slate-500">Cash / Online Breakdown</p>
+              </div>
+              <div className="card p-4 bg-white">
+                <p className="text-lg font-bold text-emerald-700">{formatINR(report.collections.dueClearedAmount)}</p>
+                <p className="text-xs font-medium text-slate-500">Total Due Cleared Amount</p>
+              </div>
+              <div className="card p-4 bg-white">
+                <p className="text-lg font-bold text-slate-900">{report.collections.dueClearedCount} orders</p>
+                <p className="text-xs font-medium text-slate-500">Old Orders Fully Cleared</p>
+              </div>
+            </div>
+
+            {/* Old dues table */}
+            {(() => {
+              const oldDues = (report.previousDuePayments ?? report.payments.filter((p) => !p.saleCreatedInPeriod));
+              if (oldDues.length === 0) {
+                return (
+                  <div className="card p-8 text-center text-slate-500 bg-white">
+                    {tab === "daily" ? "No previous dues were paid today." : "No previous dues were paid during this period."}
+                  </div>
+                );
+              }
+              return (
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <table className="min-w-[1300px] w-full text-sm">
+                    <thead className="bg-slate-50 text-left text-slate-600">
+                      <tr>
+                        <th className="p-3">Payment Date</th>
+                        <th className="p-3">Customer / Mobile</th>
+                        <th className="p-3">Order #</th>
+                        <th className="p-3">Original Sale Date</th>
+                        <th className="p-3 text-right">Original Bill</th>
+                        <th className="p-3 text-right">Paid Before Payment</th>
+                        <th className="p-3 text-right">Due Before Payment</th>
+                        <th className="p-3 text-right font-bold text-emerald-700">
+                          {tab === "daily" ? "Paid Today" : "Paid In Period"}
+                        </th>
+                        <th className="p-3 text-right">Total Paid After</th>
+                        <th className="p-3 text-right font-bold">Remaining Due</th>
+                        <th className="p-3">Mode</th>
+                        <th className="p-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {oldDues.map((payment) => (
+                        <tr key={payment.id} className="hover:bg-slate-50/70 transition">
+                          <td className="p-3 font-medium text-slate-900">{formatDate(payment.paymentDate)}</td>
+                          <td className="p-3">
+                            <div className="font-semibold text-slate-900">{payment.customerName}</div>
+                            <div className="text-xs text-slate-500">{payment.customerMobile}</div>
+                          </td>
+                          <td className="p-3 font-mono font-medium text-slate-800">{payment.orderNumber}</td>
+                          <td className="p-3 text-slate-600">{formatDate(payment.orderCreatedAt)}</td>
+                          <td className="p-3 text-right font-medium">{formatINR(payment.originalBillAmount)}</td>
+                          <td className="p-3 text-right text-slate-600">{formatINR(payment.previouslyPaidBeforePayment)}</td>
+                          <td className="p-3 text-right text-amber-700 font-medium">{formatINR(payment.dueBeforePayment)}</td>
+                          <td className="p-3 text-right font-bold text-emerald-700 text-base">{formatINR(payment.amount)}</td>
+                          <td className="p-3 text-right font-medium">{formatINR(payment.totalPaidAfterPayment)}</td>
+                          <td className="p-3 text-right">
+                            <span className={`font-bold ${payment.remainingBalanceAfterPayment > 0 ? "text-red-600" : "text-emerald-700"}`}>
+                              {formatINR(payment.remainingBalanceAfterPayment)}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <span className="badge bg-slate-100 text-slate-700 font-medium">{payment.paymentMode}</span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {payment.dueCleared ? (
+                              <span className="badge bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1">
+                                DUE CLEARED
+                              </span>
+                            ) : (
+                              <span className="badge bg-amber-100 text-amber-800 font-semibold px-2.5 py-1">
+                                PARTIAL / DUE REMAINING
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </section>
+        </div>
       )}
     </div>
   );

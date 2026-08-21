@@ -21,6 +21,7 @@ model Admin {
   auditLogs           AdminAuditLog[]
   profile             AdminProfile?
   notifications       Notification[]
+  pushDevices         AdminPushDevice[]
   passwordResetTokens AdminPasswordResetToken[]
 }
 
@@ -38,9 +39,15 @@ model AdminProfile {
 model Notification {
   id           Int      @id @default(autoincrement())
   adminId      Int
-  orderId      Int
-  orderNumber  String
-  customerName String
+  type         String   @default("NEW_ORDER")
+  title        String   @default("New order received")
+  message      String   @default("")
+  orderId      Int?
+  orderNumber  String?
+  customerName String?
+  productId    Int?
+  metadata     Json?
+  dedupeKey    String?  @unique
   status       String   @default("PENDING")
   read         Boolean  @default(false)
   createdAt    DateTime @default(now())
@@ -48,6 +55,22 @@ model Notification {
 
   @@index([adminId, read])
   @@index([adminId, createdAt])
+  @@index([adminId, type, createdAt])
+  @@index([productId])
+}
+
+model AdminPushDevice {
+  id            Int      @id @default(autoincrement())
+  adminId       Int
+  expoPushToken String   @unique
+  platform      String   @default("android")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastSeenAt    DateTime @default(now())
+  admin         Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, isActive])
 }
 
 model Category {

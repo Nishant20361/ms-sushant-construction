@@ -1,0 +1,1 @@
+import {useLocalSearchParams} from "expo-router";import {OrderPaymentScreen} from "@/features/finance/OrderPaymentScreen";export default function OrderPaymentRoute(){const{id}=useLocalSearchParams<{id:string}>();return <OrderPaymentScreen id={Number(id)}/>}

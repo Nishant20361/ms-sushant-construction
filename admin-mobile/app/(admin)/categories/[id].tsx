@@ -1,0 +1,1 @@
+import { useLocalSearchParams } from "expo-router";import { CategoryFormScreen } from "@/features/products/CategoryFormScreen";export default function CategoryRoute(){const{id}=useLocalSearchParams<{id:string}>();return <CategoryFormScreen id={Number(id)}/>}

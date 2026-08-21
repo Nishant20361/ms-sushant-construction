@@ -3,7 +3,7 @@ import { requireAdmin } from "../../middleware/auth.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { HttpError } from "../../utils/httpError.js";
 import { buildSalesReport, ReportPeriod, ReportFilters, SalesReportData } from "../../utils/report.js";
-import { buildCsv, buildXlsx, ExportColumn } from "../../utils/export.js";
+import { buildCsv, buildMultiSheetXlsx, ExportColumn } from "../../utils/export.js";
 import { AuthenticatedRequest } from "../../types.js";
 
 const router = Router();
@@ -12,7 +12,37 @@ const router = Router();
 // Sales report export (Excel / CSV)
 // ---------------------------------------------------------------------------
 
-const SALES_EXPORT_COLUMNS: ExportColumn[] = [
+export const SALES_EXPORT_COLUMNS: ExportColumn[] = [
+  { header: "Section", key: "section" },
+  { header: "Record Type", key: "recordType" },
+  { header: "Date / Payment Date", key: "date" },
+  { header: "Invoice Number", key: "invoiceNumber" },
+  { header: "Customer Name", key: "customerName" },
+  { header: "Mobile", key: "customerMobile" },
+  { header: "Original Sale Date", key: "originalSaleDate" },
+  { header: "Original Bill Amount", key: "originalBillAmount", format: "#,##0.00" },
+  { header: "Paid Before Payment", key: "previouslyPaidBeforePayment", format: "#,##0.00" },
+  { header: "Due Before Payment", key: "dueBeforePayment", format: "#,##0.00" },
+  { header: "Payment Received During Period", key: "periodPayment", format: "#,##0.00" },
+  { header: "Total Paid After Payment", key: "totalPaidAfterPayment", format: "#,##0.00" },
+  { header: "Remaining Due", key: "dueAmount", format: "#,##0.00" },
+  { header: "Payment Mode", key: "paymentMode" },
+  { header: "Payment Status / Clearance", key: "paymentStatus" },
+  { header: "Order Status", key: "orderStatus" },
+  { header: "Products", key: "products" },
+  { header: "Quantity", key: "quantity", format: "0.00" },
+  { header: "Subtotal", key: "subtotal", format: "#,##0.00" },
+  { header: "Discount", key: "discount", format: "#,##0.00" },
+  { header: "Final Amount", key: "finalAmount", format: "#,##0.00" },
+  { header: "Cash Paid Against Sale", key: "cashPaid", format: "#,##0.00" },
+  { header: "Online Paid Against Sale", key: "onlinePaid", format: "#,##0.00" },
+  { header: "Total Paid Against Sale", key: "totalPaid", format: "#,##0.00" },
+  { header: "Due Cleared", key: "dueCleared" },
+  { header: "Due Cleared Amount", key: "dueClearedAmount", format: "#,##0.00" },
+  { header: "Due Cleared Date", key: "dueClearedDate" },
+];
+
+export const PERIOD_SALES_COLUMNS: ExportColumn[] = [
   { header: "Date", key: "date" },
   { header: "Invoice Number", key: "invoiceNumber" },
   { header: "Customer Name", key: "customerName" },
@@ -24,17 +54,39 @@ const SALES_EXPORT_COLUMNS: ExportColumn[] = [
   { header: "Final Amount", key: "finalAmount", format: "#,##0.00" },
   { header: "Cash Paid", key: "cashPaid", format: "#,##0.00" },
   { header: "Online Paid", key: "onlinePaid", format: "#,##0.00" },
-  { header: "Due Amount", key: "dueAmount", format: "#,##0.00" },
+  { header: "Total Paid", key: "totalPaid", format: "#,##0.00" },
+  { header: "Remaining Due", key: "dueAmount", format: "#,##0.00" },
   { header: "Payment Status", key: "paymentStatus" },
+  { header: "Order Status", key: "orderStatus" },
 ];
 
-/** Map a report to the flat rows used by both CSV and Excel exporters. */
-function toSalesExportRows(report: SalesReportData): Record<string, any>[] {
+export const PREVIOUS_DUES_COLUMNS: ExportColumn[] = [
+  { header: "Payment Date", key: "date" },
+  { header: "Invoice Number", key: "invoiceNumber" },
+  { header: "Customer Name", key: "customerName" },
+  { header: "Mobile", key: "customerMobile" },
+  { header: "Original Sale Date", key: "originalSaleDate" },
+  { header: "Original Bill Amount", key: "originalBillAmount", format: "#,##0.00" },
+  { header: "Paid Before Payment", key: "previouslyPaidBeforePayment", format: "#,##0.00" },
+  { header: "Due Before Payment", key: "dueBeforePayment", format: "#,##0.00" },
+  { header: "Payment Received In Period", key: "periodPayment", format: "#,##0.00" },
+  { header: "Total Paid After Payment", key: "totalPaidAfterPayment", format: "#,##0.00" },
+  { header: "Remaining Due", key: "dueAmount", format: "#,##0.00" },
+  { header: "Payment Mode", key: "paymentMode" },
+  { header: "Status", key: "paymentStatus" },
+  { header: "Due Cleared Date", key: "dueClearedDate" },
+];
+
+/** Map Section 1 orders to export rows. */
+export function toPeriodSalesRows(report: SalesReportData): Record<string, any>[] {
   return report.orders.map((o) => ({
+    section: "SALES_DURING_PERIOD",
+    recordType: "SALE",
     date: new Date(o.createdAt).toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
       year: "numeric",
+      timeZone: "Asia/Kolkata",
     }),
     invoiceNumber: o.orderNumber,
     customerName: o.customerName,
@@ -44,11 +96,73 @@ function toSalesExportRows(report: SalesReportData): Record<string, any>[] {
     subtotal: o.subtotal,
     discount: o.discount,
     finalAmount: o.finalAmount,
+    totalPaid: o.totalPaid,
     cashPaid: o.cashPaid,
     onlinePaid: o.onlinePaid,
     dueAmount: o.remainingDue,
     paymentStatus: o.paymentStatus === "PARTIALLY_PAID" ? "PARTIALLY PAID" : o.paymentStatus,
+    orderStatus: o.status,
   }));
+}
+
+/** Map Section 2 old-due payments to export rows. */
+export function toPreviousDuesRows(report: SalesReportData): Record<string, any>[] {
+  const oldPayments = report.previousDuePayments ?? report.payments.filter((p) => !p.saleCreatedInPeriod);
+  return oldPayments.map((payment) => {
+    const statusText = payment.dueCleared
+      ? "DUE CLEARED"
+      : payment.remainingBalanceAfterPayment <= 0
+      ? "PAID"
+      : "PARTIAL / DUE REMAINING";
+    return {
+      section: "PREVIOUS_DUES_PAID",
+      recordType: "PREVIOUS_DUE_PAYMENT",
+      date: new Date(payment.paymentDate).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "Asia/Kolkata",
+      }),
+      originalSaleDate: new Date(payment.orderCreatedAt).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "Asia/Kolkata",
+      }),
+      invoiceNumber: payment.orderNumber,
+      customerName: payment.customerName,
+      customerMobile: payment.customerMobile,
+      subtotal: payment.subtotal,
+      originalBillAmount: payment.originalBillAmount,
+      previouslyPaidBeforePeriod: payment.previouslyPaidBeforePeriod,
+      previouslyPaidBeforePayment: payment.previouslyPaidBeforePayment,
+      dueBeforePayment: payment.dueBeforePayment,
+      periodPayment: payment.amount,
+      totalPaidAfterPayment: payment.totalPaidAfterPayment,
+      dueAmount: payment.remainingBalanceAfterPayment,
+      paymentStatus: statusText,
+      paymentMode: payment.paymentMode,
+      balanceAfterPayment: payment.remainingBalanceAfterPayment,
+      saleCreatedInPeriod: "OLDER SALE / PREVIOUS DUE",
+      dueCleared: payment.dueCleared ? "YES" : "NO",
+      dueClearedAmount: payment.dueClearedAmount ?? "",
+      dueClearedDate: payment.dueClearedAt
+        ? new Date(payment.dueClearedAt).toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            timeZone: "Asia/Kolkata",
+          })
+        : "",
+    };
+  });
+}
+
+/** Map a report to the flat rows used by both CSV and Excel exporters. */
+export function toSalesExportRows(report: SalesReportData): Record<string, any>[] {
+  const orderRows = toPeriodSalesRows(report);
+  const paymentRows = toPreviousDuesRows(report);
+  return [...orderRows, ...paymentRows];
 }
 
 function salesExportFilename(report: SalesReportData, ext: "csv" | "xlsx"): string {
@@ -93,7 +207,13 @@ async function sendSalesExport(
     return;
   }
 
-  const buf = await buildXlsx(SALES_EXPORT_COLUMNS, rows);
+  const orderRows = toPeriodSalesRows(report);
+  const previousDuesRows = toPreviousDuesRows(report);
+  const buf = await buildMultiSheetXlsx([
+    { name: "Sales During Period", columns: PERIOD_SALES_COLUMNS, rows: orderRows },
+    { name: "Previous Dues Paid", columns: PREVIOUS_DUES_COLUMNS, rows: previousDuesRows },
+  ]);
+
   res.setHeader(
     "Content-Type",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

@@ -243,6 +243,10 @@ export const notificationReadSchema = z.object({
   ids: z.array(z.coerce.number().int().positive()).max(100).optional(),
   all: z.coerce.boolean().optional(),
 });
+export const pushDeviceSchema = z.object({
+  expoPushToken: z.string().trim().regex(/^(?:Exponent|Expo)PushToken\[[A-Za-z0-9_-]+\]$/, "Invalid Expo push token"),
+  platform: z.enum(["android"]).default("android"),
+});
 
 // ------------------------- Admin profile ------------------------------
 export const adminProfileSchema = z.object({

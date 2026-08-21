@@ -15,6 +15,12 @@ export interface ExportColumn {
   format?: string;
 }
 
+export interface XlsxSheetDefinition {
+  name: string;
+  columns: ExportColumn[];
+  rows: Record<string, any>[];
+}
+
 /**
  * Build a CSV string from rows + columns. Handles escaping of commas,
  * quotes, and newlines.
@@ -42,44 +48,26 @@ export async function buildXlsx(
   columns: ExportColumn[],
   rows: Record<string, any>[]
 ): Promise<Buffer> {
+  return buildMultiSheetXlsx([{ name: "Report", columns, rows }]);
+}
+
+/**
+ * Build an XLSX buffer with multiple named sheets.
+ */
+export async function buildMultiSheetXlsx(sheets: XlsxSheetDefinition[]): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Report");
-
-  // Header row
-  const headerRow = sheet.addRow(columns.map((c) => c.header));
-  headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  headerRow.fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FF0F766E" },
-  };
-  headerRow.alignment = { vertical: "middle", horizontal: "center" };
-
-  // Style header cells
-  headerRow.eachCell((cell) => {
-    cell.border = {
-      top: { style: "thin", color: { argb: "FFE2E8F0" } },
-      bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
-      left: { style: "thin", color: { argb: "FFE2E8F0" } },
-      right: { style: "thin", color: { argb: "FFE2E8F0" } },
+  for (const s of sheets) {
+    const sheet = workbook.addWorksheet(s.name);
+    const headerRow = sheet.addRow(s.columns.map((c) => c.header));
+    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF0F766E" },
     };
-  });
+    headerRow.alignment = { vertical: "middle", horizontal: "center" };
 
-  // Data rows
-  for (const row of rows) {
-    const values = columns.map((c) => {
-      const v = row[c.key];
-      if (c.format && typeof v === "number") {
-        return v;
-      }
-      return v == null ? "" : v;
-    });
-    const excelRow = sheet.addRow(values);
-    columns.forEach((c, idx) => {
-      const cell = excelRow.getCell(idx + 1);
-      if (c.format && typeof row[c.key] === "number") {
-        cell.numFmt = c.format;
-      }
+    headerRow.eachCell((cell) => {
       cell.border = {
         top: { style: "thin", color: { argb: "FFE2E8F0" } },
         bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
@@ -87,16 +75,38 @@ export async function buildXlsx(
         right: { style: "thin", color: { argb: "FFE2E8F0" } },
       };
     });
-  }
 
-  // Auto width
-  columns.forEach((c, idx) => {
-    const maxLen = Math.max(
-      c.header.length,
-      ...rows.map((r) => String(r[c.key] ?? "").length)
-    );
-    sheet.getColumn(idx + 1).width = Math.min(Math.max(maxLen + 2, 10), 40);
-  });
+    for (const row of s.rows) {
+      const values = s.columns.map((c) => {
+        const v = row[c.key];
+        if (c.format && typeof v === "number") {
+          return v;
+        }
+        return v == null ? "" : v;
+      });
+      const excelRow = sheet.addRow(values);
+      s.columns.forEach((c, idx) => {
+        const cell = excelRow.getCell(idx + 1);
+        if (c.format && typeof row[c.key] === "number") {
+          cell.numFmt = c.format;
+        }
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFE2E8F0" } },
+          bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+          left: { style: "thin", color: { argb: "FFE2E8F0" } },
+          right: { style: "thin", color: { argb: "FFE2E8F0" } },
+        };
+      });
+    }
+
+    s.columns.forEach((c, idx) => {
+      const maxLen = Math.max(
+        c.header.length,
+        ...s.rows.map((r) => String(r[c.key] ?? "").length)
+      );
+      sheet.getColumn(idx + 1).width = Math.min(Math.max(maxLen + 2, 10), 40);
+    });
+  }
 
   const buf = await workbook.xlsx.writeBuffer();
   return Buffer.from(buf);

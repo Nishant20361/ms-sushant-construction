@@ -9,6 +9,9 @@ import { requireAdmin } from "../../middleware/auth.js";
 import { writeAudit } from "../../middleware/audit.js";
 import { serializeBill, serializeOrder, serializeOrderPayment } from "../../utils/serializer.js";
 import { AuthenticatedRequest } from "../../types.js";
+import { createAdminNotification, notifyStockTransitions } from "../../services/push.service.js";
+
+async function paymentNotification(adminId:number,input:{amount:number;mode:string;orderId?:number;orderNumber?:string;customerName:string;key:string}){await createAdminNotification({adminId,type:"PAYMENT_RECEIVED",title:"Payment received",message:`₹${input.amount.toFixed(2)} · ${input.mode} · ${input.customerName}`,orderId:input.orderId,orderNumber:input.orderNumber,customerName:input.customerName,metadata:{amount:input.amount,mode:input.mode},dedupeKey:`PAYMENT_RECEIVED:${input.key}`})}
 
 const router = Router();
 
@@ -401,6 +404,7 @@ router.post(
       entityId: mobile,
       details: `Received ${paymentMode} ₹${body.amount} for customer ${mobile} across ${createdPayments.length} order(s)`,
     });
+    await paymentNotification(Number(req.admin?.sub),{amount:body.amount,mode:paymentMode,customerName:orders[0].customerName,key:`CUSTOMER:${mobile}:${createdPayments.map(p=>p.id).join("-")}`}).catch(e=>console.error("[push] Customer payment notification failed",e instanceof Error?e.message:e));
 
     // Re-fetch the customer's updated detail.
     const updatedOrders = await prisma.order.findMany({
@@ -532,6 +536,7 @@ router.patch(
     if (!existing) throw new HttpError(404, "Order not found");
     const wasCancelled = existing.status === "CANCELLED";
     const nowCancelled = body.status === "CANCELLED";
+    const beforeProducts=await prisma.product.findMany({where:{id:{in:existing.items.map(i=>i.productId)}},select:{id:true,name:true,stock:true}});
 
     const order = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.order.update({
@@ -569,6 +574,7 @@ router.patch(
       entityId: order.id,
       details: `${order.orderNumber} -> ${order.status}`,
     });
+    if(wasCancelled&&!nowCancelled){const after=await prisma.product.findMany({where:{id:{in:beforeProducts.map(p=>p.id)}},select:{id:true,name:true,stock:true}});await notifyStockTransitions(after.map(p=>({productId:p.id,name:p.name,previous:Number(beforeProducts.find(x=>x.id===p.id)?.stock??p.stock),next:Number(p.stock)})),`ORDER_REACTIVATE:${order.id}:${order.updatedAt.toISOString()}`).catch(e=>console.error("[push] Reactivation stock notification failed",e instanceof Error?e.message:e))}
     res.json({ order: serializeOrder(order) });
   })
 );
@@ -618,6 +624,7 @@ const payment = await prisma.orderPayment.create({
       entityId: id,
       details: `${order.orderNumber} received ${body.paymentMode} ₹${body.amount}`,
     });
+    await paymentNotification(Number(req.admin?.sub),{amount:Number(payment.amount),mode:payment.paymentMode,orderId:order.id,orderNumber:order.orderNumber,customerName:order.customerName,key:`ORDER_PAYMENT:${payment.id}`}).catch(e=>console.error("[push] Order payment notification failed",e instanceof Error?e.message:e));
 
     const updated = await prisma.order.findUnique({
       where: { id },
@@ -753,6 +760,7 @@ router.patch(
       entityId: String(order.id),
       details: `Edited order ${order.orderNumber}`,
     });
+    const changed=await prisma.product.findMany({where:{id:{in:productIds}},select:{id:true,name:true,stock:true}});await notifyStockTransitions(changed.map(p=>({productId:p.id,name:p.name,previous:Number(products.find(x=>x.id===p.id)?.stock??p.stock),next:Number(p.stock)})),`ORDER_EDIT:${order.id}:${result.updatedAt.toISOString()}`).catch(e=>console.error("[push] Order edit stock notification failed",e instanceof Error?e.message:e));
 
     res.json({ order: serializeOrder(result) });
   })

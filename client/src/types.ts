@@ -161,6 +161,7 @@ export interface CustomerOrderDetail {
   finalAmount: number;
   cashPaid: number;
   onlinePaid: number;
+  totalPaid: number;
   paid: number;
   due: number;
   paymentStatus: PaymentStatus;
@@ -328,10 +329,36 @@ export interface ReportOrder {
   finalAmount: number;
   cashPaid: number;
   onlinePaid: number;
+  totalPaid: number;
   duePaid: number;
   remainingDue: number;
   paymentStatus: string;
   items: ReportLineItem[];
+}
+
+export interface ReportPayment {
+  id: number;
+  orderId: number;
+  orderNumber: string;
+  customerName: string;
+  customerMobile: string;
+  orderCreatedAt: string;
+  subtotal: number;
+  originalBillAmount: number;
+  paymentDate: string;
+  amount: number;
+  paymentMode: string;
+  previouslyPaidBeforePeriod: number;
+  previouslyPaidBeforePayment: number;
+  dueBeforePayment: number;
+  totalPaidAfterPayment: number;
+  remainingBalanceAfterPayment: number;
+  paymentStatusAfterPayment: string;
+  saleCreatedInPeriod: boolean;
+  salePeriodType: "CURRENT_PERIOD_SALE" | "OLDER_SALE_PREVIOUS_DUE";
+  dueCleared: boolean;
+  dueClearedAmount: number | null;
+  dueClearedAt: string | null;
 }
 
 export interface SalesReport {
@@ -346,16 +373,34 @@ export interface SalesReport {
     deliveredOrders: number;
     cancelledOrders: number;
     totalSales: number;
+    totalCollected: number;
     totalDiscount: number;
     cashCollection: number;
     onlineCollection: number;
     dueCollection: number;
     remainingDue: number;
+    outstandingAmount: number;
+    paidOrders: number;
+    partiallyPaidOrders: number;
+    dueOrders: number;
+    statusCounts: Record<string, number>;
     uniqueCustomers: number;
     productsSold: number;
     totalQuantitySold: number;
   };
+  collections: {
+    totalCollected: number;
+    cashCollected: number;
+    onlineCollected: number;
+    olderSalesCollected: number;
+    currentPeriodSalesCollected: number;
+    transactionCount: number;
+    dueClearedCount: number;
+    dueClearedAmount: number;
+  };
   orders: ReportOrder[];
+  payments: ReportPayment[];
+  previousDuePayments: ReportPayment[];
 }
 
 export interface ReportFilters {

@@ -56,10 +56,36 @@ export interface ReportOrder {
   finalAmount: number;
   cashPaid: number;
   onlinePaid: number;
+  totalPaid: number;
   duePaid: number;
   remainingDue: number;
   paymentStatus: string;
   items: ReportLineItem[];
+}
+
+export interface ReportPayment {
+  id: number;
+  orderId: number;
+  orderNumber: string;
+  customerName: string;
+  customerMobile: string;
+  orderCreatedAt: string;
+  subtotal: number;
+  originalBillAmount: number;
+  paymentDate: string;
+  amount: number;
+  paymentMode: string;
+  previouslyPaidBeforePeriod: number;
+  previouslyPaidBeforePayment: number;
+  dueBeforePayment: number;
+  totalPaidAfterPayment: number;
+  remainingBalanceAfterPayment: number;
+  paymentStatusAfterPayment: string;
+  saleCreatedInPeriod: boolean;
+  salePeriodType: "CURRENT_PERIOD_SALE" | "OLDER_SALE_PREVIOUS_DUE";
+  dueCleared: boolean;
+  dueClearedAmount: number | null;
+  dueClearedAt: string | null;
 }
 
 export interface SalesReportData {
@@ -74,26 +100,54 @@ export interface SalesReportData {
     deliveredOrders: number;
     cancelledOrders: number;
     totalSales: number;
+    totalCollected: number;
     totalDiscount: number;
     cashCollection: number;
     onlineCollection: number;
     dueCollection: number;
     remainingDue: number;
+    outstandingAmount: number;
+    paidOrders: number;
+    partiallyPaidOrders: number;
+    dueOrders: number;
+    statusCounts: Record<string, number>;
     uniqueCustomers: number;
     productsSold: number;
     totalQuantitySold: number;
   };
+  collections: {
+    totalCollected: number;
+    cashCollected: number;
+    onlineCollected: number;
+    olderSalesCollected: number;
+    currentPeriodSalesCollected: number;
+    transactionCount: number;
+    dueClearedCount: number;
+    dueClearedAmount: number;
+  };
   orders: ReportOrder[];
+  payments: ReportPayment[];
+  previousDuePayments: ReportPayment[];
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function endOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+function parseIstDate(value: string, isEnd = false): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new Error("Invalid date");
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  const maxDay = new Date(year, month, 0).getDate();
+  if (month < 1 || month > 12 || day < 1 || day > maxDay) throw new Error("Invalid date");
+  const m = String(month).padStart(2, "0");
+  const d = String(day).padStart(2, "0");
+  if (!isEnd) {
+    return new Date(`${year}-${m}-${d}T00:00:00.000+05:30`);
+  }
+  const nextDate = new Date(Date.UTC(year, month - 1, day + 1));
+  const ny = nextDate.getUTCFullYear();
+  const nm = String(nextDate.getUTCMonth() + 1).padStart(2, "0");
+  const nd = String(nextDate.getUTCDate()).padStart(2, "0");
+  return new Date(`${ny}-${nm}-${nd}T00:00:00.000+05:30`);
 }
 
 /** Resolve the date window for the requested period. */
@@ -101,33 +155,32 @@ export function resolvePeriod(
   period: ReportPeriod
 ): { from: Date; to: Date; label: string } {
   if (period.type === "daily") {
-    const d = new Date(period.date);
-    if (Number.isNaN(d.getTime())) throw new Error("Invalid date");
-    const from = startOfDay(d);
-    const to = endOfDay(d);
+    const from = parseIstDate(period.date, false);
+    const to = parseIstDate(period.date, true);
     const label = from.toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
       year: "numeric",
+      timeZone: "Asia/Kolkata",
     });
     return { from, to, label };
   }
 
   if (period.type === "weekly") {
-    const from = startOfDay(new Date(period.from));
-    const toRaw = new Date(period.to);
-    if (Number.isNaN(from.getTime()) || Number.isNaN(toRaw.getTime())) {
-      throw new Error("Invalid date range");
-    }
-    const to = endOfDay(toRaw);
+    const from = parseIstDate(period.from, false);
+    const to = parseIstDate(period.to, true);
+    const toDateOnly = parseIstDate(period.to, false);
+    if (from > toDateOnly) throw new Error("Invalid date range");
     const label = `${from.toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
       year: "numeric",
-    })} – ${toRaw.toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
+    })} – ${toDateOnly.toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
       year: "numeric",
+      timeZone: "Asia/Kolkata",
     })}`;
     return { from, to, label };
   }
@@ -135,10 +188,20 @@ export function resolvePeriod(
   // monthly
   const month = Number(period.month);
   const year = Number(period.year);
-  if (Number.isNaN(month) || Number.isNaN(year)) throw new Error("Invalid month/year");
-  const from = new Date(year, month - 1, 1);
-  const to = new Date(year, month, 1);
-  const label = from.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 1000 || year > 9999) {
+    throw new Error("Invalid month/year");
+  }
+  const m = String(month).padStart(2, "0");
+  const from = new Date(`${year}-${m}-01T00:00:00.000+05:30`);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const nm = String(nextMonth).padStart(2, "0");
+  const to = new Date(`${nextYear}-${nm}-01T00:00:00.000+05:30`);
+  const label = from.toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
   return { from, to, label };
 }
 
@@ -155,7 +218,7 @@ export async function buildSalesReport(
 
   // Single optimized query: fetch all orders in the period with their
   // payments, bill, and items (with product → category + primary image).
-  const orders = await prisma.order.findMany({
+  const [orders, periodPayments] = await Promise.all([prisma.order.findMany({
     where: {
       createdAt: { gte: from, lt: to },
     },
@@ -177,12 +240,18 @@ export async function buildSalesReport(
       },
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-  });
-
-  // Counts of all statuses (for the cancelled metric).
-  const totalOrders = orders.length;
-  const cancelledOrders = orders.filter((o) => o.status === "CANCELLED").length;
-  const deliveredOrders = orders.filter((o) => o.status === "DELIVERED").length;
+  }), prisma.orderPayment.findMany({
+    where: { paymentDate: { gte: from, lt: to } },
+    include: {
+      order: {
+        include: {
+          bill: true,
+          payments: { orderBy: [{ paymentDate: "asc" }, { id: "asc" }] },
+        },
+      },
+    },
+    orderBy: [{ paymentDate: "asc" }, { id: "asc" }],
+  })]);
 
   // Helper to compute per-order money fields.
   const enrich = (o: (typeof orders)[number]): ReportOrder => {
@@ -235,6 +304,7 @@ export async function buildSalesReport(
       finalAmount: round2(finalAmount),
       cashPaid: round2(cashPaid),
       onlinePaid: round2(onlinePaid),
+      totalPaid: round2(totalPaid),
       duePaid: round2(duePaid),
       remainingDue,
       paymentStatus,
@@ -289,6 +359,9 @@ export async function buildSalesReport(
   }
 
   // ---- Aggregate metrics (DELIVERED orders count toward sales) ----
+  const totalOrders = reportOrders.length;
+  const cancelledOrders = reportOrders.filter((o) => o.status === "CANCELLED").length;
+  const deliveredOrders = reportOrders.filter((o) => o.status === "DELIVERED").length;
   const salesOrders = reportOrders.filter((o) => o.status === "DELIVERED");
 
   const totalSales = round2(
@@ -309,6 +382,16 @@ export async function buildSalesReport(
   const remainingDue = round2(
     salesOrders.reduce((s, o) => s + o.remainingDue, 0)
   );
+  const totalCollected = round2(
+    salesOrders.reduce((s, o) => s + o.totalPaid, 0)
+  );
+  const paidOrders = salesOrders.filter((o) => o.paymentStatus === "PAID").length;
+  const partiallyPaidOrders = salesOrders.filter((o) => o.paymentStatus === "PARTIALLY_PAID").length;
+  const dueOrders = salesOrders.filter((o) => o.paymentStatus === "DUE").length;
+  const statusCounts = reportOrders.reduce<Record<string, number>>((counts, order) => {
+    counts[order.status] = (counts[order.status] ?? 0) + 1;
+    return counts;
+  }, {});
   const uniqueCustomers = new Set(
     salesOrders.map((o) => o.customerMobile)
   ).size;
@@ -320,6 +403,86 @@ export async function buildSalesReport(
       .flatMap((o) => o.items.map((it) => it.quantity))
       .reduce((s, q) => s + q, 0)
   );
+
+  const payments: ReportPayment[] = periodPayments.map((payment) => {
+    const history = payment.order.payments;
+    const paymentIndex = history.findIndex((entry) => entry.id === payment.id);
+    const finalAmount = Number(payment.order.bill?.finalAmount ?? payment.order.subtotal);
+    const paidBeforePeriod = history.filter((entry) => entry.paymentDate < from).reduce((sum, entry) => sum + Number(entry.amount), 0);
+    const paidBefore = history.slice(0, Math.max(0, paymentIndex)).reduce((sum, entry) => sum + Number(entry.amount), 0);
+    const paymentAmount = Number(payment.amount);
+    const totalPaidAfter = round2(paidBefore + paymentAmount);
+    const previousDue = Math.max(0, round2(finalAmount - paidBefore));
+    const remainingAfter = Math.max(0, round2(finalAmount - totalPaidAfter));
+    const saleCreatedInPeriod = payment.order.createdAt >= from && payment.order.createdAt < to;
+    // A later allocation, or the first recorded payment against an older sale,
+    // can authoritatively settle a due. A new sale's initial full payment is PAID
+    // but is deliberately not labelled as recovered/cleared due.
+    const hasPriorDebtContext = paymentIndex > 0 || payment.order.createdAt < from;
+    const dueCleared = hasPriorDebtContext && previousDue > 0 && remainingAfter === 0;
+    const paymentStatusAfterPayment = totalPaidAfter <= 0 ? "DUE" : remainingAfter <= 0 ? "PAID" : "PARTIALLY_PAID";
+    return {
+      id: payment.id,
+      orderId: payment.orderId,
+      orderNumber: payment.order.orderNumber,
+      customerName: payment.order.customerName,
+      customerMobile: payment.order.customerMobile,
+      orderCreatedAt: payment.order.createdAt.toISOString(),
+      subtotal: round2(Number(payment.order.subtotal)),
+      originalBillAmount: round2(finalAmount),
+      paymentDate: payment.paymentDate.toISOString(),
+      amount: round2(paymentAmount),
+      paymentMode: payment.paymentMode,
+      previouslyPaidBeforePeriod: round2(paidBeforePeriod),
+      previouslyPaidBeforePayment: round2(paidBefore),
+      dueBeforePayment: previousDue,
+      totalPaidAfterPayment: totalPaidAfter,
+      remainingBalanceAfterPayment: remainingAfter,
+      paymentStatusAfterPayment,
+      saleCreatedInPeriod,
+      salePeriodType: saleCreatedInPeriod ? "CURRENT_PERIOD_SALE" : "OLDER_SALE_PREVIOUS_DUE",
+      dueCleared,
+      dueClearedAmount: dueCleared ? round2(Math.min(previousDue, Number(payment.amount))) : null,
+      dueClearedAt: dueCleared ? payment.paymentDate.toISOString() : null,
+    };
+  });
+
+  let filteredPayments = payments;
+  if (filters.customerName?.trim()) {
+    const q = filters.customerName.trim().toLowerCase();
+    filteredPayments = filteredPayments.filter((p) =>
+      p.customerName.toLowerCase().includes(q)
+    );
+  }
+  if (filters.phone?.trim()) {
+    const q = filters.phone.trim();
+    filteredPayments = filteredPayments.filter((p) => p.customerMobile.includes(q));
+  }
+  if (filters.orderId?.trim()) {
+    const q = filters.orderId.trim().toLowerCase();
+    filteredPayments = filteredPayments.filter((p) =>
+      p.orderNumber.toLowerCase().includes(q)
+    );
+  }
+  if (filters.paymentType) {
+    const pt = filters.paymentType.toUpperCase();
+    if (pt === "CASH") {
+      filteredPayments = filteredPayments.filter((p) => p.paymentMode === "CASH");
+    } else if (pt === "ONLINE") {
+      filteredPayments = filteredPayments.filter((p) => p.paymentMode === "ONLINE");
+    } else if (pt === "DUE") {
+      filteredPayments = filteredPayments.filter((p) => p.remainingBalanceAfterPayment > 0);
+    }
+  }
+
+  const previousDuePayments = filteredPayments.filter((payment) => !payment.saleCreatedInPeriod);
+
+  const periodTotalCollected = round2(filteredPayments.reduce((sum, payment) => sum + payment.amount, 0));
+  const cashCollected = round2(filteredPayments.filter((payment) => payment.paymentMode === "CASH").reduce((sum, payment) => sum + payment.amount, 0));
+  const onlineCollected = round2(filteredPayments.filter((payment) => payment.paymentMode === "ONLINE").reduce((sum, payment) => sum + payment.amount, 0));
+  const olderSalesCollected = round2(filteredPayments.filter((payment) => !payment.saleCreatedInPeriod).reduce((sum, payment) => sum + payment.amount, 0));
+  const currentPeriodSalesCollected = round2(filteredPayments.filter((payment) => payment.saleCreatedInPeriod).reduce((sum, payment) => sum + payment.amount, 0));
+  const clearedPayments = filteredPayments.filter((payment) => payment.dueCleared);
 
   return {
     reportType: period.type,
@@ -333,15 +496,33 @@ export async function buildSalesReport(
       deliveredOrders,
       cancelledOrders,
       totalSales,
+      totalCollected,
       totalDiscount,
       cashCollection,
       onlineCollection,
       dueCollection,
       remainingDue,
+      outstandingAmount: remainingDue,
+      paidOrders,
+      partiallyPaidOrders,
+      dueOrders,
+      statusCounts,
       uniqueCustomers,
       productsSold,
       totalQuantitySold,
     },
+    collections: {
+      totalCollected: periodTotalCollected,
+      cashCollected,
+      onlineCollected,
+      olderSalesCollected,
+      currentPeriodSalesCollected,
+      transactionCount: filteredPayments.length,
+      dueClearedCount: clearedPayments.length,
+      dueClearedAmount: round2(clearedPayments.reduce((sum, payment) => sum + (payment.dueClearedAmount ?? 0), 0)),
+    },
     orders: reportOrders,
+    payments: filteredPayments,
+    previousDuePayments,
   };
 }

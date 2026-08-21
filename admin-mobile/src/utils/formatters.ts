@@ -1,0 +1,9 @@
+type Numeric = number | string | null | undefined;
+const finite = (value: Numeric) => { if (value === null || value === undefined || value === "") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; };
+export function formatINR(value: Numeric, maximumFractionDigits = 2) { const parsed = finite(value); return parsed === null ? "—" : new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits }).format(parsed); }
+export function formatCompactINR(value: Numeric) { const parsed = finite(value); return parsed === null ? "—" : new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", notation: "compact", maximumFractionDigits: 1 }).format(parsed); }
+const dateValue = (value: string | number | Date | null | undefined) => { if (value === null || value === undefined || value === "") return null; const parsed = value instanceof Date ? value : new Date(value); return Number.isNaN(parsed.getTime()) ? null : parsed; };
+export function formatDate(value: string | number | Date | null | undefined) { const parsed = dateValue(value); return parsed ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(parsed) : "—"; }
+export function formatDateTime(value: string | number | Date | null | undefined) { const parsed = dateValue(value); return parsed ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(parsed) : "—"; }
+export function formatQuantity(value: Numeric, unit?: string) { const parsed = finite(value); return parsed === null ? "—" : `${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(parsed)}${unit ? ` ${unit}` : ""}`; }
+export function formatPercentage(value: Numeric) { const parsed = finite(value); return parsed === null ? "—" : `${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 }).format(parsed)}%`; }

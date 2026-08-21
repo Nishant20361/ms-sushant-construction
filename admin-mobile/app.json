@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "Sushant Control",
+    "slug": "sushant-control",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "sushantcontrol",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.mssushantconstruction.admin",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.mssushantconstruction.admin",
+      "versionCode": 1,
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#075E46"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#075E46",
+          "defaultChannel": "general"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#075E46",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0D1512"
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Sushant Control to choose a product or category image only when you request it.",
+          "cameraPermission": "Allow Sushant Control to take a product or category photo only when you request it.",
+          "microphonePermission": false
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,0 +1,1 @@
+import {useLocalSearchParams} from "expo-router";import {BillingScreen} from "@/features/finance/BillingScreen";export default function BillingRoute(){const{orderId}=useLocalSearchParams<{orderId?:string}>();return <BillingScreen initialOrderId={Number(orderId)||0}/>}

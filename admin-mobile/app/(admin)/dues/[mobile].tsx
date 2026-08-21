@@ -1,0 +1,1 @@
+import {useLocalSearchParams} from "expo-router";import {CustomerDueScreen} from "@/features/finance/CustomerDueScreen";export default function CustomerDueRoute(){const{mobile}=useLocalSearchParams<{mobile:string}>();return <CustomerDueScreen mobile={decodeURIComponent(mobile)}/>}

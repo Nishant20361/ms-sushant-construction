@@ -198,19 +198,12 @@ export function buildBillHtml(bill: BillData): string {
 
   const discountRow =
     bill.discount > 0
-      ? `
-        <tr class="discount">
-          <td colspan="3">Discount</td>
-          <td class="num">-${fmtINR(bill.discount)}</td>
-        </tr>`
+      ? `<p class="discount">Discount: <strong>-${fmtINR(bill.discount)}</strong></p>`
       : "";
 
   const dueRow =
     bill.due > 0
-      ? `<tr class="due">
-          <td colspan="3">Remaining Due</td>
-          <td class="num">${fmtINR(bill.due)}</td>
-        </tr>`
+      ? `<div class="row due"><span class="label">Remaining Due</span><span class="val">${fmtINR(bill.due)}</span></div>`
       : "";
 
   const paymentStatusBadge =
@@ -227,44 +220,50 @@ export function buildBillHtml(bill: BillData): string {
 <title>Invoice ${bill.orderNumber}</title>
 <style>
   ${getEmbeddedFontCss()}
-  body { font-family: 'Noto Sans Devanagari', 'Noto Sans', 'Segoe UI', Arial, sans-serif; color: #1e293b; margin: 0; padding: 32px; }
-  .container { max-width: 720px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
-  .header { background: #1e293b; color: #fff; padding: 24px; text-align: center; position: relative; }
-  .header .logo { max-height: 64px; margin-bottom: 8px; }
-  .header h1 { margin: 0; font-size: 22px; letter-spacing: 0.5px; }
-  .header p { margin: 4px 0 0; opacity: 0.85; font-size: 13px; }
-  .business-details { background: #f8fafc; padding: 16px 24px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+  @page { size: A4 portrait; margin: 7mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Noto Sans Devanagari', 'Noto Sans', 'Segoe UI', Arial, sans-serif; color: #1e293b; margin: 0; padding: 8px; font-size: 10px; line-height: 1.3; }
+  .container { width: 100%; max-width: 158mm; margin: 0 auto; border: 1px solid #dbe3ec; border-radius: 7px; overflow: hidden; }
+  .header { background: #1e293b; color: #fff; padding: 10px 14px; text-align: center; position: relative; break-inside: avoid; page-break-inside: avoid; }
+  .header .logo { max-height: 38px; max-width: 120px; object-fit: contain; margin-bottom: 3px; }
+  .header h1 { margin: 0; font-size: 16px; letter-spacing: 0.2px; line-height: 1.25; }
+  .header p { margin: 2px 0 0; opacity: 0.85; font-size: 9px; }
+  .business-details { background: #f8fafc; padding: 6px 10px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; border-bottom: 1px solid #e2e8f0; font-size: 9px; break-inside: avoid; page-break-inside: avoid; }
   .business-details .left { text-align: left; }
   .business-details .right { text-align: right; }
   .business-details p { margin: 2px 0; }
   .business-details .label { font-weight: 600; color: #64748b; }
-  .meta { padding: 20px 24px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid #e2e8f0; }
-  .meta div p { margin: 2px 0; font-size: 13px; }
-  .meta .label { font-weight: 600; color: #64748b; text-transform: uppercase; font-size: 11px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 10px 14px; text-align: left; font-size: 13px; }
-  thead th { background: #f1f5f9; color: #475569; text-transform: uppercase; font-size: 11px; letter-spacing: 0.4px; }
-  tbody tr { border-bottom: 1px solid #f1f5f9; }
+  .meta { padding: 7px 10px; display: grid; grid-template-columns: 0.8fr 1fr 1.2fr; gap: 8px; border-bottom: 1px solid #e2e8f0; break-inside: avoid; page-break-inside: avoid; }
+  .meta div p { margin: 1px 0; font-size: 9px; overflow-wrap: anywhere; }
+  .meta .label { font-weight: 600; color: #64748b; text-transform: uppercase; font-size: 7.5px; margin-top: 3px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th:first-child, td:first-child { width: 43%; overflow-wrap: anywhere; }
+  th, td { padding: 4px 6px; text-align: left; font-size: 9px; line-height: 1.25; }
+  thead { display: table-header-group; }
+  thead th { background: #f1f5f9; color: #475569; text-transform: uppercase; font-size: 8px; letter-spacing: 0.2px; }
+  tbody tr { border-bottom: 1px solid #f1f5f9; break-inside: avoid; page-break-inside: avoid; }
   .num { text-align: right; }
-  .totals { padding: 20px 24px; text-align: right; }
-  .totals p { margin: 4px 0; font-size: 14px; }
-  .totals .grand { font-size: 18px; font-weight: 700; color: #0f766e; margin-top: 6px; }
-  .discount td { color: #b91c1c; font-weight: 600; }
-  .due td { color: #b45309; font-weight: 700; }
-  .payment-box { margin: 0 24px 20px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-  .payment-box .head { background: #f1f5f9; padding: 10px 16px; font-weight: 700; color: #334155; text-transform: uppercase; font-size: 12px; letter-spacing: 0.4px; }
-  .payment-box .row { display: flex; justify-content: space-between; padding: 8px 16px; font-size: 13px; border-top: 1px solid #f1f5f9; }
+  .totals { padding: 6px 10px; text-align: right; break-inside: avoid; page-break-inside: avoid; }
+  .totals p { margin: 2px 0; font-size: 9px; }
+  .totals .grand { font-size: 12px; font-weight: 700; color: #0f766e; margin-top: 3px; }
+  .discount { color: #b91c1c; font-weight: 600; }
+  .due { color: #b45309; font-weight: 700; }
+  .payment-box { margin: 0 10px 7px; border: 1px solid #e2e8f0; border-radius: 5px; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
+  .payment-box .head { background: #f1f5f9; padding: 4px 7px; font-weight: 700; color: #334155; text-transform: uppercase; font-size: 8px; letter-spacing: 0.2px; }
+  .payment-box .row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 7px; font-size: 9px; border-top: 1px solid #f1f5f9; }
   .payment-box .row span.label { color: #64748b; }
   .payment-box .row span.val { font-weight: 600; color: #0f172a; }
-  .pstatus { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .pstatus { display: inline-block; padding: 1px 5px; border-radius: 999px; font-size: 7.5px; font-weight: 700; white-space: nowrap; }
   .pstatus.paid { background: #dcfce7; color: #15803d; }
   .pstatus.due { background: #fee2e2; color: #b91c1c; }
   .pstatus.partial { background: #fef3c7; color: #b45309; }
-  .footer { padding: 20px 24px; text-align: center; color: #64748b; font-size: 13px; border-top: 1px solid #e2e8f0; }
-  .footer .tagline { font-weight: 600; color: #334155; margin-top: 6px; }
+  .footer { padding: 6px 10px; text-align: center; color: #64748b; font-size: 8px; border-top: 1px solid #e2e8f0; break-inside: avoid; page-break-inside: avoid; }
+  .footer p { margin: 1px 0; }
+  .footer .tagline { font-weight: 600; color: #334155; margin-top: 3px; }
   @media print {
-    body { padding: 0; }
-    .container { border: 0; }
+    body { padding: 0; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .container { border-radius: 0; }
+    h1, h2, h3, thead { break-after: avoid; page-break-after: avoid; }
   }
 </style>
 </head>

@@ -63,3 +63,11 @@ export const forgotPasswordLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many reset requests. Please try again after 15 minutes." },
 });
+
+export const pushDeviceLimiter = rateLimit({
+  windowMs: 15 * minute,
+  limit: isTest ? 1000 : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many notification device updates. Please try again later." },
+});

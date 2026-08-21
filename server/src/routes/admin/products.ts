@@ -8,6 +8,7 @@ import { writeAudit } from "../../middleware/audit.js";
 import { serializeProduct } from "../../utils/serializer.js";
 import { HttpError } from "../../utils/httpError.js";
 import { AuthenticatedRequest } from "../../types.js";
+import { notifyStockTransitions } from "../../services/push.service.js";
 
 /**
  * Round to a fixed number of decimal places.
@@ -185,6 +186,7 @@ router.put(
       entityId: product.id,
       details: product.name,
     });
+    await notifyStockTransitions([{productId:product.id,name:product.name,previous:Number(existing.stock),next:Number(product.stock)}],`PRODUCT_UPDATE:${product.id}:${product.updatedAt.toISOString()}`).catch(e=>console.error("[push] Product stock notification failed",e instanceof Error?e.message:e));
     res.json({ product: serializeProduct(product) });
   })
 );
@@ -251,4 +253,3 @@ router.delete(
 );
 
 export default router;
-

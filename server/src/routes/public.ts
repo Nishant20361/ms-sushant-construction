@@ -12,6 +12,7 @@ import { sendOrderNotificationEmail } from "../services/email.service.js";
 import { config } from "../config.js";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { createAdminNotification, notifyStockTransitions } from "../services/push.service.js";
 import { quantityMatchesUnit } from "../utils/quantity.js";
 
 const router = Router();
@@ -257,6 +258,12 @@ router.post(
 
     if (!order) throw new HttpError(500, "Order could not be confirmed");
 
+    if (!replayed) {
+      const affected=await prisma.product.findMany({where:{id:{in:order.items.map(i=>i.productId)}},select:{id:true,name:true,stock:true}});
+      const qty=new Map(order.items.map(i=>[i.productId,Number(i.quantity)]));
+      await notifyStockTransitions(affected.map(p=>({productId:p.id,name:p.name,next:Number(p.stock),previous:Number(p.stock)+(qty.get(p.id)??0)})),`PUBLIC_ORDER:${order.id}`).catch(e=>console.error("[push] Order stock notification failed",e instanceof Error?e.message:e));
+    }
+
     // ----- Order Notification (email + in-app bell) -----
     let finalRecipient = "";
 
@@ -290,15 +297,7 @@ router.post(
       }
 
       if (admin) {
-        await prisma.notification.create({
-          data: {
-            adminId: admin.id,
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            customerName: order.customerName,
-            status: order.status,
-          },
-        });
+        await createAdminNotification({adminId:admin.id,type:"NEW_ORDER",title:"New order received",message:`Order ${order.orderNumber} · ₹${Number(order.subtotal).toFixed(2)}`,orderId:order.id,orderNumber:order.orderNumber,customerName:order.customerName,metadata:{status:order.status},dedupeKey:`NEW_ORDER:${order.id}`});
       }
     } catch (err: unknown) {
       console.error("[order] Admin notification error:", err);
