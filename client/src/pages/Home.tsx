@@ -147,20 +147,60 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const heroBg = useMemo(
-    () => ({
-      backgroundImage: settings?.heroBannerUrl
-        ? `linear-gradient(rgba(15,23,42,0.75), rgba(15,23,42,0.75)), url(${resolveImageUrl(settings.heroBannerUrl) ??
-        "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1600&q=80"
-        })`
-        : "linear-gradient(rgba(15,23,42,0.8), rgba(15,23,42,0.8)), url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1600&q=80')",
-      backgroundSize: "cover",
-      backgroundPosition: "center",
-    }),
-    [settings?.heroBannerUrl]
-  );
+  const heroSlides = useMemo(() => {
+    const defaultSlides = [
+      {
+        url: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=1920&q=80",
+        caption: "RCC & Structural Construction",
+      },
+      {
+        url: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1920&q=80",
+        caption: "TMT Steel Rods & Reinforcement",
+      },
+      {
+        url: "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1920&q=80",
+        caption: "Top Quality Cements & Concrete",
+      },
+      {
+        url: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1920&q=80",
+        caption: "Modern Home Construction",
+      },
+      {
+        url: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1920&q=80",
+        caption: "Roofing, Waterproofing & Supplies",
+      },
+    ];
 
-const handleAdd = (p: Product, quantity: number) => {
+    if (settings?.heroBannerUrl) {
+      const customUrl = resolveImageUrl(settings.heroBannerUrl);
+      if (customUrl) {
+        return [{ url: customUrl, caption: "Featured Construction Supplies" }, ...defaultSlides];
+      }
+    }
+    return defaultSlides;
+  }, [settings?.heroBannerUrl]);
+
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Automatic slideshow transition every 4.5 seconds
+  useEffect(() => {
+    if (isHovered || heroSlides.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [heroSlides.length, isHovered]);
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+  };
+
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
+  };
+
+  const handleAdd = (p: Product, quantity: number) => {
     if (p.stock <= 0) {
       toast("This product is out of stock", "error");
       return;
@@ -171,26 +211,112 @@ const handleAdd = (p: Product, quantity: number) => {
 
   return (
     <main>
-      {/* ============ HERO ============ */}
-      <section id="home" className="relative text-white" style={heroBg}>
-        <div className="container-page flex min-h-[560px] flex-col justify-center py-20">
-          <span className="badge mb-4 w-fit bg-brand-600/90 text-white">
-            ★ Trusted Supplier since years
-          </span>
-          <h1 className="max-w-3xl text-4xl font-extrabold leading-tight sm:text-5xl lg:text-6xl">
+      {/* ============ HERO SLIDER ============ */}
+      <section
+        id="home"
+        className="relative overflow-hidden bg-slate-950 text-white select-none"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {/* Background Images Slider with Smooth Crossfade */}
+        {heroSlides.map((slide, idx) => (
+          <div
+            key={slide.url + idx}
+            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+              idx === currentSlide ? "opacity-100 z-0" : "opacity-0 -z-10 pointer-events-none"
+            }`}
+          >
+            <img
+              src={slide.url}
+              alt={slide.caption}
+              className={`h-full w-full object-cover transition-transform duration-[8000ms] ease-out ${
+                idx === currentSlide ? "scale-105" : "scale-100"
+              }`}
+            />
+          </div>
+        ))}
+
+        {/* Multi-gradient Dark Overlay for Enhanced Contrast */}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-900/80 to-slate-900/60 z-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-slate-950/40 z-10" />
+
+        {/* Hero Content */}
+        <div className="relative z-20 container-page flex min-h-[580px] sm:min-h-[620px] flex-col justify-center py-20">
+          <div className="flex items-center gap-2">
+            <span className="badge w-fit bg-brand-600/95 text-white shadow-lg backdrop-blur-sm px-3.5 py-1 text-xs font-semibold uppercase tracking-wider">
+              ★ Trusted Supplier Since Years
+            </span>
+            <span className="hidden sm:inline-flex rounded-full bg-white/15 px-3 py-0.5 text-xs font-medium text-slate-200 backdrop-blur-sm">
+              {heroSlides[currentSlide]?.caption}
+            </span>
+          </div>
+
+          <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl drop-shadow-sm">
             {settings?.heroTitle || "Quality Construction Materials"}
           </h1>
-          <p className="mt-4 max-w-2xl text-lg text-slate-200">
+
+          <p className="mt-4 max-w-2xl text-base sm:text-lg text-slate-200 leading-relaxed drop-shadow-sm">
             {settings?.heroSubtitle ||
               "Cement, steel rods, roofing sheets, waterproofing chemicals and more — delivered at the best prices."}
           </p>
-          <div className="mt-8 flex flex-wrap gap-4">
-            <a href="#products" className="btn-primary !px-7 !py-3 !text-base">
+
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <a href="#products" className="btn-primary !px-7 !py-3.5 !text-base shadow-xl hover:shadow-brand-500/25 transition-all">
               Browse Products
             </a>
-            <a href="#contact" className="btn-secondary !bg-white/10 !border-white/30 !text-white !px-7 !py-3 !text-base hover:!bg-white/20">
+            <a
+              href="#contact"
+              className="btn-secondary !bg-white/10 !border-white/30 !text-white !px-7 !py-3.5 !text-base hover:!bg-white/20 backdrop-blur-sm transition-all"
+            >
               Contact Us
             </a>
+          </div>
+
+          {/* Slider Bottom Controls & Indicators */}
+          <div className="mt-12 flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/10">
+            {/* Dots */}
+            <div className="flex items-center gap-2">
+              {heroSlides.map((slide, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setCurrentSlide(idx)}
+                  className={`h-2.5 rounded-full transition-all duration-300 ${
+                    idx === currentSlide
+                      ? "w-8 bg-brand-500 shadow-md"
+                      : "w-2.5 bg-white/40 hover:bg-white/70"
+                  }`}
+                  aria-label={`Go to slide ${idx + 1}: ${slide.caption}`}
+                />
+              ))}
+            </div>
+
+            {/* Slide Navigation Arrows */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={prevSlide}
+                aria-label="Previous slide"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition-all hover:bg-white/30 active:scale-95"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className="text-xs font-semibold text-slate-300 px-1">
+                {String(currentSlide + 1).padStart(2, "0")} / {String(heroSlides.length).padStart(2, "0")}
+              </span>
+              <button
+                type="button"
+                onClick={nextSlide}
+                aria-label="Next slide"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition-all hover:bg-white/30 active:scale-95"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </section>
