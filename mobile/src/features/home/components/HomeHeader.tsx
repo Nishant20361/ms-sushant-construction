@@ -13,4 +13,93 @@ export function HomeHeader({ companyName, logoUrl }: { companyName: string; logo
     <Link href="/(tabs)/cart" asChild><Pressable accessibilityRole="button" accessibilityLabel={`Open cart, ${Math.ceil(count)} items`} hitSlop={8} style={styles.cart}><Text style={styles.cartIcon}>🛒</Text>{count > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{Math.min(99, Math.ceil(count))}</Text></View> : null}</Pressable></Link>
   </View>;
 }
-const styles = StyleSheet.create({ header: { flexDirection: "row", alignItems: "center", gap: 8 }, identity: { minWidth: 0, flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }, logo: { width: 42, height: 42, borderRadius: 12, backgroundColor: theme.colors.surface }, fallback: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: theme.colors.primary }, fallbackText: { color: "white", fontSize: 15, fontWeight: "900" }, copy: { minWidth: 0, flex: 1 }, name: { fontSize: 15, lineHeight: 17, fontWeight: "900", color: theme.colors.text }, subtitle: { marginTop: 2, fontSize: 11, color: theme.colors.muted }, cart: { width: 46, height: 46, alignItems: "center", justifyContent: "center", borderRadius: 14, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }, cartIcon: { fontSize: 21 }, badge: { position: "absolute", top: -5, right: -5, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, borderRadius: 10, backgroundColor: theme.colors.secondary }, badgeText: { color: theme.colors.text, fontSize: 10, fontWeight: "900" } });
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 4,
+  },
+  identity: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  logo: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  fallback: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: theme.colors.primary,
+    ...theme.shadow,
+    elevation: 2,
+  },
+  fallbackText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  copy: {
+    minWidth: 0,
+    flex: 1,
+  },
+  name: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "800",
+    color: theme.colors.text,
+  },
+  subtitle: {
+    marginTop: 2,
+    fontSize: 11.5,
+    fontWeight: "500",
+    color: theme.colors.muted,
+  },
+  cart: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    ...theme.shadow,
+    elevation: 2,
+  },
+  cartIcon: {
+    fontSize: 20,
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: theme.colors.secondary,
+    borderWidth: 1.5,
+    borderColor: theme.colors.surface,
+  },
+  badgeText: {
+    color: theme.colors.text,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+});

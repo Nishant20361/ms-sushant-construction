@@ -34,4 +34,85 @@ function ProductCardComponent({ product, onAdd, style }: { product: Product; onA
   </View>;
 }
 export const ProductCard = memo(ProductCardComponent);
-const styles = StyleSheet.create({ card: { width: "48%", minWidth: 136, padding: 10, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 15, backgroundColor: theme.colors.surface, ...theme.shadow }, pressed: { opacity: 0.78 }, image: { width: "100%", aspectRatio: 1.18, borderRadius: 10, backgroundColor: theme.colors.border }, stockBadge: { position: "absolute", left: 7, top: 7, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 7, backgroundColor: "#DCFCE7" }, outBadge: { backgroundColor: "#FEE2E2" }, stockText: { color: theme.colors.success, fontSize: 9, fontWeight: "900" }, outText: { color: theme.colors.danger }, name: { minHeight: 42, marginTop: 10, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: "700" }, price: { marginTop: 4, color: theme.colors.primary, fontSize: 13, fontWeight: "800" }, add: { minHeight: 44, marginTop: 10, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: theme.colors.primary }, addPressed: { opacity: 0.78 }, disabled: { opacity: 0.48 }, addText: { color: "white", fontSize: 12, fontWeight: "800" } });
+const styles = StyleSheet.create({
+  card: {
+    width: "48%",
+    minWidth: 140,
+    padding: 11,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 18,
+    backgroundColor: theme.colors.surface,
+    ...theme.shadow,
+    elevation: 2,
+  },
+  pressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.985 }],
+  },
+  image: {
+    width: "100%",
+    aspectRatio: 1.15,
+    borderRadius: 13,
+    backgroundColor: "#F1F5F9",
+  },
+  stockBadge: {
+    position: "absolute",
+    left: 8,
+    top: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+    backgroundColor: "#DCFCE7",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  outBadge: {
+    backgroundColor: "#FEE2E2",
+    borderColor: "#FECACA",
+  },
+  stockText: {
+    color: "#15803D",
+    fontSize: 9.5,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  outText: {
+    color: "#DC2626",
+  },
+  name: {
+    minHeight: 38,
+    marginTop: 10,
+    color: theme.colors.text,
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+  price: {
+    marginTop: 4,
+    color: theme.colors.primaryDark,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  add: {
+    minHeight: 42,
+    marginTop: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: theme.colors.primary,
+  },
+  addPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  disabled: {
+    opacity: 0.45,
+    backgroundColor: "#94A3B8",
+  },
+  addText: {
+    color: "white",
+    fontSize: 12.5,
+    fontWeight: "800",
+  },
+});
