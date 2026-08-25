@@ -150,47 +150,51 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
   const heroSlides = useMemo(() => {
     const defaultSlides = [
       {
-        url: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=1920&q=80",
+        url: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=2000&q=85",
         caption: "RCC & Structural Construction",
+        tag: "Heavy Civil Works",
       },
       {
-        url: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1920&q=80",
+        url: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=2000&q=85",
         caption: "TMT Steel Rods & Reinforcement",
+        tag: "Certified Fe 500D Steel",
       },
       {
-        url: "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1920&q=80",
-        caption: "Top Quality Cements & Concrete",
+        url: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=2000&q=85",
+        caption: "Top Brand Cements & Concrete Mixes",
+        tag: "ACC, Nuvoco & Ultratech",
       },
       {
-        url: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1920&q=80",
-        caption: "Modern Home Construction",
+        url: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=2000&q=85",
+        caption: "Quality Bricks & Wall Masonry",
+        tag: "Bricks, Sand & Mortar",
       },
       {
-        url: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1920&q=80",
-        caption: "Roofing, Waterproofing & Supplies",
+        url: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=2000&q=85",
+        caption: "Roofing Sheets & Waterproofing",
+        tag: "Dr. Fixit & Metal Sheets",
       },
     ];
 
     if (settings?.heroBannerUrl) {
       const customUrl = resolveImageUrl(settings.heroBannerUrl);
       if (customUrl) {
-        return [{ url: customUrl, caption: "Featured Construction Supplies" }, ...defaultSlides];
+        return [{ url: customUrl, caption: "Featured Construction Supplies", tag: "Direct Supplies" }, ...defaultSlides];
       }
     }
     return defaultSlides;
   }, [settings?.heroBannerUrl]);
 
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [isHovered, setIsHovered] = useState(false);
 
-  // Automatic slideshow transition every 4.5 seconds
+  // Automatic infinite slideshow transition every 2.5 seconds (2500ms)
   useEffect(() => {
-    if (isHovered || heroSlides.length <= 1) return;
+    if (heroSlides.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
-    }, 4500);
+    }, 2500);
     return () => clearInterval(timer);
-  }, [heroSlides.length, isHovered]);
+  }, [heroSlides.length]);
 
   const prevSlide = () => {
     setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
@@ -214,44 +218,78 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
       {/* ============ HERO SLIDER ============ */}
       <section
         id="home"
-        className="relative overflow-hidden bg-slate-950 text-white select-none"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        className="relative overflow-hidden bg-slate-950 text-white select-none group/hero"
       >
         {/* Background Images Slider with Smooth Crossfade */}
         {heroSlides.map((slide, idx) => (
           <div
             key={slide.url + idx}
-            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
               idx === currentSlide ? "opacity-100 z-0" : "opacity-0 -z-10 pointer-events-none"
             }`}
           >
             <img
               src={slide.url}
               alt={slide.caption}
-              className={`h-full w-full object-cover transition-transform duration-[8000ms] ease-out ${
+              className={`h-full w-full object-cover transition-transform duration-[4000ms] ease-out ${
                 idx === currentSlide ? "scale-105" : "scale-100"
               }`}
             />
           </div>
         ))}
 
-        {/* Multi-gradient Dark Overlay for Enhanced Contrast */}
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-900/80 to-slate-900/60 z-10" />
+        {/* Multi-gradient Dark Overlay for Crisp Legibility */}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-900/80 to-slate-900/50 z-10" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-slate-950/40 z-10" />
 
+        {/* Left Floating Action Arrow */}
+        <button
+          type="button"
+          onClick={prevSlide}
+          aria-label="Previous Slide"
+          className="absolute left-3 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-black/45 hover:bg-brand-600 border border-white/25 hover:border-brand-400 text-white shadow-2xl backdrop-blur-md transition-all duration-300 hover:scale-110 active:scale-95 group/arrow"
+        >
+          <svg
+            className="h-6 w-6 sm:h-7 sm:w-7 transition-transform group-hover/arrow:-translate-x-1"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        {/* Right Floating Action Arrow */}
+        <button
+          type="button"
+          onClick={nextSlide}
+          aria-label="Next Slide"
+          className="absolute right-3 sm:right-6 md:right-8 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-black/45 hover:bg-brand-600 border border-white/25 hover:border-brand-400 text-white shadow-2xl backdrop-blur-md transition-all duration-300 hover:scale-110 active:scale-95 group/arrow"
+        >
+          <svg
+            className="h-6 w-6 sm:h-7 sm:w-7 transition-transform group-hover/arrow:translate-x-1"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
         {/* Hero Content */}
-        <div className="relative z-20 container-page flex min-h-[580px] sm:min-h-[620px] flex-col justify-center py-20">
-          <div className="flex items-center gap-2">
-            <span className="badge w-fit bg-brand-600/95 text-white shadow-lg backdrop-blur-sm px-3.5 py-1 text-xs font-semibold uppercase tracking-wider">
+        <div className="relative z-20 container-page flex min-h-[580px] sm:min-h-[620px] flex-col justify-center py-20 px-8 sm:px-16 md:px-20">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="badge w-fit bg-brand-600/95 text-white shadow-lg backdrop-blur-sm px-3.5 py-1 text-xs font-bold uppercase tracking-wider">
               ★ Trusted Supplier Since Years
             </span>
-            <span className="hidden sm:inline-flex rounded-full bg-white/15 px-3 py-0.5 text-xs font-medium text-slate-200 backdrop-blur-sm">
-              {heroSlides[currentSlide]?.caption}
+            <span className="inline-flex items-center rounded-full bg-white/20 px-3 py-0.5 text-xs font-semibold text-white backdrop-blur-md border border-white/20">
+              {heroSlides[currentSlide]?.tag}
             </span>
           </div>
 
-          <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl drop-shadow-sm">
+          <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl drop-shadow-md">
             {settings?.heroTitle || "Quality Construction Materials"}
           </h1>
 
@@ -261,20 +299,23 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            <a href="#products" className="btn-primary !px-7 !py-3.5 !text-base shadow-xl hover:shadow-brand-500/25 transition-all">
+            <a
+              href="#products"
+              className="btn-primary !px-8 !py-3.5 !text-base shadow-xl hover:shadow-brand-500/30 transition-all font-bold"
+            >
               Browse Products
             </a>
             <a
               href="#contact"
-              className="btn-secondary !bg-white/10 !border-white/30 !text-white !px-7 !py-3.5 !text-base hover:!bg-white/20 backdrop-blur-sm transition-all"
+              className="btn-secondary !bg-white/15 !border-white/30 !text-white !px-8 !py-3.5 !text-base hover:!bg-white/25 backdrop-blur-md transition-all font-semibold"
             >
               Contact Us
             </a>
           </div>
 
-          {/* Slider Bottom Controls & Indicators */}
-          <div className="mt-12 flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/10">
-            {/* Dots */}
+          {/* Slider Bottom Indicators & Slide Cards */}
+          <div className="mt-12 flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/15">
+            {/* Step Progress Pill Indicators */}
             <div className="flex items-center gap-2">
               {heroSlides.map((slide, idx) => (
                 <button
@@ -283,41 +324,33 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
                   onClick={() => setCurrentSlide(idx)}
                   className={`h-2.5 rounded-full transition-all duration-300 ${
                     idx === currentSlide
-                      ? "w-8 bg-brand-500 shadow-md"
-                      : "w-2.5 bg-white/40 hover:bg-white/70"
+                      ? "w-9 bg-brand-500 shadow-lg shadow-brand-500/50"
+                      : "w-2.5 bg-white/40 hover:bg-white/80"
                   }`}
                   aria-label={`Go to slide ${idx + 1}: ${slide.caption}`}
                 />
               ))}
             </div>
 
-            {/* Slide Navigation Arrows */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={prevSlide}
-                aria-label="Previous slide"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition-all hover:bg-white/30 active:scale-95"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span className="text-xs font-semibold text-slate-300 px-1">
+            {/* Slide Title / Counter Label */}
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold text-slate-300 hidden sm:inline-block">
+                {heroSlides[currentSlide]?.caption}
+              </span>
+              <span className="rounded-lg bg-black/40 px-2.5 py-1 text-xs font-bold text-white border border-white/20 backdrop-blur-sm">
                 {String(currentSlide + 1).padStart(2, "0")} / {String(heroSlides.length).padStart(2, "0")}
               </span>
-              <button
-                type="button"
-                onClick={nextSlide}
-                aria-label="Next slide"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition-all hover:bg-white/30 active:scale-95"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
             </div>
           </div>
+        </div>
+
+        {/* Dynamic 2.5s Top Slide Progress Bar */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-white/10 z-30">
+          <div
+            key={currentSlide}
+            className="h-full bg-brand-500 shadow-sm transition-all animate-[sliderProgress_2.5s_linear]"
+            style={{ width: "100%" }}
+          />
         </div>
       </section>
 
