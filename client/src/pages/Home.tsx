@@ -187,22 +187,14 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
 
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Automatic infinite slideshow transition every 2.5 seconds (2500ms)
+  // Automatic infinite background transition every 5.5 seconds
   useEffect(() => {
     if (heroSlides.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
-    }, 2500);
+    }, 5500);
     return () => clearInterval(timer);
   }, [heroSlides.length]);
-
-  const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
-  };
-
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
-  };
 
   const handleAdd = (p: Product, quantity: number) => {
     if (p.stock <= 0) {
@@ -215,76 +207,40 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
 
   return (
     <main>
-      {/* ============ HERO SLIDER ============ */}
+      {/* ============ HERO SLIDER (Clean Auto-Crossfade) ============ */}
       <section
         id="home"
-        className="relative overflow-hidden bg-slate-950 text-white select-none group/hero"
+        className="relative overflow-hidden bg-slate-950 text-white select-none"
       >
-        {/* Background Images Slider with Smooth Crossfade */}
+        {/* Background Images Slider with Smooth 1.2s Crossfade */}
         {heroSlides.map((slide, idx) => (
           <div
             key={slide.url + idx}
-            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
               idx === currentSlide ? "opacity-100 z-0" : "opacity-0 -z-10 pointer-events-none"
             }`}
           >
             <img
               src={slide.url}
               alt={slide.caption}
-              className={`h-full w-full object-cover transition-transform duration-[4000ms] ease-out ${
+              className={`h-full w-full object-cover transition-transform duration-[7000ms] ease-out ${
                 idx === currentSlide ? "scale-105" : "scale-100"
               }`}
             />
           </div>
         ))}
 
-        {/* Multi-gradient Dark Overlay for Crisp Legibility */}
+        {/* Multi-gradient Dark Overlay for Crisp Contrast */}
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-900/80 to-slate-900/50 z-10" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-slate-950/40 z-10" />
 
-        {/* Left Floating Action Arrow */}
-        <button
-          type="button"
-          onClick={prevSlide}
-          aria-label="Previous Slide"
-          className="absolute left-3 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-black/45 hover:bg-brand-600 border border-white/25 hover:border-brand-400 text-white shadow-2xl backdrop-blur-md transition-all duration-300 hover:scale-110 active:scale-95 group/arrow"
-        >
-          <svg
-            className="h-6 w-6 sm:h-7 sm:w-7 transition-transform group-hover/arrow:-translate-x-1"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        {/* Right Floating Action Arrow */}
-        <button
-          type="button"
-          onClick={nextSlide}
-          aria-label="Next Slide"
-          className="absolute right-3 sm:right-6 md:right-8 top-1/2 -translate-y-1/2 z-30 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-black/45 hover:bg-brand-600 border border-white/25 hover:border-brand-400 text-white shadow-2xl backdrop-blur-md transition-all duration-300 hover:scale-110 active:scale-95 group/arrow"
-        >
-          <svg
-            className="h-6 w-6 sm:h-7 sm:w-7 transition-transform group-hover/arrow:translate-x-1"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-
         {/* Hero Content */}
-        <div className="relative z-20 container-page flex min-h-[580px] sm:min-h-[620px] flex-col justify-center py-20 px-8 sm:px-16 md:px-20">
+        <div className="relative z-20 container-page flex min-h-[580px] sm:min-h-[620px] flex-col justify-center py-20">
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="badge w-fit bg-brand-600/95 text-white shadow-lg backdrop-blur-sm px-3.5 py-1 text-xs font-bold uppercase tracking-wider">
               ★ Trusted Supplier Since Years
             </span>
-            <span className="inline-flex items-center rounded-full bg-white/20 px-3 py-0.5 text-xs font-semibold text-white backdrop-blur-md border border-white/20">
+            <span className="inline-flex items-center rounded-full bg-white/20 px-3.5 py-1 text-xs font-semibold text-white backdrop-blur-md border border-white/20 transition-all">
               {heroSlides[currentSlide]?.tag}
             </span>
           </div>
@@ -312,45 +268,6 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
               Contact Us
             </a>
           </div>
-
-          {/* Slider Bottom Indicators & Slide Cards */}
-          <div className="mt-12 flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/15">
-            {/* Step Progress Pill Indicators */}
-            <div className="flex items-center gap-2">
-              {heroSlides.map((slide, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setCurrentSlide(idx)}
-                  className={`h-2.5 rounded-full transition-all duration-300 ${
-                    idx === currentSlide
-                      ? "w-9 bg-brand-500 shadow-lg shadow-brand-500/50"
-                      : "w-2.5 bg-white/40 hover:bg-white/80"
-                  }`}
-                  aria-label={`Go to slide ${idx + 1}: ${slide.caption}`}
-                />
-              ))}
-            </div>
-
-            {/* Slide Title / Counter Label */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold text-slate-300 hidden sm:inline-block">
-                {heroSlides[currentSlide]?.caption}
-              </span>
-              <span className="rounded-lg bg-black/40 px-2.5 py-1 text-xs font-bold text-white border border-white/20 backdrop-blur-sm">
-                {String(currentSlide + 1).padStart(2, "0")} / {String(heroSlides.length).padStart(2, "0")}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic 2.5s Top Slide Progress Bar */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-white/10 z-30">
-          <div
-            key={currentSlide}
-            className="h-full bg-brand-500 shadow-sm transition-all animate-[sliderProgress_2.5s_linear]"
-            style={{ width: "100%" }}
-          />
         </div>
       </section>
 
