@@ -291,6 +291,138 @@ export const COMPARISONS: ComparisonItem[] = [
     followupEn: "Both work together in RCC — would you like a full material list?",
     followupHi: "RCC में दोनों साथ काम करते हैं — क्या आप पूरी material list चाहेंगे?",
   },
+  {
+    id: "fe500_vs_fe500d",
+    a: {
+      nameEn: "Fe 500",
+      nameHi: "Fe 500 TMT",
+      pointsEn: [
+        "Standard high-yield strength TMT steel.",
+        "Min elongation ~12%.",
+        "Suitable for general non-critical residential framing.",
+      ],
+      pointsHi: [
+        "मानक high-strength TMT सरिया।",
+        "न्यूनतम elongation ~12%।",
+        "सामान्य आवासीय निर्माण के लिए उपयुक्त।",
+      ],
+    },
+    b: {
+      nameEn: "Fe 500D",
+      nameHi: "Fe 500D TMT (D = Ductile)",
+      pointsEn: [
+        "High ductility (D = Ductile) with min 16% elongation.",
+        "Superior earthquake & seismic shock resistance.",
+        "Lower sulfur/phosphorus impurities, better bendability.",
+      ],
+      pointsHi: [
+        "अधिक लचीलापन (D = Ductile) और 16%+ elongation।",
+        "भूकंपरोधी (Earthquake-resistant) संरचनाओं के लिए सर्वोत्तम।",
+        "कम अशुद्धियां और आसानी से मोड़ा जा सकने वाला।",
+      ],
+    },
+    followupEn: "Fe 500D is recommended for RCC columns and slabs in earthquake zones. Would you like a steel estimate?",
+    followupHi: "भूकंप प्रभावित क्षेत्रों में RCC छत और कॉलम के लिए Fe 500D सबसे उपयुक्त है। क्या आपको सरिया का अनुमान चाहिए?",
+  },
+  {
+    id: "m20_vs_m25",
+    a: {
+      nameEn: "M20 Concrete",
+      nameHi: "M20 कंक्रीट (1:1.5:3)",
+      pointsEn: [
+        "Standard mix ratio: 1 Cement : 1.5 Sand : 3 Aggregate.",
+        "Characteristic strength: 20 N/mm² at 28 days.",
+        "Minimum grade for standard residential RCC slabs and beams.",
+      ],
+      pointsHi: [
+        "मानक मिक्स रेशो: 1 सीमेंट : 1.5 बालू : 3 गिट्टी।",
+        "28 दिन में सामर्थ्य: 20 N/mm²।",
+        "साधारण 1-2 मंजिला घर की छत और बीम के लिए मानक।",
+      ],
+    },
+    b: {
+      nameEn: "M25 Concrete",
+      nameHi: "M25 कंक्रीट (1:1:2)",
+      pointsEn: [
+        "Richer mix ratio: 1 Cement : 1 Sand : 2 Aggregate.",
+        "Characteristic strength: 25 N/mm² at 28 days.",
+        "Recommended for heavy columns, commercial frames, and water tanks.",
+      ],
+      pointsHi: [
+        "मजबूत मिक्स रेशो: 1 सीमेंट : 1 बालू : 2 गिट्टी।",
+        "28 दिन में सामर्थ्य: 25 N/mm²।",
+        "मल्टी-स्टोरी कॉलम, भारी बीम और पानी की टंकी के लिए उपयुक्त।",
+      ],
+    },
+    followupEn: "Would you like concrete material calculations for your roof slab?",
+    followupHi: "क्या आप अपनी छत की ढलाई के लिए सीमेंट, बालू और गिट्टी की गणना करना चाहते हैं?",
+  },
+  {
+    id: "vitrified_vs_ceramic",
+    a: {
+      nameEn: "Vitrified Tiles",
+      nameHi: "विट्रीफाइड टाइल्स",
+      pointsEn: [
+        "Extremely low water absorption (<0.5%).",
+        "Very strong, scratch resistant, stain resistant.",
+        "Ideal for living rooms, bedrooms, and heavy foot-traffic areas.",
+      ],
+      pointsHi: [
+        "पानी सोखने की क्षमता न के बराबर (<0.5%)।",
+        "काफी मजबूत, खरोंच व दाग-धब्बे रोधी।",
+        "लिविंग रूम, बेडरूम और पूरे घर की फ्लोरिंग के लिए बेस्ट।",
+      ],
+    },
+    b: {
+      nameEn: "Ceramic Tiles",
+      nameHi: "सिरेमिक टाइल्स",
+      pointsEn: [
+        "Higher water absorption (3-10%).",
+        "More economical, lightweight, available in non-skid textures.",
+        "Best suited for bathroom walls, kitchen splashbacks, and balconies.",
+      ],
+      pointsHi: [
+        "पानी सोखने की दर अधिक (3-10%)।",
+        "किफायती, हल्की और फिसलन-रोधी (anti-skid) सतह।",
+        "बाथरूम की दीवारों, किचन डैडो और बालकनी के लिए सही।",
+      ],
+    },
+    followupEn: "Would you like an estimate of tile boxes needed for your rooms?",
+    followupHi: "क्या आप अपने कमरों के लिए टाइल के डिब्बों की गणना चाहते हैं?",
+  },
+  {
+    id: "rmc_vs_sitemix",
+    a: {
+      nameEn: "Ready Mix Concrete (RMC)",
+      nameHi: "रेडी मिक्स कंक्रीट (RMC)",
+      pointsEn: [
+        "Computer-controlled batching with consistent water-cement ratio.",
+        "Very fast pouring with concrete pump directly to high floors.",
+        "Reduces on-site clutter, labour, and noise.",
+      ],
+      pointsHi: [
+        "प्लांट में कंप्यूटर द्वारा सटीक वजन और सही अनुपात।",
+        "पंप से सीधे ऊपरी मंजिल तक बहुत तेज ढलाई।",
+        "साइट पर रेत/गिट्टी का फैलाव और लेबर की सिरदर्दी नहीं।",
+      ],
+    },
+    b: {
+      nameEn: "Site Mixed Concrete",
+      nameHi: "साइट मिक्स (मिक्सर मशीन)",
+      pointsEn: [
+        "Economical for small pours and independent houses.",
+        "Easier to adjust timings without transit delay risk.",
+        "Requires vigilant on-site supervision of water and box measurements.",
+      ],
+      pointsHi: [
+        "छोटे कामों और एकल मकानों के लिए काफी किफायती।",
+        "ट्रैफिक या डिलीवरी में देरी का कोई खतरा नहीं।",
+        "पानी की मात्रा और फर्मा नाप पर कड़ी निगरानी जरूरी।",
+      ],
+    },
+    followupEn: "What is your roof slab area to decide between RMC and mixer machine?",
+    followupHi: "RMC या साइट मिक्सर में से चुनने के लिए आपकी छत का एरिया कितना है?",
+  },
 ];
 
 /** Find a comparison whose A/B names appear in the text (e.g. "ACC vs Nuvoco"). */

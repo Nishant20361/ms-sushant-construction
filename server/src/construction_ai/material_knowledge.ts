@@ -962,6 +962,161 @@ export const MATERIAL_KNOWLEDGE: MaterialKnowledgeItem[] = [
     notesEn: ["Follow local safety law and competent supervisor instructions; do not treat this as a complete safety plan."],
     notesHi: ["स्थानीय safety law और competent supervisor की instruction मानें; इसे पूरा safety plan न समझें।"],
   },
+  {
+    id: "tmt_fe500d_engineering",
+    category: "steel",
+    nameEn: "Fe 500D TMT Rebar (Ductile Grade)",
+    nameHi: "Fe 500D TMT सरिया (डक्टाइल ग्रेड)",
+    keywords: ["fe 500d", "fe500d", "tmt bar", "sariya", "सरिया", "tata tiscon", "mongia", "steel grade", "earthquake steel"],
+    benefitsEn: [
+      "High ductility with minimum 16% elongation provides superior earthquake safety.",
+      "Lower carbon content allows easy bending, rebending and welding without cracking.",
+      "Rib pattern provides excellent mechanical bonding with concrete.",
+    ],
+    benefitsHi: [
+      "16%+ लचीलापन (elongation) भूकंप के झटकों में इमारत को टूटने से बचाता है।",
+      "कम कार्बन होने से सरिया आसानी से बिना टूटे 180° तक मुड़ जाता है।",
+      "पसलियों (ribs) की वजह से कंक्रीट के साथ बहुत मजबूत पकड़ बनती है।",
+    ],
+    usageEn: [
+      "RCC roof slabs (8mm & 10mm), Beams (12mm, 16mm & 20mm), Columns (12mm, 16mm, 20mm & 25mm), and Footings.",
+      "Stirrups / Ties (8mm @ 100-150mm spacing).",
+    ],
+    usageHi: [
+      "RCC छत ढलाई (8mm और 10mm), बीम (12mm, 16mm, 20mm), कॉलम (12mm, 16mm, 20mm, 25mm) और नींव।",
+      "रिंग/टाई (8mm @ 100-150mm दूरी पर)।",
+    ],
+    notesEn: [
+      "Always maintain 50d lap length (e.g. 600mm for 12mm bar). Use 18 gauge GI binding wire.",
+      "Store raised off the ground covered with tarpaulin to prevent rusting.",
+    ],
+    notesHi: [
+      "हमेशा 50d लैप लेंथ दें (12mm सरिया के लिए 2 फीट)। 18 गेज बाइंडिंग वायर इस्तेमाल करें।",
+      "जमीन से ऊपर लकड़ी के गुटके पर रखें और तिरपाल से ढकें ताकि जंग न लगे।",
+    ],
+  },
+  {
+    id: "concrete_mix_design_m20_m25",
+    category: "cement",
+    nameEn: "Concrete Mix Design (M20 & M25)",
+    nameHi: "कंक्रीट मिक्स डिज़ाइन (M20 और M25)",
+    keywords: ["m20", "m25", "mix design", "ratio", "1:1.5:3", "1:1:2", "concrete mix", "dhalai ratio", "कंक्रीट अनुपात"],
+    benefitsEn: [
+      "M20 (1 Cement : 1.5 Sand : 3 Aggregate) gives 20 N/mm² 28-day characteristic strength for normal slabs/beams.",
+      "M25 (1 Cement : 1 Sand : 2 Aggregate) gives 25 N/mm² strength for heavy columns, water tanks, and commercial slabs.",
+      "Maintaining proper water-cement ratio (0.45 - 0.50) ensures maximum density and zero porosity.",
+    ],
+    benefitsHi: [
+      "M20 (1 सीमेंट : 1.5 बालू : 3 गिट्टी) साधारण 1-2 मंजिला छत और बीम के लिए मानक है।",
+      "M25 (1 सीमेंट : 1 बालू : 2 गिट्टी) मल्टी-स्टोरी कॉलम, भारी बीम और पानी की टंकी के लिए सर्वोत्तम है।",
+      "पानी का सही अनुपात (1 बोरी सीमेंट में 25-28 लीटर पानी) रखने से कंक्रीट कभी कमजोर नहीं पड़ता।",
+    ],
+    usageEn: [
+      "RCC Slab Casting, Plinth Beams, Columns, Footings, and Staircases.",
+    ],
+    usageHi: [
+      "छत की ढलाई, प्लिंथ बीम, कॉलम, नींव और सीढ़ियां।",
+    ],
+    notesEn: [
+      "Add integral waterproofing compound (Dr. Fixit LW+ 200ml/bag). Vibrate with needle vibrator.",
+      "Cure continuously with water ponding for at least 14-21 days.",
+    ],
+    notesHi: [
+      "प्रति बोरी 200ml वाटरप्रूफिंग केमिकल (Dr. Fixit LW+) जरूर मिलाएं। वाइब्रेटर अवश्य चलाएं।",
+      "छत पर क्यारियां (ponding) बनाकर कम से कम 14 से 21 दिन लगातार तराई करें।",
+    ],
+  },
+  {
+    id: "sand_msand_psand_guide",
+    category: "sand",
+    nameEn: "M-Sand (Concrete) & P-Sand (Plaster)",
+    nameHi: "M-Sand (कंक्रीट) और P-Sand (प्लास्टर)",
+    keywords: ["m-sand", "msand", "p-sand", "psand", "manufactured sand", "balu", "बालू", "रेत", "river sand"],
+    benefitsEn: [
+      "M-Sand (0-4.75mm) is cubical manufactured sand completely free from silt, clay, and organic impurities.",
+      "P-Sand (0-2.36mm) has ultra-fine graded particles providing super-smooth crack-free plaster finish.",
+      "100% eco-friendly replacement for scarce and adulterated river sand.",
+    ],
+    benefitsHi: [
+      "M-Sand (0-4.75mm) में कोई मिट्टी या गाद (silt/clay) नहीं होती, जिससे कंक्रीट 15-20% ज्यादा मजबूत बनता है।",
+      "P-Sand (0-2.36mm) बहुत महीन और छनी हुई होती है, जिससे प्लास्टर में कभी दरारें (cracks) नहीं आतीं।",
+      "नदी की बालू की तुलना में ज्यादा भरोसेमंद, शुद्ध और किफायती।",
+    ],
+    usageEn: [
+      "M-Sand for RCC Concrete, Masonry Mortar (1:4 and 1:6 ratios).",
+      "P-Sand for Internal 12mm and External 15-20mm Wall Plaster.",
+    ],
+    usageHi: [
+      "RCC कंक्रीट और ईंट चिनाई के मसाले (1:4 और 1:6) के लिए M-Sand।",
+      "अंदर और बाहर की दीवारों के चिकने प्लास्टर के लिए P-Sand।",
+    ],
+    notesEn: [
+      "For river sand, perform glass test — silt content must be under 6-8%.",
+    ],
+    notesHi: [
+      "नदी की बालू इस्तेमाल करते समय ध्यान दें कि उसमें 6-8% से ज्यादा मिट्टी न हो।",
+    ],
+  },
+  {
+    id: "waterproofing_full_system",
+    category: "waterproofing",
+    nameEn: "Complete Home Waterproofing Solutions",
+    nameHi: "सम्पूर्ण होम वाटरप्रूफिंग गाइड",
+    keywords: ["dr fixit", "lw+", "urp", "waterproofing chemical", "seepage", "seelan", "सीलन", "terrace leakage", "bathroom waterproofing"],
+    benefitsEn: [
+      "Integral Liquid (LW+): Mixed directly in concrete (200ml/bag) to block capillary water channels.",
+      "Polymer Coating (URP / Fastflex): 2 coats on roof terrace and sunken bathroom slabs prevent 100% seepage.",
+      "Crack Fillers (CrackX): Fills plaster and surface hairline cracks up to 5mm permanently.",
+    ],
+    benefitsHi: [
+      "Integral Liquid (LW+): कंक्रीट और प्लास्टर में प्रति बोरी 200ml मिलाने से कंक्रीट के अंदर पानी के रास्ते बंद हो जाते हैं।",
+      "Polymer Coating (URP / Fastflex): छत की सतह और बाथरूम के फर्श पर 2 कोट लगाने से कभी सीलन नहीं आती।",
+      "CrackX Paste: दीवारों और छत की 5mm तक की दरारों को हमेशा के लिए सील करता है।",
+    ],
+    usageEn: [
+      "Roof Terraces, Sunken Bathrooms, Water Tanks, Basements, and Plinth DPC.",
+    ],
+    usageHi: [
+      "छत, बाथरूम, पानी की टंकी, बेसमेंट और प्लिंथ डीपीसी।",
+    ],
+    notesEn: [
+      "Always apply polymer coating on clean, sound, pre-wetted concrete. Never apply on dry dust or peeling paint.",
+    ],
+    notesHi: [
+      "कोटिंग हमेशा साफ और हल्की नम कंक्रीट की सतह पर लगाएं, धूल या पुराने पेंट के ऊपर न लगाएं।",
+    ],
+  },
+  {
+    id: "aac_vs_flyash_redbrick_guide",
+    category: "bricks",
+    nameEn: "AAC Blocks vs Fly Ash Bricks vs Red Bricks",
+    nameHi: "AAC ब्लॉक vs फ्लाई ऐश ईंट vs लाल ईंट",
+    keywords: ["aac block", "fly ash", "red brick", "eent", "ईंट", "block", "brick comparison"],
+    benefitsEn: [
+      "AAC Blocks: 60% lighter than red bricks, reduces foundation load, excellent thermal and sound insulation.",
+      "Fly Ash Bricks: Uniform size, sharp edges, saves 20-30% plaster mortar, high compressive strength.",
+      "Red Clay Bricks: Traditional high load-bearing capacity, well suited for non-framed load-bearing walls.",
+    ],
+    benefitsHi: [
+      "AAC ब्लॉक: लाल ईंट से 60% हल्का, कमरे को ठंडा रखता है, और भूकंप के समय इमारत पर वजन कम डालता है।",
+      "फ्लाई ऐश ईंट: बिल्कुल एक साइज और तीखे कोने, जिससे चिनाई और प्लास्टर में 25% सीमेंट मसाला बचता है।",
+      "लाल ईंट: पारंपरिक मजबूती और लोड-बेयरिंग दीवारों के लिए टिकाऊ।",
+    ],
+    usageEn: [
+      "AAC Blocks for framed multi-storey buildings and external/internal walls.",
+      "Fly Ash and Red Bricks for residential houses, boundary walls, and foundation masonry.",
+    ],
+    usageHi: [
+      "कॉलम-बीम वाले मकानों और फ्लैट्स के लिए AAC ब्लॉक सबसे बेस्ट।",
+      "साधारण मकानों, बाउंड्री वॉल और नींव की चिनाई के लिए फ्लाई ऐश व लाल ईंट।",
+    ],
+    notesEn: [
+      "Soak red bricks thoroughly before laying. Use block adhesive for AAC blocks.",
+    ],
+    notesHi: [
+      "लाल ईंटों को चिनाई से पहले पानी में अच्छी तरह भिगोएं। AAC ब्लॉक को ब्लॉक एडहेसिव से जोड़ें।",
+    ],
+  },
 ];
 
 /** Find material knowledge items whose keywords match the text (any match). */
