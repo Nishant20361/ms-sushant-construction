@@ -1,8 +1,12 @@
 import Groq from "groq-sdk";
 
+export type GroqContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 export interface GroqMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: string | GroqContentPart[];
 }
 
 /**
@@ -22,6 +26,7 @@ You assist homeowners, contractors, builders, and customers with:
 - Finishing & Interior: 12mm internal / 15-20mm external cement plaster (1:4, 1:6), 2 coats white cement putty, 1 coat primer, 2 coats acrylic emulsion / weatherproof exterior paint, Vitrified tiles (2x2, 2x4, 4x2), Anti-skid bathroom tiles, Granite kitchen platforms.
 - MEP Plumbing & Electrical: CPVC (hot & cold water, up to 93°C), UPVC (cold water/external supply), PVC SWR (drainage 75mm/110mm), FRLS Copper wires (1.0/1.5/2.5/4.0/6.0 sq mm), MCB/RCCB distribution boards, Overhead water tank sizing (135-150 Liters per person per day).
 - Site Execution & Sequence: Soil testing -> Excavation -> PCC -> Footing/Column -> Plinth beam & Backfilling -> DPC -> Anti-termite treatment -> Brickwork to lintel -> Lintel beam & chajja -> Brickwork to slab -> Shuttering & Steel reinforcement -> Slab casting -> Curing (14-21 days) -> De-shuttering -> MEP conduit -> Plastering -> Flooring & Tiling -> Putty & Paint -> Door/Window fitting -> Handover.
+- Visual Inspection & Image Analysis: When the user attaches an image, inspect the site condition, cracks, structural members, slab shuttering, honeycombing, rebar layout, moisture/dampness, cement/steel packaging, or building plan drawings. Provide concise, clear civil engineering observations, root cause analysis, and practical solutions.
 - Indian Construction Thumb Rules (Approximate planning figures per sq.ft built-up area):
   * Cement: ~0.4 to 0.45 bags/sq.ft
   * Steel: ~3.5 to 4.5 kg/sq.ft
@@ -46,6 +51,8 @@ Core Rules & Communication Style:
 export const DEFAULT_SYSTEM_PROMPT = CONSTRUCTION_SYSTEM_PROMPT;
 export const GROQ_PRIMARY_MODEL = "openai/gpt-oss-20b";
 export const GROQ_FALLBACK_MODEL = "groq/compound-mini";
+export const GROQ_VISION_PRIMARY_MODEL = "llama-3.2-11b-vision-preview";
+export const GROQ_VISION_FALLBACK_MODEL = "llama-3.2-90b-vision-preview";
 
 let groqInstance: Groq | null = null;
 let lastApiKey: string | null = null;
@@ -175,22 +182,33 @@ export function categorizeGroqError(err: any, model?: string, durationMs?: numbe
 export async function askGroq(
   prompt: string,
   systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
-  model: string = process.env.GROQ_PRIMARY_MODEL?.trim() || GROQ_PRIMARY_MODEL,
-  history: GroqMessage[] = []
+  model?: string,
+  history: GroqMessage[] = [],
+  imageUrl?: string
 ): Promise<{ text: string; model: string }> {
   if (process.env.NODE_ENV === "test" && process.env.GROQ_ALLOW_TEST_REQUESTS !== "true") {
     throw new Error("Groq is disabled in test mode");
   }
 
   const client = getGroqClient();
-  const messages: GroqMessage[] = [
+  const userContent: string | GroqContentPart[] = imageUrl
+    ? [
+        { type: "text", text: prompt },
+        { type: "image_url", image_url: { url: imageUrl } },
+      ]
+    : prompt;
+
+  const messages: any[] = [
     { role: "system", content: systemPrompt },
-    ...history.filter((message) => message.role !== "system" && message.content.trim()).slice(-8),
-    { role: "user", content: prompt },
+    ...history
+      .filter((message) => message.role !== "system" && (typeof message.content === "string" ? message.content.trim() : true))
+      .slice(-8),
+    { role: "user", content: userContent },
   ];
 
-  const fallbackModel = process.env.GROQ_FALLBACK_MODEL?.trim() || GROQ_FALLBACK_MODEL;
-  const candidateModels = Array.from(new Set([model, fallbackModel]));
+  const primaryModel = model || (imageUrl ? GROQ_VISION_PRIMARY_MODEL : (process.env.GROQ_PRIMARY_MODEL?.trim() || GROQ_PRIMARY_MODEL));
+  const fallbackModel = imageUrl ? GROQ_VISION_FALLBACK_MODEL : (process.env.GROQ_FALLBACK_MODEL?.trim() || GROQ_FALLBACK_MODEL);
+  const candidateModels = Array.from(new Set([primaryModel, fallbackModel]));
 
   let lastError: any = null;
 
@@ -235,6 +253,9 @@ export async function askGroq(
  *
  * @param message User question.
  * @param context Retrieved knowledge / dataset context.
+ * @param language Response language.
+ * @param history Recent conversation messages.
+ * @param imageUrl Optional image (URL or data URL) for multimodal analysis.
  * @returns AI generated answer string.
  */
 export type GroqResponseLanguage = "Hindi" | "English" | "Hinglish" | "Other";
@@ -274,7 +295,7 @@ export function resolveGroqResponseLanguage(
   return detectGroqResponseLanguage(normalized);
 }
 
-export function buildGroqPrompt(message: string, context: string = "", language: GroqResponseLanguage = "English"): string {
+export function buildGroqPrompt(message: string, context: string = "", language: GroqResponseLanguage = "English", hasImage: boolean = false): string {
   const responseLanguage = language === "English"
     ? "Respond entirely in natural English unless the user explicitly asks for another language."
     : language === "Hindi"
@@ -282,7 +303,10 @@ export function buildGroqPrompt(message: string, context: string = "", language:
       : language === "Hinglish"
         ? "Respond naturally in Hinglish using Roman script, matching the user's casual Hindi-English style. Do not convert the whole answer to Devanagari Hindi or formal English."
         : "Respond in the same language as the user's latest message where supported.";
-  let prompt = `Question: ${message}\n\nRESPONSE LANGUAGE REQUIREMENT: ${responseLanguage}`;
+  let prompt = `Question / Request: ${message || (hasImage ? "Please analyze this attached construction/building image and give detailed civil engineering recommendations." : "Hello")}\n\nRESPONSE LANGUAGE REQUIREMENT: ${responseLanguage}`;
+  if (hasImage) {
+    prompt += `\n\nATTACHED IMAGE CONTEXT: The user uploaded a photo related to construction/building. Analyze visible elements (materials, brickwork, slab casting, rebar reinforcement, cracks, dampness, finishing, blueprint dimensions, or brand tags). Provide direct, practical civil engineering inspection findings and next steps.`;
+  }
   if (context && context.trim()) prompt += `\n\nRELEVANT CONSTRUCTION KNOWLEDGE & DATASET CONTEXT:\n${context}`;
   return prompt;
 }
@@ -291,10 +315,11 @@ export async function answerWithGroq(
   message: string,
   context: string = "",
   language: GroqResponseLanguage = "English",
-  history: GroqMessage[] = []
+  history: GroqMessage[] = [],
+  imageUrl?: string
 ): Promise<string> {
-  const prompt = buildGroqPrompt(message, context, language);
-  const { text } = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT, undefined, history);
+  const prompt = buildGroqPrompt(message, context, language, !!imageUrl);
+  const { text } = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT, undefined, history, imageUrl);
   if (!text.trim()) throw new Error("Groq returned an empty response");
   return text;
 }

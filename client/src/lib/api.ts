@@ -173,14 +173,16 @@ export const publicApi = {
   health(): Promise<{ status: string; service: string; time: string }> {
     return request("/health");
   },
-constructionAssistantChat(payload: {
+  constructionAssistantChat(payload: {
     message: string;
     sessionId?: string;
     language?: AssistantLanguage;
+    imageUrl?: string;
   }): Promise<ConstructionChatResponse> {
     const body: Record<string, string> = { message: payload.message };
     if (payload.sessionId) body.sessionId = payload.sessionId;
     if (payload.language) body.language = payload.language;
+    if (payload.imageUrl) body.imageUrl = payload.imageUrl;
     return request(
       "/construction-assistant/chat",
       { method: "POST", body: JSON.stringify(body) },

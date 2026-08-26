@@ -59,16 +59,22 @@ router.post(
   assistantLimiter,
   asyncHandler(async (req, res) => {
     const body = constructionChatSchema.parse(req.body);
-    const message = body.message.trim();
-    if (!message) {
+    const imageUrl = body.imageUrl?.trim();
+    let message = body.message.trim();
+    if (!message && !imageUrl) {
       res.status(200).json({
         reply: body.language === "Hindi"
-          ? "कृपया कुछ टाइप करें… 😊"
-          : "Please type something… 😊",
+          ? "कृपया कुछ टाइप करें या फोटो अपलोड करें… 😊"
+          : "Please type a message or upload a photo… 😊",
         language: body.language === "Hindi" ? "Hindi" : "English",
         sessionId: body.sessionId ?? "",
       });
       return;
+    }
+    if (!message && imageUrl) {
+      message = body.language === "Hindi"
+        ? "कृपया इस फोटो का निरीक्षण करके निर्माण संबंधी सुझाव दें।"
+        : "Please analyze this construction photo and provide engineering recommendations.";
     }
 
     // Resolve session (and a preferred language).
@@ -111,9 +117,13 @@ router.post(
     // through Groq, with local results supplied as authoritative calculation context.
     const local = processMessage(data, message);
     const advanced = processAdvancedCalculator(message);
-    const fallback = advanced.type && advanced.result
-      ? { reply: advanced.formattedText, language: data.language, producedEstimate: true }
-      : local;
+    const fallbackReply = imageUrl
+      ? (messageLanguage === "Hindi"
+          ? "📸 आपकी निर्माण फोटो प्राप्त हो गई है।\n\n• यदि यह **छत/ढलाई (RCC Slab)** है: सरिया की स्पेसिंग, 25mm कवर ब्लॉक और वाइब्रेटर का सही उपयोग जांचें। ढलाई के बाद 14-21 दिन तराई (Curing) अवश्य करें।\n• यदि यह **दीवार/क्रैक (Cracks/Dampness)** है: बारीक हेयरलाइन क्रैक के लिए Dr. Fixit CrackX पेस्ट लगाएं और सीलन वाले हिस्से में 2 कोट वॉटरप्रूफिंग पॉलीमर लगाएं।\n• यदि यह **मटेरियल या बिल** है: सही ब्रांड (ACC, Dalmia, UltraTech, Tata Tiscon) और ISI मार्क अवश्य चेक करें।\n\nआप इस बारे में विशेष सवाल भी पूछ सकते हैं!"
+          : "📸 Construction photo received.\n\n• For **RCC Slab / Concrete**: Ensure proper rebar spacing, 25mm cover blocks, uniform vibration, and minimum 14–21 days pond curing.\n• For **Cracks / Moisture**: Treat hairline shrinkage cracks with Dr. Fixit CrackX paste; apply polymer waterproofing coating for seepage.\n• For **Materials / Bills**: Verify ISI certification, brand packaging, and test certificates.\n\nFeel free to ask any specific question about this photo!")
+      : (advanced.type && advanced.result ? advanced.formattedText : local.reply);
+
+    const fallback = { reply: fallbackReply, language: data.language, producedEstimate: !imageUrl && (advanced.type && advanced.result ? true : local.producedEstimate) };
     const stored = sessions.get(sessionId);
     let retrievedContext = "";
     try {
@@ -136,7 +146,7 @@ router.post(
     };
 
     try {
-      const reply = await answerWithGroq(message, context, messageLanguage, stored?.history ?? []);
+      const reply = await answerWithGroq(message, context, messageLanguage, stored?.history ?? [], imageUrl);
       result = {
         reply,
         language: messageLanguage,
@@ -149,7 +159,10 @@ router.post(
     }
 
     if (stored) {
-      const nextHistory: GroqMessage[] = [...stored.history, { role: "user", content: message }, { role: "assistant", content: result.reply }];
+      const userEntryContent = imageUrl
+        ? [{ type: "text" as const, text: message }, { type: "image_url" as const, image_url: { url: imageUrl } }]
+        : message;
+      const nextHistory: GroqMessage[] = [...stored.history, { role: "user", content: userEntryContent }, { role: "assistant", content: result.reply }];
       stored.history = nextHistory.slice(-8);
     }
 
@@ -158,7 +171,7 @@ router.post(
     try {
       await prisma.constructionQuery.create({
         data: {
-          customerMessage: message.slice(0, 2000),
+          customerMessage: (message + (imageUrl ? " [Photo Attached]" : "")).slice(0, 2000),
           language: result.language,
           assistantReply: result.reply.slice(0, 10000),
         },

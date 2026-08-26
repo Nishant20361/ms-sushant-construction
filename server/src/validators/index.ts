@@ -268,9 +268,13 @@ export const resetPasswordSchema = z.object({
 
 // ------------------------- Construction Assistant --------------------
 export const constructionChatSchema = z.object({
-  message: z.string().trim().min(1, "Message cannot be empty").max(2000),
+  message: z.string().trim().max(2000).default(""),
   sessionId: z.string().trim().max(100).optional(),
   language: z.enum(["Hindi", "English", "Hinglish", "Other"]).optional(),
+  imageUrl: z.string().trim().max(15_000_000).optional(),
+}).refine((data) => data.message.length > 0 || (data.imageUrl && data.imageUrl.length > 0), {
+  message: "Either a message or an image must be provided",
+  path: ["message"],
 });
 
 // ------------------------- Construction Knowledge (Phase 5) --------------
