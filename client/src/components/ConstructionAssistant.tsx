@@ -407,7 +407,7 @@ export default function ConstructionAssistant() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const processImageFile = (file: File) => {
+  const processImageFile = async (file: File) => {
     if (!file.type.startsWith("image/")) {
       setVoiceError(
         languageRef.current === "Hindi"
@@ -417,36 +417,88 @@ export default function ConstructionAssistant() {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > 20 * 1024 * 1024) {
       setVoiceError(
         languageRef.current === "Hindi"
-          ? "फोटो का साइज 10MB से कम होना चाहिए।"
-          : "Image size must be less than 10MB."
+          ? "फोटो का साइज 20MB से कम होना चाहिए।"
+          : "Image size must be less than 20MB."
       );
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-      const sizeKb = Math.round(file.size / 1024);
-      setSelectedImage({
-        file,
-        dataUrl,
-        name: file.name,
-        sizeFormatted: file.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`,
-      });
-      setVoiceError(null);
-    };
-    reader.onerror = () => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const rawDataUrl = e.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 1280;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            setSelectedImage({
+              file,
+              dataUrl: rawDataUrl,
+              name: file.name,
+              sizeFormatted: `${Math.round(file.size / 1024)} KB`,
+            });
+            setVoiceError(null);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          const approxSizeKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
+
+          setSelectedImage({
+            file,
+            dataUrl: compressedDataUrl,
+            name: file.name,
+            sizeFormatted: approxSizeKb > 1024 ? `${(approxSizeKb / 1024).toFixed(1)} MB` : `${approxSizeKb} KB`,
+          });
+          setVoiceError(null);
+        };
+        img.onerror = () => {
+          setSelectedImage({
+            file,
+            dataUrl: rawDataUrl,
+            name: file.name,
+            sizeFormatted: `${Math.round(file.size / 1024)} KB`,
+          });
+          setVoiceError(null);
+        };
+        img.src = rawDataUrl;
+      };
+      reader.onerror = () => {
+        setVoiceError(
+          languageRef.current === "Hindi"
+            ? "फोटो लोड करने में समस्या आई।"
+            : "Failed to read image file."
+        );
+      };
+      reader.readAsDataURL(file);
+    } catch {
       setVoiceError(
         languageRef.current === "Hindi"
-          ? "फोटो लोड करने में समस्या आई।"
-          : "Failed to read image file."
+          ? "फोटो प्रोसेस करने में समस्या आई।"
+          : "Failed to process image file."
       );
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -93,7 +93,11 @@ export async function askAgentRouter(
   const primaryModel = isVision ? AGENTROUTER_VISION_PRIMARY : AGENTROUTER_TEXT_PRIMARY;
   const fallbackModel = isVision ? AGENTROUTER_VISION_FALLBACK : AGENTROUTER_TEXT_FALLBACK;
 
-  const messages: AgentRouterMessage[] = [{ role: "system", content: systemPrompt }];
+  const effectiveSystemPrompt = isVision
+    ? "You are MS Sushant Construction AI Assistant — an advanced multimodal civil engineering consultant and visual perception AI. Analyze any attached image with high visual intelligence. If it is a person/selfie, compliment and converse warmly. If it is a construction photo (slab, rebar, crack, dampness, wall, brick, foundation, paint, material bag, blueprint), provide expert civil engineering inspection and practical remedies. If the user asks in Hindi or Hinglish, provide your detailed response in friendly natural Hinglish/Hindi."
+    : systemPrompt;
+
+  const messages: AgentRouterMessage[] = [{ role: "system", content: effectiveSystemPrompt }];
 
   // Format past history
   for (const h of history) {
@@ -107,14 +111,16 @@ export async function askAgentRouter(
 
   // Format current user message with image if present
   if (isVision) {
+    const visionUserText = prompt && prompt.trim()
+      ? `User Question / Request: ${prompt.trim()}\n\nPlease inspect this attached image thoroughly and answer.`
+      : "Please inspect this attached photo in detail and provide your observations, analysis, and recommendations.";
+
     messages.push({
       role: "user",
       content: [
         {
           type: "text",
-          text:
-            prompt ||
-            "Please analyze this image thoroughly. If it is a construction/building photo, inspect materials, cracks, structural members, or blueprints. If it is a person, selfie, document, object, or scene, describe what you see accurately and converse naturally.",
+          text: visionUserText,
         },
         {
           type: "image_url",
