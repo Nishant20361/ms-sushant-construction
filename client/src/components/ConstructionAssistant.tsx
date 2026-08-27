@@ -180,6 +180,7 @@ const WELCOME_ENGLISH =
 
 // Suggested questions (bilingual-friendly: the assistant auto-detects).
 const SUGGESTED_QUESTIONS: { label: string; message: string }[] = [
+  { label: "🎨 3D घर का डिज़ाइन बनाओ", message: "modern luxury 3 bedroom house ka 3D design banao" },
   { label: "🏠 40×35 घर का estimate", message: "40x35 ka ghar ka estimate do" },
   { label: "🧱 Cement कितना लगेगा?", message: "cement kitna lagega" },
   { label: "🔩 Steel कितना चाहिए?", message: "steel kitna lagega" },
@@ -197,6 +198,58 @@ const SUGGESTED_QUESTIONS: { label: string; message: string }[] = [
   { label: "🏠 RCC या Sheet roof?", message: "RCC roof or sheet which is better?" },
   { label: "🏗️ घर कैसे बनता है?", message: "ghar kaise banta hai?" },
 ];
+
+function FormattedMessageText({
+  text,
+  fromVoice,
+  onImageClick,
+}: {
+  text: string;
+  fromVoice?: boolean;
+  onImageClick: (url: string) => void;
+}) {
+  const parts = text.split(/(!\[.*?\]\(.*?\))/g);
+
+  return (
+    <div className="whitespace-pre-line leading-relaxed">
+      {fromVoice && (
+        <span className="mr-1 inline-block" title="Voice input">
+          🎤
+        </span>
+      )}
+      {parts.map((part, idx) => {
+        const imgMatch = part.match(/!\[(.*?)\]\((.*?)\)/);
+        if (imgMatch) {
+          const alt = imgMatch[1] || "3D Architectural Render";
+          const src = imgMatch[2];
+          return (
+            <div key={idx} className="my-2.5 overflow-hidden rounded-xl border border-white/20 bg-black/40 shadow-lg">
+              <div
+                className="relative group/img cursor-pointer"
+                onClick={() => onImageClick(src)}
+              >
+                <img
+                  src={src}
+                  alt={alt}
+                  className="max-h-72 w-full object-cover transition-transform duration-300 group-hover/img:scale-[1.02]"
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/img:opacity-100">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-black/80 px-3 py-1.5 text-xs font-bold text-white shadow backdrop-blur-sm">
+                    🔍 3D डिज़ाइन बड़ा करके देखें
+                  </span>
+                </div>
+              </div>
+              <p className="bg-slate-900/90 px-3 py-1.5 text-[11px] font-semibold text-brand-300">
+                ✨ AI Generated 3D Architectural Visual
+              </p>
+            </div>
+          );
+        }
+        return <span key={idx}>{part}</span>;
+      })}
+    </div>
+  );
+}
 
 let msgSeq = 0;
 
@@ -719,15 +772,12 @@ export default function ConstructionAssistant() {
                     </div>
                   )}
 
-                  {/* Message Text */}
-                  <div className="whitespace-pre-line">
-                    {m.fromVoice && (
-                      <span className="mr-1 inline-block" title="Voice input">
-                        🎤
-                      </span>
-                    )}
-                    {m.text}
-                  </div>
+                  {/* Message Text with Markdown Image support */}
+                  <FormattedMessageText
+                    text={m.text}
+                    fromVoice={m.fromVoice}
+                    onImageClick={(url) => setEnlargedImage(url)}
+                  />
 
                   {/* Assistant TTS Listen Button (Natural Sweet Female Voice) */}
                   {m.role === "assistant" && (

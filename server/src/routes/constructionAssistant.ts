@@ -9,7 +9,8 @@ import {
 } from "../construction_ai/assistant.js";
 import { isCalculatorQuestion } from "../construction_ai/rag/intentDetector.js";
 import { getRelevantContext } from "../construction_ai/rag/knowledgeRetriever.js";
-import { answerWithGroq, resolveGroqResponseLanguage, type GroqMessage, type GroqResponseLanguage } from "../construction_ai/groq.js";
+import { resolveGroqResponseLanguage, type GroqMessage, type GroqResponseLanguage } from "../construction_ai/groq.js";
+import { answerWithHybridAi } from "../construction_ai/hybridAiRouter.js";
 import { isAbusiveMessage, respectfulBoundaryReply } from "../construction_ai/conversationSafety.js";
 import { processAdvancedCalculator } from "../construction_ai/calculators/index.js";
 import { assistantLimiter } from "../middleware/rateLimit.js";
@@ -153,16 +154,16 @@ router.post(
     };
 
     try {
-      const reply = await answerWithGroq(message, context, messageLanguage, stored?.history ?? [], imageUrl);
+      const hybridRes = await answerWithHybridAi(message, context, messageLanguage, stored?.history ?? [], imageUrl);
       result = {
-        reply,
+        reply: hybridRes.reply,
         language: messageLanguage,
         conversation: local.conversation,
         suggestions: local.suggestions,
         producedEstimate: advanced.type && advanced.result ? true : local.producedEstimate,
       };
     } catch (error) {
-      console.error("[constructionAssistant] Groq call failed, using local fallback:", error);
+      console.error("[constructionAssistant] Hybrid AI call failed, using local fallback:", error);
       result = {
         ...fallback,
         conversation: local.conversation,
