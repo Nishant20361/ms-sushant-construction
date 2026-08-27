@@ -77,6 +77,7 @@ export async function answerWithHybridAi(
   try {
     const agentRes = await askAgentRouter(prompt, HYBRID_SYSTEM_PROMPT, history, imageUrl);
     if (agentRes.text && agentRes.text.trim()) {
+      console.log(`[HybridAI] Answered via AgentRouter model: ${agentRes.model} (Vision: ${isImage ? "YES" : "NO"})`);
       return {
         reply: agentRes.text,
         engineUsed: "agentrouter",
@@ -91,6 +92,7 @@ export async function answerWithHybridAi(
   try {
     const groqRes = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT, undefined, history, imageUrl);
     if (groqRes.text && groqRes.text.trim()) {
+      console.log(`[HybridAI] Answered via Groq model: ${groqRes.model}`);
       return {
         reply: groqRes.text,
         engineUsed: "groq",

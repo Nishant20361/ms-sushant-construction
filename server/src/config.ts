@@ -13,6 +13,10 @@ const hasGroqKey = !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim(
 console.log("[GROQ CHECK]");
 console.log(`KEY LOADED: ${hasGroqKey ? "YES" : "NO"}`);
 
+console.log("[AGENTROUTER CHECK]");
+console.log(`KEY LOADED: YES (${process.env.AGENTROUTER_API_KEY ? "CUSTOM_ENV" : "DEFAULT_BUILTIN"})`);
+console.log(`MODELS: gpt-5.6-sol (Vision), claude-opus-4-8 (Vision), deepseek-v4-flash (Fast Reasoning)`);
+
 const isProd = process.env.NODE_ENV === "production";
 
 function required(name: string): string {
