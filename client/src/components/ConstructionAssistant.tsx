@@ -81,41 +81,67 @@ function getSpeechRecognition(): WebSpeechRecognition | null {
   return Ctor ? new Ctor() : null;
 }
 
-// Helper to strip markdown, special characters and emojis for clean, natural speech pronunciation
+// Helper to expand construction units and strip markdown/emojis for sweet, natural speech pronunciation
 function cleanTextForSpeech(raw: string): string {
-  return raw
+  let text = raw
+    // Expand common construction units & abbreviations for natural listening
+    .replace(/(\d+)\s*(?:sq\.?\s*ft|sqft|sq\s*feet)/gi, "$1 स्क्वायर फीट")
+    .replace(/(\d+)\s*(?:cft|cu\.?\s*ft)/gi, "$1 क्यूबिक फीट")
+    .replace(/₹\s*(\d+)/g, "$1 रुपये")
+    .replace(/(\d+)\s*bags?\b/gi, "$1 बोरी")
+    .replace(/(\d+)\s*kg\b/gi, "$1 किलो")
+    .replace(/(\d+)\s*mm\b/gi, "$1 एमएम")
+    .replace(/\bRCC\b/g, "आर सी सी")
+    .replace(/\bOPC\b/g, "ओ पी सी")
+    .replace(/\bPPC\b/g, "पी पी सी")
+    .replace(/\bM-Sand\b/gi, "एम सैंड")
+    .replace(/\bP-Sand\b/gi, "पी सैंड")
+    .replace(/\bDPC\b/g, "डी पी सी")
+    // Remove code blocks and inline backticks
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/`([^`]+)`/g, "$1")
+    // Remove markdown bold / italic symbols
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1")
     .replace(/_([^_]+)_/g, "$1")
+    // Remove markdown headers and list bullet symbols
     .replace(/#{1,6}\s+/g, "")
     .replace(/^[\s*->•\d.]+/gm, "")
+    // Remove markdown links [text](url) -> text
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    // Remove emojis & symbols
     .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/gu, "")
+    // Replace consecutive newlines with clean natural pauses
     .replace(/\n+/g, ". ")
     .replace(/\s+/g, " ")
     .trim();
+
+  return text;
 }
 
 /**
- * Find Aditi or best available Indian female voice in browser speech synthesis.
+ * Find highest-definition Natural Neural Indian female voice in browser speech synthesis.
+ * Prioritizes Microsoft Swara/Neerja Natural, Google हिन्दी, Apple Lekha/Kavya Enhanced, Aditi.
  */
-function getAditiIndianVoice(): SpeechSynthesisVoice | null {
+function getNaturalIndianFemaleVoice(): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
   const voices = window.speechSynthesis.getVoices();
   if (!voices || voices.length === 0) return null;
 
-  // 1. Explicit voice containing "Aditi" (Google Aditi, Microsoft Aditi, etc.)
-  const aditi = voices.find((v) => /aditi/i.test(v.name));
-  if (aditi) return aditi;
+  // 1. Top Neural Natural Online voices (Microsoft Swara, Microsoft Neerja, Google Hindi, Apple Lekha Enhanced)
+  const premiumNatural = voices.find((v) =>
+    /swara|neerja|google\s*हिन्दी|google\s*hindi|lekha.*enhanced|lekha.*premium|kavya.*enhanced|aditi.*enhanced/i.test(
+      v.name
+    )
+  );
+  if (premiumNatural) return premiumNatural;
 
-  // 2. Hindi female voices
+  // 2. High-quality Hindi female voices
   const hiFemale = voices.find(
     (v) =>
       (v.lang.startsWith("hi") || /hindi/i.test(v.name)) &&
-      /female|lekha|swara|kavya|kalpana|priya|google/i.test(v.name)
+      /female|swara|neerja|lekha|kavya|kalpana|priya|aditi|google/i.test(v.name)
   );
   if (hiFemale) return hiFemale;
 
@@ -123,20 +149,26 @@ function getAditiIndianVoice(): SpeechSynthesisVoice | null {
   const enInFemale = voices.find(
     (v) =>
       (v.lang.includes("en-IN") || v.lang.includes("en_IN") || /india/i.test(v.name)) &&
-      /female|heera|veena|neerja|pooja|raveena|google/i.test(v.name)
+      /female|heera|veena|neerja|pooja|raveena|google|aditi/i.test(v.name)
   );
   if (enInFemale) return enInFemale;
 
-  // 4. Any Hindi voice
+  // 4. Any voice containing "Aditi", "Swara", "Lekha", "Kavya"
+  const namedVoice = voices.find((v) => /aditi|swara|lekha|kavya|veena/i.test(v.name));
+  if (namedVoice) return namedVoice;
+
+  // 5. Any Hindi voice
   const anyHi = voices.find((v) => v.lang.startsWith("hi") || /hindi/i.test(v.name));
   if (anyHi) return anyHi;
 
-  // 5. Any Indian English voice
-  const anyEnIn = voices.find((v) => v.lang.includes("en-IN") || v.lang.includes("en_IN") || /india/i.test(v.name));
+  // 6. Any Indian English voice
+  const anyEnIn = voices.find(
+    (v) => v.lang.includes("en-IN") || v.lang.includes("en_IN") || /india/i.test(v.name)
+  );
   if (anyEnIn) return anyEnIn;
 
-  // 6. Any female voice or default
-  const anyFemale = voices.find((v) => /female|woman/i.test(v.name));
+  // 7. Any female voice or default
+  const anyFemale = voices.find((v) => /female|woman|girl/i.test(v.name));
   return anyFemale || voices[0] || null;
 }
 
@@ -154,9 +186,8 @@ const SUGGESTED_QUESTIONS: { label: string; message: string }[] = [
   { label: "🏗️ Foundation में क्या लगता है?", message: "foundation me kya kya lagega" },
   { label: "🏠 Roof के लिए क्या चाहिए?", message: "roof banane me kya kya chahiye" },
   { label: "💧 Waterproofing कैसे करें?", message: "waterproofing kaise karein" },
-  { label: "🧱 ACC F2R के बारे में बताओ", message: "ACC F2R ke bare me batao" },
+  { label: "🧱 ACC F2R Cement के फायदे", message: "ACC F2R cement ke bare me batao" },
   { label: "💰 Construction cost कितनी?", message: "construction cost kitni aayegi" },
-  // ---- PART 2 suggested questions (Phases 11-30) ----
   { label: "🏠 Rooms से area निकालें", message: "3 room 1 kitchen 2 bathroom" },
   { label: "⚖️ OPC vs PPC", message: "OPC vs PPC which is better?" },
   { label: "⚖️ M-Sand vs River Sand", message: "M sand vs river sand difference" },
@@ -180,8 +211,9 @@ export default function ConstructionAssistant() {
   const [supportsVoice] = useState<boolean>(() => !!getSpeechRecognition());
   const [showSuggestions, setShowSuggestions] = useState(true);
 
-  // Audio Speech Synthesis state (Aditi Indian Female Voice)
+  // Audio Speech Synthesis state (Natural Sweet Female Voice)
   const [speakingMsgId, setSpeakingMsgId] = useState<number | null>(null);
+  const [voiceName, setVoiceName] = useState<string>("Natural Voice");
 
   // Image Upload State
   const [selectedImage, setSelectedImage] = useState<SelectedImageState | null>(null);
@@ -203,11 +235,14 @@ export default function ConstructionAssistant() {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  // Preload voices for speech synthesis
+  // Preload voices for speech synthesis and identify natural voice
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     const loadVoices = () => {
-      window.speechSynthesis.getVoices();
+      const v = getNaturalIndianFemaleVoice();
+      if (v) {
+        setVoiceName(v.name.replace(/online|natural|\(.*?\)/gi, "").trim() || "Natural Voice");
+      }
     };
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
@@ -290,17 +325,18 @@ export default function ConstructionAssistant() {
     if (!cleaned) return;
 
     const utterance = new SpeechSynthesisUtterance(cleaned);
-    const aditiVoice = getAditiIndianVoice();
+    const naturalVoice = getNaturalIndianFemaleVoice();
 
-    if (aditiVoice) {
-      utterance.voice = aditiVoice;
-      utterance.lang = aditiVoice.lang || (languageRef.current === "Hindi" ? "hi-IN" : "en-IN");
+    if (naturalVoice) {
+      utterance.voice = naturalVoice;
+      utterance.lang = naturalVoice.lang || (languageRef.current === "Hindi" ? "hi-IN" : "en-IN");
     } else {
       utterance.lang = languageRef.current === "Hindi" ? "hi-IN" : "en-IN";
     }
 
-    utterance.pitch = 1.05;
-    utterance.rate = 0.96;
+    // Natural, sweet, calm female pitch and relaxed human pacing
+    utterance.pitch = 1.0;
+    utterance.rate = 0.92;
 
     utterance.onstart = () => {
       setSpeakingMsgId(msgId);
@@ -478,7 +514,12 @@ export default function ConstructionAssistant() {
       recognitionRef.current = null;
       const code = e?.error ?? "unknown";
       let msg: string;
-      if (code === "not-allowed" || code === "service-not-allowed" || code === "permission-denied" || code === "audio-capture") {
+      if (
+        code === "not-allowed" ||
+        code === "service-not-allowed" ||
+        code === "permission-denied" ||
+        code === "audio-capture"
+      ) {
         msg =
           languageRef.current === "Hindi"
             ? "🎤 Microphone permission नहीं मिली। Browser settings में microphone permission allow करके फिर try करें।"
@@ -590,8 +631,8 @@ export default function ConstructionAssistant() {
                 {listening
                   ? "🎤 सुन रहा हूँ… / Listening…"
                   : isSpeakingAny
-                    ? "🔊 Aditi आवाज़ में बोल रही हूँ…"
-                    : "हिंदी • English • Hinglish · Aditi Voice 🔊 · Photo Upload 📷"}
+                    ? "🔊 Sweet Natural Voice में बोल रही हूँ…"
+                    : `हिंदी • English • Hinglish · 🔊 ${voiceName} · Photo Upload 📷`}
               </p>
             </div>
           </div>
@@ -688,7 +729,7 @@ export default function ConstructionAssistant() {
                     {m.text}
                   </div>
 
-                  {/* Assistant TTS Listen Button (Aditi Voice) */}
+                  {/* Assistant TTS Listen Button (Natural Sweet Female Voice) */}
                   {m.role === "assistant" && (
                     <div className="mt-2.5 flex items-center justify-between border-t border-slate-700/50 pt-2 text-xs">
                       <button
@@ -701,7 +742,7 @@ export default function ConstructionAssistant() {
                         title={
                           isSpeakingThis
                             ? "ऑडियो रोकें (Stop audio)"
-                            : "Aditi की आवाज़ में सुनें (Listen with Aditi Voice)"
+                            : "नेचुरल आवाज़ में सुनें (Listen in Natural Voice)"
                         }
                       >
                         {isSpeakingThis ? (
@@ -716,13 +757,13 @@ export default function ConstructionAssistant() {
                         ) : (
                           <>
                             <span className="text-sm">🔊</span>
-                            <span className="text-[11px]">Aditi Voice में सुनें</span>
+                            <span className="text-[11px]">नेचुरल आवाज़ में सुनें</span>
                           </>
                         )}
                       </button>
 
                       <span className="text-[10px] text-slate-400">
-                        {isSpeakingThis ? "Speaking…" : "Aditi (Female Voice)"}
+                        {isSpeakingThis ? "Speaking…" : voiceName}
                       </span>
                     </div>
                   )}
@@ -927,7 +968,7 @@ export default function ConstructionAssistant() {
                 : "💡 Upload photo (📷) or speak (🎤): “Estimate for 30x40 house”"}
             </span>
             <span className="flex items-center gap-2">
-              <span>🔊 Aditi Voice</span>
+              <span>🔊 Sweet Voice</span>
               <span>•</span>
               <span>📷 Vision AI</span>
             </span>

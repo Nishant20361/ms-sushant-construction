@@ -11,6 +11,7 @@
 import { searchKnowledge, KnowledgeSearchResult } from "../knowledge/knowledge.service.js";
 import { PRODUCTS } from "../product_data.js";
 import { MATERIAL_KNOWLEDGE } from "../material_knowledge.js";
+import { prisma } from "../../db.js";
 
 /** Categories we support for retrieval. */
 export type RetrievalCategory =
@@ -24,7 +25,8 @@ export type RetrievalCategory =
   | "finishing"
   | "labour"
   | "cost"
-  | "stages";
+  | "stages"
+  | "learned_insights";
 
 export interface RetrievedKnowledge {
   /** The original user question. */
@@ -40,7 +42,7 @@ export interface RetrievedKnowledge {
 const MIN_RELEVANCE_SCORE = 8;
 
 /**
- * Retrieve dataset context across product_data, material_knowledge, and DB.
+ * Retrieve dataset context across product_data, material_knowledge, live DB products, and DB learnings.
  */
 export async function getRelevantContext(query: string): Promise<string> {
   const lower = query.toLowerCase();
@@ -55,7 +57,7 @@ export async function getRelevantContext(query: string): Promise<string> {
 
   for (const p of matchedProducts) {
     blocks.push(
-      `[PRODUCT DATA: ${p.company} ${p.product}]\n` +
+      `[RECOMMENDED PRODUCT DATA: ${p.company} ${p.product}]\n` +
       `Category: ${p.category}\n` +
       `Benefits (Hindi): ${p.benefitsHi.join("; ")}\n` +
       `Benefits (English): ${p.benefitsEn.join("; ")}\n` +
@@ -83,7 +85,58 @@ export async function getRelevantContext(query: string): Promise<string> {
     );
   }
 
-  // 3. Search constructionKnowledge DB
+  // 3. Search live store inventory from PostgreSQL Product table (M/S Sushant Construction live catalog)
+  try {
+    const liveProducts = await prisma.product.findMany({
+      where: {
+        isActive: true,
+      },
+      include: {
+        category: true,
+      },
+      take: 20,
+    });
+
+    const relevantLive = liveProducts.filter((p) => {
+      const pName = p.name.toLowerCase();
+      const pCat = (p.category?.name || "").toLowerCase();
+      const pDesc = (p.description || "").toLowerCase();
+      return (
+        lower.includes("product") ||
+        lower.includes("price") ||
+        lower.includes("rate") ||
+        lower.includes("store") ||
+        lower.includes("cement") ||
+        lower.includes("steel") ||
+        lower.includes("sand") ||
+        lower.includes("sheet") ||
+        lower.includes(pName) ||
+        pName.split(" ").some((token) => token.length > 2 && lower.includes(token)) ||
+        lower.includes(pCat) ||
+        pDesc.split(" ").some((token) => token.length > 3 && lower.includes(token))
+      );
+    });
+
+    if (relevantLive.length > 0) {
+      const itemsList = relevantLive
+        .slice(0, 6)
+        .map(
+          (p) =>
+            `• ${p.name} (${p.category?.name || "General"}): ₹${p.price} / ${p.unit} (In Stock: ${p.stock} ${p.unit})`
+        )
+        .join("\n");
+
+      blocks.push(
+        `[M/S SUSHANT CONSTRUCTION LIVE STORE INVENTORY & PRODUCTS]\n` +
+        `Directly Available at our Store:\n${itemsList}\n` +
+        `Note: Recommend these exact store products to the customer with confidence.`
+      );
+    }
+  } catch {
+    // Graceful fallback if database is offline
+  }
+
+  // 4. Search constructionKnowledge DB + Continuous Learned Insights
   try {
     const dbResults = await searchKnowledge(query, 3);
     for (const r of dbResults) {
@@ -91,6 +144,27 @@ export async function getRelevantContext(query: string): Promise<string> {
         `[DATABASE KNOWLEDGE: ${r.title}]\n` +
         `Category: ${r.category}\n` +
         `Content: ${r.content}`
+      );
+    }
+
+    // Also pull latest learned insights from past user interactions
+    const learnedEntries = await prisma.constructionKnowledge.findMany({
+      where: {
+        category: "learned_insights",
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      take: 4,
+    });
+
+    if (learnedEntries.length > 0) {
+      const learnedText = learnedEntries
+        .map((e) => `• [${e.title}]: ${e.content}`)
+        .join("\n");
+
+      blocks.push(
+        `[CONTINUOUS LEARNING & PREVIOUS SITE INSIGHTS]\n${learnedText}`
       );
     }
   } catch {

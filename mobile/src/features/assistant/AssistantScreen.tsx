@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
+import * as Speech from "expo-speech";
 import { AssistantComposer } from "./components/AssistantComposer";
 import { AssistantWelcome } from "./components/AssistantWelcome";
 import { MessageBubble } from "./components/MessageBubble";
@@ -18,6 +19,7 @@ export default function AssistantScreen() {
   const list = useRef<FlatList<ChatMessage>>(null);
   const nearBottom = useRef(true);
   const send = useCallback((prompt?: string) => {
+    try { Speech.stop(); } catch {}
     const question = (prompt ?? draft).trim();
     if (!question || chat.sending) return;
     setDraft("");
@@ -29,7 +31,11 @@ export default function AssistantScreen() {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     nearBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 120;
   }, []);
-  const clear = () => Alert.alert("Clear chat?", "This starts a fresh assistant conversation on this device.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: chat.clear }]);
+
+  const clear = () => {
+    try { Speech.stop(); } catch {}
+    Alert.alert("Clear chat?", "This starts a fresh assistant conversation on this device.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: () => { try { Speech.stop(); } catch {} chat.clear(); } }]);
+  };
 
   const stopListening = useCallback(() => {
     if (!listeningRef.current) return;
@@ -75,6 +81,7 @@ export default function AssistantScreen() {
     if (event.error !== "aborted") Alert.alert("Voice input couldn't finish", event.error === "no-speech" || event.error === "speech-timeout" ? "We couldn't hear a question. Please try again." : "Speech recognition is unavailable right now. You can still type your question.");
   });
   useEffect(() => () => {
+    try { Speech.stop(); } catch {}
     if (listeningRef.current) ExpoSpeechRecognitionModule.abort();
   }, []);
 

@@ -13,6 +13,7 @@ import { answerWithGroq, resolveGroqResponseLanguage, type GroqMessage, type Gro
 import { isAbusiveMessage, respectfulBoundaryReply } from "../construction_ai/conversationSafety.js";
 import { processAdvancedCalculator } from "../construction_ai/calculators/index.js";
 import { assistantLimiter } from "../middleware/rateLimit.js";
+import { recordInteractionLearning } from "../construction_ai/learning/interactionLearner.js";
 
 const router = Router();
 
@@ -176,6 +177,9 @@ router.post(
           assistantReply: result.reply.slice(0, 10000),
         },
       });
+
+      // Self-Learning: extract and persist useful construction QA and site knowledge
+      void recordInteractionLearning(message, result.reply, result.language);
     } catch (err) {
       // Never fail the chat because logging to DB failed.
       console.error("[construction-assistant] Failed to persist query:", err);
