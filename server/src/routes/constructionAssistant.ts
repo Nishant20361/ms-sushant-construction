@@ -124,7 +124,13 @@ router.post(
           : "📸 Construction photo received.\n\n• For **RCC Slab / Concrete**: Ensure proper rebar spacing, 25mm cover blocks, uniform vibration, and minimum 14–21 days pond curing.\n• For **Cracks / Moisture**: Treat hairline shrinkage cracks with Dr. Fixit CrackX paste; apply polymer waterproofing coating for seepage.\n• For **Materials / Bills**: Verify ISI certification, brand packaging, and test certificates.\n\nFeel free to ask any specific question about this photo!")
       : (advanced.type && advanced.result ? advanced.formattedText : local.reply);
 
-    const fallback = { reply: fallbackReply, language: data.language, producedEstimate: !imageUrl && (advanced.type && advanced.result ? true : local.producedEstimate) };
+    const fallback = {
+      reply: fallbackReply,
+      language: data.language,
+      conversation: local.conversation,
+      suggestions: local.suggestions,
+      producedEstimate: !imageUrl && (advanced.type && advanced.result ? true : local.producedEstimate),
+    };
     const stored = sessions.get(sessionId);
     let retrievedContext = "";
     try {
@@ -152,11 +158,17 @@ router.post(
         reply,
         language: messageLanguage,
         conversation: local.conversation,
+        suggestions: local.suggestions,
         producedEstimate: advanced.type && advanced.result ? true : local.producedEstimate,
       };
     } catch (error) {
       console.error("[constructionAssistant] Groq call failed, using local fallback:", error);
-      result = { ...fallback, language: messageLanguage };
+      result = {
+        ...fallback,
+        conversation: local.conversation,
+        suggestions: local.suggestions,
+        language: messageLanguage,
+      };
     }
 
     if (stored) {
