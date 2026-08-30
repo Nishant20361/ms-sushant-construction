@@ -61,10 +61,10 @@ Core Rules & Communication Style:
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = CONSTRUCTION_SYSTEM_PROMPT;
-export const GROQ_PRIMARY_MODEL = "llama-3.3-70b-versatile";
-export const GROQ_FALLBACK_MODEL = "llama-3.1-8b-instant";
-export const GROQ_VISION_PRIMARY_MODEL = "llama-3.2-11b-vision-preview";
-export const GROQ_VISION_FALLBACK_MODEL = "llama-3.2-90b-vision-preview";
+export const GROQ_PRIMARY_MODEL = "openai/gpt-oss-120b";
+export const GROQ_FALLBACK_MODEL = "openai/gpt-oss-20b";
+export const GROQ_VISION_PRIMARY_MODEL = "qwen/qwen3.6-27b";
+export const GROQ_VISION_FALLBACK_MODEL = "qwen/qwen3.8-27b";
 
 let groqInstance: Groq | null = null;
 let lastApiKey: string | null = null;
@@ -241,7 +241,8 @@ export async function askGroq(
         },
         { signal: controller.signal }
       );
-      const text = response.choices[0]?.message?.content || "";
+      let text = response.choices[0]?.message?.content || "";
+      text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
       return { text, model: currentModel };
     } catch (err: any) {
       const durationMs = Date.now() - startMs;

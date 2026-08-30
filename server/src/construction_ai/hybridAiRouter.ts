@@ -74,22 +74,7 @@ export async function answerWithHybridAi(
 
   const prompt = buildGroqPrompt(message, context, language, isImage);
 
-  // 2. Try AgentRouter (Frontier Vision & Deep Reasoning)
-  try {
-    const agentRes = await askAgentRouter(prompt, HYBRID_SYSTEM_PROMPT, history, imageUrl);
-    if (agentRes.text && agentRes.text.trim()) {
-      console.log(`[HybridAI] Answered via AgentRouter model: ${agentRes.model} (Vision: ${isImage ? "YES" : "NO"})`);
-      return {
-        reply: agentRes.text,
-        engineUsed: "agentrouter",
-        modelUsed: agentRes.model,
-      };
-    }
-  } catch (agentErr: any) {
-    console.warn(`[HybridAI] AgentRouter attempt failed (${agentErr.message}). Switching to Groq...`);
-  }
-
-  // 3. Try Groq LPU Engine (Fast High-Throughput Fallback)
+  // 2. Try Groq LPU Engine First (Ultra-fast 150ms responses)
   try {
     const groqRes = await askGroq(prompt, CONSTRUCTION_SYSTEM_PROMPT, undefined, history, imageUrl);
     if (groqRes.text && groqRes.text.trim()) {
@@ -101,8 +86,23 @@ export async function answerWithHybridAi(
       };
     }
   } catch (groqErr: any) {
-    console.warn(`[HybridAI] Groq attempt also failed (${groqErr.message}).`);
+    console.warn(`[HybridAI] Groq attempt failed (${groqErr.message}). Switching to secondary engine...`);
   }
 
-  throw new Error("All AI engines (AgentRouter & Groq) were unavailable.");
+  // 3. Fallback to AgentRouter
+  try {
+    const agentRes = await askAgentRouter(prompt, HYBRID_SYSTEM_PROMPT, history, imageUrl);
+    if (agentRes.text && agentRes.text.trim()) {
+      console.log(`[HybridAI] Answered via AgentRouter model: ${agentRes.model} (Vision: ${isImage ? "YES" : "NO"})`);
+      return {
+        reply: agentRes.text,
+        engineUsed: "agentrouter",
+        modelUsed: agentRes.model,
+      };
+    }
+  } catch (agentErr: any) {
+    console.warn(`[HybridAI] AgentRouter attempt also failed (${agentErr.message}).`);
+  }
+
+  throw new Error("All AI engines (Groq & AgentRouter) were unavailable.");
 }
