@@ -361,6 +361,28 @@ export interface ReportPayment {
   dueClearedAt: string | null;
 }
 
+export interface ReportProductSales {
+  productId: number;
+  productName: string;
+  category: string | null;
+  unit: string;
+  totalQuantitySold: number;
+  totalRevenue: number;
+  orderCount: number;
+  currentStock: number;
+}
+
+export interface ReportProductInventory {
+  productId: number;
+  productName: string;
+  category: string | null;
+  unit: string;
+  currentStock: number;
+  price: number;
+  mrp: number;
+  isActive: boolean;
+}
+
 export interface SalesReport {
   reportType: ReportType;
   periodLabel: string;
@@ -401,6 +423,8 @@ export interface SalesReport {
   orders: ReportOrder[];
   payments: ReportPayment[];
   previousDuePayments: ReportPayment[];
+  productSales?: ReportProductSales[];
+  currentInventory?: ReportProductInventory[];
 }
 
 export interface ReportFilters {

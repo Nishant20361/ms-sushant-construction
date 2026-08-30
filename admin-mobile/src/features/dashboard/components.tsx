@@ -1,5 +1,6 @@
 import { memo, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components/AppText";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -20,7 +21,63 @@ const DashboardMetric = memo(function DashboardMetric({ icon, label, value, cont
 export function DashboardSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) { const t = useTheme(); return <Card style={{ gap: t.spacing.sm }}><View style={s.sectionTitle}><AppText role="cardTitle" style={s.flex}>{title}</AppText>{action}</View>{children}</Card>; }
 export const RecentOrderRow = memo(function RecentOrderRow({ order, last }: { order: DashboardOrder; last?: boolean }) { const t = useTheme(); const status = orderStatusPresentation(order.status); return <View><View style={s.dataRow}><View style={s.flex}><AppText role="bodyStrong" numberOfLines={1}>{order.orderNumber}</AppText><AppText role="caption" numberOfLines={1} style={{ color: t.colors.textSecondary }}>{order.customerName}</AppText><AppText role="caption" style={{ color: t.colors.textMuted }}>{formatDateTime(order.createdAt)}</AppText></View><View style={s.rowEnd}><AppText role="financialCompact" numberOfLines={1}>{formatINR(order.subtotal)}</AppText><StatusBadge label={status.label} tone={status.tone} icon={status.icon} /></View></View>{!last && <Divider />}</View>; });
 export const LowStockRow = memo(function LowStockRow({ product, last }: { product: LowStockProduct; last?: boolean }) { const t = useTheme(); const out = product.stock <= 0; return <View><View style={s.dataRow}><View style={[s.metricIcon, { backgroundColor: out ? t.colors.dangerSoft : t.colors.warningSoft }]}><Ionicons name={out ? "close-circle-outline" : "warning-outline"} size={20} color={out ? t.colors.danger : t.colors.warning} /></View><View style={s.flex}><AppText role="bodyStrong" numberOfLines={1}>{product.name}</AppText><AppText role="caption" style={{ color: t.colors.textSecondary }}>{formatQuantity(product.stock, product.unit)}</AppText></View><StatusBadge label={out ? "Out" : "Low"} tone={out ? "danger" : "warning"} icon={out ? "close-circle-outline" : "warning-outline"} /></View>{!last && <Divider />}</View>; });
+export function QuickActionHub() {
+  const t = useTheme();
+  return (
+    <View style={s.quickHub}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/(admin)/billing" as never)}
+        style={({ pressed }) => [s.quickButton, { backgroundColor: "#0f766e", opacity: pressed ? 0.8 : 1 }]}
+      >
+        <View style={s.quickIconCircle}>
+          <Ionicons name="receipt" size={24} color="#ffffff" />
+        </View>
+        <AppText role="bodyStrong" style={{ color: "#ffffff", fontSize: 13, marginTop: 4 }}>+ नया बिल (Bill)</AppText>
+        <AppText role="caption" style={{ color: "#ccfbf1", fontSize: 10 }}>Create Invoice</AppText>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/(admin)/(tabs)/products" as never)}
+        style={({ pressed }) => [s.quickButton, { backgroundColor: "#2563eb", opacity: pressed ? 0.8 : 1 }]}
+      >
+        <View style={s.quickIconCircle}>
+          <Ionicons name="cube" size={24} color="#ffffff" />
+        </View>
+        <AppText role="bodyStrong" style={{ color: "#ffffff", fontSize: 13, marginTop: 4 }}>+ स्टॉक जोड़ें</AppText>
+        <AppText role="caption" style={{ color: "#dbeafe", fontSize: 10 }}>Add Stock</AppText>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/(admin)/(tabs)/dues" as never)}
+        style={({ pressed }) => [s.quickButton, { backgroundColor: "#dc2626", opacity: pressed ? 0.8 : 1 }]}
+      >
+        <View style={s.quickIconCircle}>
+          <Ionicons name="wallet" size={24} color="#ffffff" />
+        </View>
+        <AppText role="bodyStrong" style={{ color: "#ffffff", fontSize: 13, marginTop: 4 }}>बाकी उधारी</AppText>
+        <AppText role="caption" style={{ color: "#fee2e2", fontSize: 10 }}>Customer Dues</AppText>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/(admin)/reports" as never)}
+        style={({ pressed }) => [s.quickButton, { backgroundColor: "#7c3aed", opacity: pressed ? 0.8 : 1 }]}
+      >
+        <View style={s.quickIconCircle}>
+          <Ionicons name="stats-chart" size={24} color="#ffffff" />
+        </View>
+        <AppText role="bodyStrong" style={{ color: "#ffffff", fontSize: 13, marginTop: 4 }}>बिक्री रिपोर्ट</AppText>
+        <AppText role="caption" style={{ color: "#ede9fe", fontSize: 10 }}>Sales Report</AppText>
+      </Pressable>
+    </View>
+  );
+}
+
 export function TextAction({ label, onPress }: { label: string; onPress: () => void }) { const t = useTheme(); return <Pressable accessibilityRole="button" onPress={onPress} hitSlop={8} style={({ pressed }) => ({ opacity: pressed ? .6 : 1, padding: 4 })}><AppText role="label" style={{ color: t.colors.brand }}>{label}</AppText></Pressable>; }
 export function OfflineBanner({ message = "Offline · showing last loaded data" }: { message?: string }) { const t = useTheme(); return <View accessibilityRole="alert" style={[s.offline, { backgroundColor: t.colors.warningSoft, borderColor: t.colors.warning }]}><Ionicons name="cloud-offline-outline" size={18} color={t.colors.warning} /><AppText role="caption" style={{ color: t.colors.warning, flex: 1 }}>{message}</AppText></View>; }
 export function DashboardSkeleton({ cardWidth }: { cardWidth: number }) { const t = useTheme(); return <View style={{ gap: t.spacing.xl }}><View style={s.header}><Skeleton width={48} height={48} radius={14} /><View style={[s.flex, { gap: 6 }]}><Skeleton width="38%" height={12} /><Skeleton width="72%" height={22} /><Skeleton width="45%" height={12} /></View></View><Card style={{ gap: t.spacing.md }}><Skeleton width="45%" /><Skeleton width="78%" height={38} /><Divider /><View style={s.heroSupport}><Skeleton width="28%" height={34} /><Skeleton width="28%" height={34} /><Skeleton width="28%" height={34} /></View></Card><View style={s.grid}>{[0,1,2,3].map(i => <Card key={i} style={{ width: cardWidth, gap: 9 }}><Skeleton width={36} height={36} radius={12} /><Skeleton width="66%" height={24} /><Skeleton width="82%" /></Card>)}</View><Card style={{ gap: 14 }}><Skeleton width="38%" height={20} />{[0,1,2].map(i => <View key={i} style={{ gap: 8 }}><Skeleton width="55%" /><Skeleton width="78%" height={12} /></View>)}</Card></View>; }
-const s = StyleSheet.create({ header: { flexDirection: "row", alignItems: "center", gap: 8 }, flex: { flex: 1, minWidth: 0 }, badgeCount: { position: "absolute", top: 1, right: 0, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" }, hero: { gap: 16 }, heroTitle: { flexDirection: "row", alignItems: "center", gap: 12 }, heroIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" }, heroSupport: { flexDirection: "row", gap: 10 }, heroValue: { flex: 1, minWidth: 0, gap: 2 }, grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, metricIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" }, sectionTitle: { flexDirection: "row", alignItems: "center", gap: 12 }, dataRow: { minHeight: 72, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 }, rowEnd: { maxWidth: "44%", alignItems: "flex-end", gap: 5 }, offline: { minHeight: 40, flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 } });
+const s = StyleSheet.create({ header: { flexDirection: "row", alignItems: "center", gap: 8 }, flex: { flex: 1, minWidth: 0 }, badgeCount: { position: "absolute", top: 1, right: 0, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" }, hero: { gap: 16 }, heroTitle: { flexDirection: "row", alignItems: "center", gap: 12 }, heroIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" }, heroSupport: { flexDirection: "row", gap: 10 }, heroValue: { flex: 1, minWidth: 0, gap: 2 }, grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, metricIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" }, sectionTitle: { flexDirection: "row", alignItems: "center", gap: 12 }, dataRow: { minHeight: 72, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 }, rowEnd: { maxWidth: "44%", alignItems: "flex-end", gap: 5 }, offline: { minHeight: 40, flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 }, quickHub: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, quickButton: { flex: 1, minWidth: 140, padding: 14, borderRadius: 16, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 }, quickIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" } });
+

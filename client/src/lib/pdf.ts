@@ -261,12 +261,35 @@ export function generateSalesPdfHtml(report: SalesReport): string {
   ]);
 
   const section1Table = table(
-    ["Date & Time", "Order #", "Customer", "Order / Payment Status", "Total", "Paid", "Remaining Due"],
+    [
+      "Date & Time",
+      "Order #",
+      "Customer",
+      "Items Purchased & Pricing",
+      "Order / Payment Status",
+      "Total",
+      "Paid",
+      "Remaining Due",
+    ],
     orders.map((o) =>
       row([
         formatDate(o.createdAt),
         escapeHtml(o.orderNumber),
         `${escapeHtml(o.customerName)}<br><span class="meta">${escapeHtml(o.customerMobile)}</span>`,
+        `<div style="min-width: 170px; line-height: 1.4;">
+          ${o.items
+            .map(
+              (it) => `
+            <div style="margin-bottom: 3px; padding-bottom: 2px; border-bottom: 1px dashed #e2e8f0;">
+              <strong>${escapeHtml(it.productName)}</strong><br>
+              <span style="color: #475569; font-size: 8px;">
+                ${it.quantity} ${escapeHtml(it.unit)} &times; ${formatINR(it.price)} = <strong>${formatINR(it.total)}</strong>
+              </span>
+            </div>
+          `
+            )
+            .join("")}
+        </div>`,
         `${escapeHtml(o.status.replace(/_/g, " "))}<br><span class="meta">${escapeHtml(o.paymentStatus.replace(/_/g, " "))}</span>`,
         formatINR(o.finalAmount),
         formatINR(o.totalPaid),
@@ -322,14 +345,79 @@ export function generateSalesPdfHtml(report: SalesReport): string {
     )
   );
 
+  const productSales = report.productSales ?? [];
+  const section3Table = table(
+    [
+      "Product Name",
+      "Category",
+      "Quantity Sold (This Period)",
+      "Total Revenue Generated (₹)",
+      "Orders Count",
+      "Current Stock Left",
+    ],
+    productSales.length > 0
+      ? productSales.map((p) =>
+          row([
+            `<strong>${escapeHtml(p.productName)}</strong>`,
+            escapeHtml(p.category ?? "General"),
+            `<strong style="color:#0f766e;">${p.totalQuantitySold} ${escapeHtml(p.unit)}</strong>`,
+            `<strong class="highlight">${formatINR(p.totalRevenue)}</strong>`,
+            `${p.orderCount} orders`,
+            `<strong>${p.currentStock} ${escapeHtml(p.unit)}</strong>`,
+          ])
+        )
+      : []
+  );
+
+  const currentInventory = report.currentInventory ?? [];
+  const section4Table = table(
+    [
+      "Product Name",
+      "Category",
+      "Current Stock Remaining",
+      "Stock Status",
+      "Selling Price (₹)",
+      "MRP (₹)",
+    ],
+    currentInventory.length > 0
+      ? currentInventory.map((p) => {
+          const isOut = p.currentStock <= 0;
+          const isLow = p.currentStock > 0 && p.currentStock <= 10;
+          const statusBadge = isOut
+            ? '<span class="badge" style="background:#fee2e2;color:#991b1b;">OUT OF STOCK</span>'
+            : isLow
+            ? '<span class="badge" style="background:#fef3c7;color:#92400e;">LOW STOCK</span>'
+            : '<span class="badge" style="background:#d1fae5;color:#065f46;">IN STOCK</span>';
+
+          return row([
+            `<strong>${escapeHtml(p.productName)}</strong>`,
+            escapeHtml(p.category ?? "General"),
+            `<strong style="color:${isOut ? "#dc2626" : isLow ? "#b45309" : "#0f172a"}; font-size:10px;">${p.currentStock} ${escapeHtml(p.unit)}</strong>`,
+            statusBadge,
+            formatINR(p.price),
+            formatINR(p.mrp),
+          ]);
+        })
+      : []
+  );
+
   const body = `
-    <h2>SECTION 1 — SALES DURING SELECTED PERIOD</h2>
+    <h2>SECTION 1 — SALES & ITEMS PURCHASED DURING SELECTED PERIOD</h2>
     ${section1Kpis}
     ${section1Table}
+
     <h2>${section2Title}</h2>
     <p class="section-desc">Payments received during this period against sales created before ${escapeHtml(report.periodLabel)}. These payments settle older debt and do not increase period sales.</p>
     ${section2Kpis}
     ${section2Table}
+
+    <h2>SECTION 3 — PRODUCT-WISE SALES SUMMARY (THIS PERIOD)</h2>
+    <p class="section-desc">Total quantities and revenue generated per product during the selected period.</p>
+    ${section3Table}
+
+    <h2>SECTION 4 — CURRENT WAREHOUSE STOCK INVENTORY (REMAINING STOCK)</h2>
+    <p class="section-desc">Live warehouse stock balance remaining for each material/product as of report generation.</p>
+    ${section4Table}
   `;
 
   return renderDocument(`${periodTitle} Sales Report`, report.periodLabel, body);

@@ -7,7 +7,7 @@ import { EmptyState, ErrorState } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { AdminAppError } from "@/types/errors";
 import { useTheme } from "@/theme";
-import { DashboardHeader, DashboardMetricGrid, DashboardSection, DashboardSkeleton, FinancialHero, LowStockRow, OfflineBanner, RecentOrderRow, TextAction } from "./components";
+import { DashboardHeader, DashboardMetricGrid, DashboardSection, DashboardSkeleton, FinancialHero, LowStockRow, OfflineBanner, QuickActionHub, RecentOrderRow, TextAction } from "./components";
 import { updatedLabel } from "./presentation";
 import { useDashboardOverview, useNotificationSummary } from "./useDashboard";
 function dashboardError(error: unknown) { if (error instanceof AdminAppError) { if (error.kind === "network" || error.kind === "timeout") return "You're offline. Connect to the internet and try again."; if (error.kind === "forbidden") return "You don't have access to this overview."; if (error.kind === "rate_limited") return "Too many requests. Please try again later."; if (error.kind === "server") return "The Dashboard service is unavailable. Please try again."; } return "The Dashboard could not be loaded. Please try again."; }
@@ -25,7 +25,9 @@ export function DashboardScreen() {
     <DashboardHeader username={auth.admin?.username ?? "Admin"} unreadCount={notifications.data?.unreadCount} onNotifications={() => router.push("/(admin)/notifications" as never)} onProfile={() => router.push("/(admin)/(tabs)/more" as never)} />
     {offline ? <OfflineBanner /> : staleError && <OfflineBanner message={`${staleError} Showing last loaded data.`} />}
     <FinancialHero stats={data.stats} />
-    <View style={s.sectionHeading}><AppText role="sectionTitle">At a glance</AppText><AppText role="caption" style={{ color: t.colors.textMuted }}>{updatedLabel(overview.dataUpdatedAt)}</AppText></View>
+    <View style={s.sectionHeading}><AppText role="sectionTitle">त्वरित कार्य / Quick Actions</AppText><AppText role="caption" style={{ color: t.colors.textMuted }}>Direct 1-tap</AppText></View>
+    <QuickActionHub />
+    <View style={s.sectionHeading}><AppText role="sectionTitle">व्यापार का हाल / At a glance</AppText><AppText role="caption" style={{ color: t.colors.textMuted }}>{updatedLabel(overview.dataUpdatedAt)}</AppText></View>
     <DashboardMetricGrid stats={data.stats} cardWidth={cardWidth} />
     <DashboardSection title="Recent orders" action={<TextAction label="View all" onPress={() => router.push("/(admin)/(tabs)/orders" as never)} />}>{data.recentOrders.length ? data.recentOrders.map((order, index) => <RecentOrderRow key={order.id || `${order.orderNumber}-${index}`} order={order} last={index === data.recentOrders.length - 1} />) : <EmptyState title="No orders yet" description="Recent orders will appear here when business activity begins." />}</DashboardSection>
     <DashboardSection title="Low-stock preview" action={<TextAction label="Products" onPress={() => router.push("/(admin)/(tabs)/products" as never)} />}>{data.lowStockProducts.length ? data.lowStockProducts.slice(0, 5).map((product, index) => <LowStockRow key={product.id || `${product.name}-${index}`} product={product} last={index === Math.min(data.lowStockProducts.length, 5) - 1} />) : <EmptyState title="Stock levels look healthy" description="No active products are at or below the configured threshold." />}<AppText role="caption" style={{ color: t.colors.textMuted }}>Preview only · backend returns at most 10 flagged products.</AppText></DashboardSection>

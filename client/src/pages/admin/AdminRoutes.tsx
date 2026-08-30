@@ -13,6 +13,7 @@ import AdminSettings from "./AdminSettings";
 import ChangePassword from "./ChangePassword";
 import AdminBilling from "./AdminBilling";
 import AdminDues from "./AdminDues";
+import Khatabook from "./Khatabook";
 import ReceivePayment from "./ReceivePayment";
 import SalesReports from "./SalesReports";
 import AnalyticsDashboard from "./AnalyticsDashboard";
@@ -42,6 +43,7 @@ export function AdminRoutes() {
         <Route path="reset-password" element={<ResetPassword />} />
         <Route element={<Protected />}>
           <Route index element={<Dashboard />} />
+          <Route path="khatabook" element={<Khatabook />} />
           <Route path="products" element={<AdminProducts />} />
           <Route path="categories" element={<AdminCategories />} />
           <Route path="orders" element={<AdminOrders />} />

@@ -109,6 +109,7 @@ router.get(
 router.get(
   "/categories",
   asyncHandler(async (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
     const categories = await prisma.category.findMany({
       where: { isActive: true },
       include: { _count: { select: { products: { where: { isActive: true } } } } },
@@ -122,6 +123,7 @@ router.get(
 router.get(
   "/settings/public",
   asyncHandler(async (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
     const settings = await prisma.siteSetting.findFirst();
     res.json({ settings: serializeSettings(settings) });
   })

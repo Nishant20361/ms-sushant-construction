@@ -12,13 +12,13 @@ export const DEFAULT_AGENTROUTER_API_KEY =
 export const AGENTROUTER_BASE_URL =
   process.env.AGENTROUTER_BASE_URL || "https://agentrouter.org/v1";
 
-// Best vision models on AgentRouter
-export const AGENTROUTER_VISION_PRIMARY = "gpt-5.6-sol";
-export const AGENTROUTER_VISION_FALLBACK = "claude-opus-4-8";
+// Best fast vision and multimodal models on AgentRouter
+export const AGENTROUTER_VISION_PRIMARY = "gemini-2.0-flash";
+export const AGENTROUTER_VISION_FALLBACK = "gpt-4o-mini";
 
-// Best high-speed text and reasoning models on AgentRouter
-export const AGENTROUTER_TEXT_PRIMARY = "deepseek-v4-flash";
-export const AGENTROUTER_TEXT_FALLBACK = "gpt-5.6-sol";
+// Best ultra-fast conversational models on AgentRouter (no long thinking pauses)
+export const AGENTROUTER_TEXT_PRIMARY = "gemini-2.0-flash";
+export const AGENTROUTER_TEXT_FALLBACK = "gpt-4o-mini";
 
 export interface AgentRouterMessage {
   role: "system" | "user" | "assistant";
@@ -30,7 +30,7 @@ export interface AgentRouterResult {
   model: string;
 }
 
-const REQUEST_TIMEOUT_MS = 25_000;
+const REQUEST_TIMEOUT_MS = 8_000;
 
 /**
  * Execute chat completion on AgentRouter with client authorization headers.

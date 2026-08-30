@@ -10,6 +10,7 @@ import notificationRoutes from "./notifications.js";
 import billRoutes from "./bills.js";
 import reportRoutes from "./reports.js";
 import analyticsRoutes from "./analytics.js";
+import khatabookAuthRoutes from "./khatabookAuth.js";
 
 const router = Router();
 
@@ -25,6 +26,7 @@ router.use("/", notificationRoutes);
 router.use("/", billRoutes);
 router.use("/", reportRoutes);
 router.use("/", analyticsRoutes);
+router.use("/", khatabookAuthRoutes);
 
 export default router;
 

@@ -50,27 +50,25 @@ Expert Civil Engineering Guidelines:
   * Estimated Construction Cost: ~₹1,800 to ₹2,200/sq.ft (Standard), ₹2,500 to ₹3,500/sq.ft (Premium).
 
 Core Rules & Communication Style:
-- Explain simply, clearly, and practically like an experienced, friendly senior civil engineer and material supplier.
+- Explain simply, clearly, naturally, and practically like an experienced, friendly senior civil engineer and material supplier.
+- Natural & Conversational: Talk naturally with the user without long robotic essays or artificial fluff. Give direct, high-value answers first.
+- Default Language: Hindi / Hinglish is the PRIMARY DEFAULT language. If the user writes in Hindi or Hinglish (e.g. "bhai slab me kitna cement lagega", "chat dhalana h", "kya rate h"), respond warmly in natural conversational Hindi/Hinglish (Roman or Devanagari matching the user). ONLY respond in English if the user asks entirely in pure English.
 - You can have normal, polite conversation as well as construction conversations. Do not reject greetings, thanks, or everyday small talk.
-- Match the user's latest message language: English in English, Hindi in clear Devanagari script, and Hinglish in natural Roman script (e.g. "aapka ghar", "slab dhalai", "estimate", "tarai"). Never suddenly switch languages.
-- You may use light, warm, family-friendly humour when the user is chatting casually or invites a joke. Keep it short and natural; one small smile/emoticon is enough.
-- Never joke about safety incidents, injuries, money stress, delays, defective work, a customer's identity, religion, caste, gender, language, or an abusive message. If the question is technical, urgent, or safety-related, be calm and direct instead of funny.
-- Do not make up claims, prices, product availability, or work results just to be humorous. Acknowledge uncertainty honestly.
 - Format responses beautifully with bullet points, bold key terms, and short clean sections so it is effortless to read on mobile.
 - Never invent exact structural design values for critical safety members; always remind that structural drawings should be verified by a qualified structural engineer.
 - Direct customers to the current Products catalogue for live price and stock verification.
-- Always offer helpful, relevant follow-up questions to guide the customer through their planning.
+- Always offer helpful, relevant follow-up suggestions to guide the customer.
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = CONSTRUCTION_SYSTEM_PROMPT;
-export const GROQ_PRIMARY_MODEL = "openai/gpt-oss-20b";
-export const GROQ_FALLBACK_MODEL = "groq/compound-mini";
+export const GROQ_PRIMARY_MODEL = "llama-3.3-70b-versatile";
+export const GROQ_FALLBACK_MODEL = "llama-3.1-8b-instant";
 export const GROQ_VISION_PRIMARY_MODEL = "llama-3.2-11b-vision-preview";
 export const GROQ_VISION_FALLBACK_MODEL = "llama-3.2-90b-vision-preview";
 
 let groqInstance: Groq | null = null;
 let lastApiKey: string | null = null;
-export const GROQ_REQUEST_TIMEOUT_MS = 25_000;
+export const GROQ_REQUEST_TIMEOUT_MS = 8_000;
 
 export type GroqErrorCategory =
   | "MISSING_KEY"
@@ -276,23 +274,41 @@ export type GroqResponseLanguage = "Hindi" | "English" | "Hinglish" | "Other";
 
 const HINGLISH_PHRASES = [
   /\bkaise\s+ho\b/i, /\bkya\s+kar/i, /\bthik\s+hai\b/i, /\bsamajh\s+gaya\b/i,
-  /\baur\s+batao\b/i, /\bmujhe\s+help\s+chahiye\b/i,
+  /\baur\s+batao\b/i, /\bmujhe\s+help\s+chahiye\b/i, /\bkitna\s+hoga\b/i,
+  /\bkya\s+rate\b/i, /\bchat\s+dhalai\b/i, /\bghar\s+banana\b/i,
 ];
 const HINGLISH_TOKENS = new Set([
-  "kaise", "kya", "kyu", "kyun", "mujhe", "ghar", "kitna", "kitni", "konsa", "kaunsa",
-  "chahiye", "lagta", "lagega", "batao", "karna", "banana", "accha", "acha", "dhanyawad",
-  "samajh", "thik", "tum", "aap", "apko", "mera", "meri", "mere", "wala", "wali",
+  "kaise", "kya", "kyu", "kyun", "mujhe", "ghar", "kitna", "kitni", "kitne", "konsa", "kaunsa",
+  "chahiye", "lagta", "lagega", "lagi", "batao", "karna", "banana", "banao", "accha", "acha", "dhanyawad",
+  "samajh", "thik", "theek", "tum", "aap", "apko", "mera", "meri", "mere", "wala", "wali", "wale",
+  "bhai", "chat", "chhat", "dhalai", "dhalana", "saria", "cement", "eet", "balu", "gitti", "rate",
+  "dam", "paisa", "kharcha", "plinth", "kam", "jyada", "sahi", "kharab", "lelo", "dena", "kab",
+  "hai", "h", "hain", "ho", "tha", "thi", "raha", "rahe", "rahi", "hoga", "hogi", "bhi", "aur",
+  "sir", "madam", "namaste", "pranam", "kripya", "bataiye", "boliye", "bolo", "karo", "karein",
+  "kaun", "kisko", "kaha", "kahan", "jankari", "bhav", "bata", "batao"
 ]);
 
-export function detectGroqResponseLanguage(message: string, _fallback?: "Hindi" | "English"): GroqResponseLanguage {
+const ENGLISH_PATTERNS = [
+  /\b(what|how|why|when|where|which|who|can you|could you|please provide|tell me|calculate|estimate|cost of|price of|specifications|dimensions|difference between|compressive strength|ratio of)\b/i,
+  /\b(the|this|that|these|those|is|are|was|were|have|has|had|with|for|from|about)\b/i
+];
+
+export function detectGroqResponseLanguage(message: string, fallback: "Hindi" | "English" = "Hindi"): GroqResponseLanguage {
   const normalized = message.toLowerCase().trim();
+  if (!normalized) return fallback;
   if (/[\u0900-\u097F]/.test(normalized)) return "Hindi";
   if (HINGLISH_PHRASES.some((phrase) => phrase.test(normalized))) return "Hinglish";
   const tokens = normalized.match(/[a-z]+/g) ?? [];
-  const hinglishScore = new Set(tokens.filter((token) => HINGLISH_TOKENS.has(token))).size;
-  if (hinglishScore >= 1) return "Hinglish";
+  const hinglishMatches = tokens.filter((token) => HINGLISH_TOKENS.has(token));
+  if (hinglishMatches.length >= 1) return "Hinglish";
+  
+  const englishMatches = ENGLISH_PATTERNS.filter((pattern) => pattern.test(normalized));
+  if (englishMatches.length >= 2 || (englishMatches.length === 1 && tokens.length > 3 && hinglishMatches.length === 0)) {
+    return "English";
+  }
+
   if ([...normalized].some((char) => char.codePointAt(0)! > 0x7f)) return "Other";
-  return "English";
+  return "Hinglish";
 }
 
 // Short acknowledgements do not reliably reveal a language by themselves.
@@ -306,7 +322,7 @@ export function resolveGroqResponseLanguage(
 ): GroqResponseLanguage {
   const normalized = message.trim();
   if (previousLanguage && NEUTRAL_FOLLOW_UP.test(normalized)) return previousLanguage;
-  return detectGroqResponseLanguage(normalized);
+  return detectGroqResponseLanguage(normalized, previousLanguage === "English" ? "English" : "Hindi");
 }
 
 export function buildGroqPrompt(message: string, context: string = "", language: GroqResponseLanguage = "English", hasImage: boolean = false): string {

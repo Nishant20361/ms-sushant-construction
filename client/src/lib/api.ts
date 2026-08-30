@@ -252,6 +252,12 @@ export const adminApi = {
   toggleProduct(id: number): Promise<{ product: Product }> {
     return request(`/admin/products/${id}/toggle`, { method: "PATCH" }, { csrf: true });
   },
+  adjustStock(
+    id: number,
+    data: { action: "ADD" | "SET" | "DEDUCT"; quantity: number; reason?: string }
+  ): Promise<{ product: Product }> {
+    return request(`/admin/products/${id}/stock`, { method: "PATCH", body: JSON.stringify(data) }, { csrf: true });
+  },
   getCategories(): Promise<{ categories: Category[] }> {
     return request("/admin/categories");
   },
@@ -327,6 +333,26 @@ getDuesSummary(params: {
   },
   deleteOrder(id: number): Promise<{ success: boolean; message: string }> {
     return request(`/admin/orders/${id}`, { method: "DELETE" }, { csrf: true });
+  },
+  getKhatabookAuthStatus(): Promise<{
+    isPinSet: boolean;
+    recoveryEmail: string;
+    maskedEmail: string;
+    defaultPinActive: boolean;
+  }> {
+    return request("/admin/khatabook/auth-status");
+  },
+  verifyKhatabookPin(pin: string): Promise<{ success: boolean; message: string }> {
+    return request("/admin/khatabook/verify-pin", { method: "POST", body: JSON.stringify({ pin }) }, { csrf: true });
+  },
+  changeKhatabookPin(data: { currentPin?: string; adminPassword?: string; newPin?: string; recoveryEmail?: string }): Promise<{ success: boolean; message: string }> {
+    return request("/admin/khatabook/change-pin", { method: "POST", body: JSON.stringify(data) }, { csrf: true });
+  },
+  requestKhatabookForgotPin(): Promise<{ success: boolean; message: string; maskedEmail: string }> {
+    return request("/admin/khatabook/forgot-pin", { method: "POST" }, { csrf: true });
+  },
+  resetKhatabookPin(data: { otp: string; newPin: string }): Promise<{ success: boolean; message: string }> {
+    return request("/admin/khatabook/reset-pin", { method: "POST", body: JSON.stringify(data) }, { csrf: true });
   },
   getSettings(): Promise<{ settings: SiteSettings }> {
     return request("/admin/settings");

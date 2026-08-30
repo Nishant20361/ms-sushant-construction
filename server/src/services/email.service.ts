@@ -443,6 +443,77 @@ M/S Sushant Construction Security Team
   );
 }
 
+/**
+ * Send Khatabook PIN Reset OTP email to admin's Gmail.
+ */
+export async function sendKhatabookOtpEmail(
+  to: string,
+  otp: string,
+  expiresInMinutes: number = 15
+): Promise<boolean> {
+  const from = config.smtp.from || config.smtp.user || "";
+
+  const plainText = `
+खाताबुक सुरक्षा पिन रीसेट OTP - M/S SUSHANT CONSTRUCTION
+=====================================================
+नमस्ते एडमिन जी,
+
+आपने खाताबुक (Khatabook) का सुरक्षा पिन रीसेट करने के लिए OTP का अनुरोध किया है।
+
+आपका 6-अंकीय OTP कोड है: ${otp}
+
+यह OTP अगले ${expiresInMinutes} मिनट तक वैध है। किसी के साथ इसे शेयर न करें।
+
+धन्यवाद,
+M/S Sushant Construction Security Team
+`;
+
+  const htmlContent = `
+<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 520px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+  <div style="background: linear-gradient(135deg, #7f1d1d, #1e293b); color: #ffffff; padding: 24px; text-align: center;">
+    <h2 style="margin: 0; font-size: 20px; letter-spacing: 0.5px;">M/S SUSHANT CONSTRUCTION</h2>
+    <p style="margin: 6px 0 0 0; color: #fca5a5; font-size: 13px; font-weight: 600;">📖 डिजिटल खाताबुक सुरक्षा सत्यापन</p>
+  </div>
+  <div style="padding: 28px 24px;">
+    <p style="font-size: 15px; color: #1e293b; margin-top: 0; font-weight: 600;">नमस्ते एडमिन,</p>
+    <p style="font-size: 14px; color: #475569; line-height: 1.5;">खाताबुक (Khatabook & Customer Ledger) का सुरक्षा पिन रीसेट करने के लिए आपका 6-अंकीय गोपनीय OTP नीचे दिया गया है:</p>
+    
+    <div style="text-align: center; margin: 28px 0;">
+      <div style="display: inline-block; background: #fef2f2; border: 2px dashed #dc2626; border-radius: 12px; padding: 14px 32px;">
+        <span style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #dc2626; font-family: monospace;">${otp}</span>
+      </div>
+      <p style="font-size: 12px; color: #64748b; margin-top: 8px;">यह कोड <strong>${expiresInMinutes} मिनट</strong> के लिए वैध है।</p>
+    </div>
+
+    <div style="background: #f8fafc; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 4px; margin-top: 20px;">
+      <p style="margin: 0; font-size: 12px; color: #78350f;"><strong>सुरक्षा सूचना:</strong> यदि आपने यह अनुरोध नहीं किया है, तो कृपया इसे अनदेखा करें। आपका खाताबुक पिन सुरक्षित रहेगा।</p>
+    </div>
+  </div>
+  <div style="background: #f8fafc; padding: 16px; text-align: center; color: #64748b; font-size: 12px; border-top: 1px solid #e2e8f0;">
+    M/S Sushant Construction · Secure Admin Authentication
+  </div>
+</div>
+`;
+
+  if (!to) {
+    const err = "No recipient address provided for Khatabook OTP email";
+    console.warn(`[EMAIL] ${err}`);
+    logEmailFlow("KHATABOOK_OTP", to, false, err);
+    return false;
+  }
+
+  return sendMailWithFallback(
+    {
+      from,
+      to,
+      subject: `खाताबुक पिन रीसेट OTP [${otp}] - M/S SUSHANT CONSTRUCTION`,
+      text: plainText,
+      html: htmlContent,
+    },
+    "KHATABOOK_OTP"
+  );
+}
+
 export interface SmtpTestResponse {
   success: boolean;
   smtpConfigured: boolean;

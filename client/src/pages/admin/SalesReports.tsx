@@ -530,6 +530,109 @@ const s = report?.summary;
               );
             })()}
           </section>
+
+          {/* Section 3: Product Sales Summary */}
+          {report.productSales && report.productSales.length > 0 && (
+            <section className="space-y-4">
+              <div className="border-b border-slate-200 pb-2">
+                <h3 className="text-lg font-bold text-slate-900">
+                  Section 3 — Product-Wise Sales Summary (This Period)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Total quantities and revenue generated per product during {report.periodLabel}.
+                </p>
+              </div>
+
+              <div className="card overflow-x-auto">
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="p-3">Product Name</th>
+                      <th className="p-3">Category</th>
+                      <th className="p-3 text-right">Quantity Sold</th>
+                      <th className="p-3 text-right">Total Revenue</th>
+                      <th className="p-3 text-right">Orders Count</th>
+                      <th className="p-3 text-right">Current Stock Left</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {report.productSales.map((p) => (
+                      <tr key={p.productId} className="hover:bg-slate-50">
+                        <td className="p-3 font-bold text-slate-900">{p.productName}</td>
+                        <td className="p-3 text-slate-600">{p.category || "General"}</td>
+                        <td className="p-3 text-right font-bold text-teal-700">
+                          {p.totalQuantitySold} {p.unit}
+                        </td>
+                        <td className="p-3 text-right font-black text-slate-900">{formatINR(p.totalRevenue)}</td>
+                        <td className="p-3 text-right text-slate-600">{p.orderCount} orders</td>
+                        <td className="p-3 text-right font-semibold text-slate-700">
+                          {p.currentStock} {p.unit}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* Section 4: Current Warehouse Stock Inventory */}
+          {report.currentInventory && report.currentInventory.length > 0 && (
+            <section className="space-y-4">
+              <div className="border-b border-slate-200 pb-2">
+                <h3 className="text-lg font-bold text-slate-900">
+                  Section 4 — Current Warehouse Stock Inventory (Remaining Stock)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Live warehouse stock balance remaining for each material as of report generation.
+                </p>
+              </div>
+
+              <div className="card overflow-x-auto">
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="p-3">Product Name</th>
+                      <th className="p-3">Category</th>
+                      <th className="p-3">Remaining Stock</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3 text-right">Selling Price</th>
+                      <th className="p-3 text-right">MRP</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {report.currentInventory.map((p) => {
+                      const isOut = p.currentStock <= 0;
+                      const isLow = p.currentStock > 0 && p.currentStock <= 10;
+
+                      return (
+                        <tr key={p.productId} className="hover:bg-slate-50">
+                          <td className="p-3 font-bold text-slate-900">{p.productName}</td>
+                          <td className="p-3 text-slate-600">{p.category || "General"}</td>
+                          <td className="p-3 font-black">
+                            <span className={isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-slate-900"}>
+                              {p.currentStock} {p.unit}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            {isOut ? (
+                              <span className="badge bg-red-100 text-red-800 font-bold">OUT OF STOCK</span>
+                            ) : isLow ? (
+                              <span className="badge bg-amber-100 text-amber-800 font-bold">LOW STOCK</span>
+                            ) : (
+                              <span className="badge bg-emerald-100 text-emerald-800 font-bold">IN STOCK</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-right font-bold text-slate-900">{formatINR(p.price)}</td>
+                          <td className="p-3 text-right text-slate-400 line-through">{formatINR(p.mrp)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>

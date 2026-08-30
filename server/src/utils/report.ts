@@ -88,6 +88,28 @@ export interface ReportPayment {
   dueClearedAt: string | null;
 }
 
+export interface ReportProductSales {
+  productId: number;
+  productName: string;
+  category: string | null;
+  unit: string;
+  totalQuantitySold: number;
+  totalRevenue: number;
+  orderCount: number;
+  currentStock: number;
+}
+
+export interface ReportProductInventory {
+  productId: number;
+  productName: string;
+  category: string | null;
+  unit: string;
+  currentStock: number;
+  price: number;
+  mrp: number;
+  isActive: boolean;
+}
+
 export interface SalesReportData {
   reportType: "daily" | "weekly" | "monthly";
   periodLabel: string;
@@ -128,6 +150,8 @@ export interface SalesReportData {
   orders: ReportOrder[];
   payments: ReportPayment[];
   previousDuePayments: ReportPayment[];
+  productSales?: ReportProductSales[];
+  currentInventory?: ReportProductInventory[];
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -484,6 +508,56 @@ export async function buildSalesReport(
   const currentPeriodSalesCollected = round2(filteredPayments.filter((payment) => payment.saleCreatedInPeriod).reduce((sum, payment) => sum + payment.amount, 0));
   const clearedPayments = filteredPayments.filter((payment) => payment.dueCleared);
 
+  // Compute product-wise sales and current inventory
+  let allDbProducts: any[] = [];
+  if (prisma?.product?.findMany) {
+    try {
+      allDbProducts = await prisma.product.findMany({
+        include: { category: true },
+        orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
+      });
+    } catch {
+      allDbProducts = [];
+    }
+  }
+
+  const productSalesMap = new Map<number, ReportProductSales>();
+
+  for (const o of salesOrders) {
+    for (const it of o.items) {
+      const prodInDb = allDbProducts.find((p) => p.id === it.productId);
+      const existing = productSalesMap.get(it.productId) || {
+        productId: it.productId,
+        productName: it.productName,
+        category: it.category ?? prodInDb?.category?.name ?? "General",
+        unit: it.unit,
+        totalQuantitySold: 0,
+        totalRevenue: 0,
+        orderCount: 0,
+        currentStock: Number(prodInDb?.stock ?? 0),
+      };
+      existing.totalQuantitySold = round2(existing.totalQuantitySold + it.quantity);
+      existing.totalRevenue = round2(existing.totalRevenue + it.total);
+      existing.orderCount += 1;
+      productSalesMap.set(it.productId, existing);
+    }
+  }
+
+  const productSales = Array.from(productSalesMap.values()).sort(
+    (a, b) => b.totalRevenue - a.totalRevenue
+  );
+
+  const currentInventory: ReportProductInventory[] = allDbProducts.map((p) => ({
+    productId: p.id,
+    productName: p.name,
+    category: p.category?.name ?? "General",
+    unit: p.unit,
+    currentStock: Number(p.stock),
+    price: Number(p.price),
+    mrp: Number(p.mrp),
+    isActive: p.isActive,
+  }));
+
   return {
     reportType: period.type,
     periodLabel: label,
@@ -524,5 +598,7 @@ export async function buildSalesReport(
     orders: reportOrders,
     payments: filteredPayments,
     previousDuePayments,
+    productSales,
+    currentInventory,
   };
 }

@@ -77,6 +77,26 @@ export const PREVIOUS_DUES_COLUMNS: ExportColumn[] = [
   { header: "Due Cleared Date", key: "dueClearedDate" },
 ];
 
+export const PRODUCT_SALES_COLUMNS: ExportColumn[] = [
+  { header: "Product Name", key: "productName" },
+  { header: "Category", key: "category" },
+  { header: "Unit", key: "unit" },
+  { header: "Quantity Sold (This Period)", key: "totalQuantitySold", format: "0.00" },
+  { header: "Total Revenue Generated", key: "totalRevenue", format: "#,##0.00" },
+  { header: "Orders Count", key: "orderCount", format: "0" },
+  { header: "Current Remaining Stock", key: "currentStock", format: "0.00" },
+];
+
+export const INVENTORY_COLUMNS: ExportColumn[] = [
+  { header: "Product Name", key: "productName" },
+  { header: "Category", key: "category" },
+  { header: "Current Stock Remaining", key: "currentStock", format: "0.00" },
+  { header: "Unit", key: "unit" },
+  { header: "Selling Price", key: "price", format: "#,##0.00" },
+  { header: "MRP", key: "mrp", format: "#,##0.00" },
+  { header: "Store Status", key: "status" },
+];
+
 /** Map Section 1 orders to export rows. */
 export function toPeriodSalesRows(report: SalesReportData): Record<string, any>[] {
   return report.orders.map((o) => ({
@@ -91,7 +111,12 @@ export function toPeriodSalesRows(report: SalesReportData): Record<string, any>[
     invoiceNumber: o.orderNumber,
     customerName: o.customerName,
     customerMobile: o.customerMobile,
-    products: o.items.map((it) => it.productName).join(", "),
+    products: o.items
+      .map(
+        (it) =>
+          `${it.productName} (${it.quantity} ${it.unit} @ ₹${it.price} = ₹${it.total})`
+      )
+      .join("\n"),
     quantity: Math.round(o.items.reduce((s, it) => s + it.quantity, 0) * 100) / 100,
     subtotal: o.subtotal,
     discount: o.discount,
@@ -209,9 +234,30 @@ async function sendSalesExport(
 
   const orderRows = toPeriodSalesRows(report);
   const previousDuesRows = toPreviousDuesRows(report);
+  const productSalesRows = (report.productSales ?? []).map((p) => ({
+    productName: p.productName,
+    category: p.category ?? "General",
+    unit: p.unit,
+    totalQuantitySold: p.totalQuantitySold,
+    totalRevenue: p.totalRevenue,
+    orderCount: p.orderCount,
+    currentStock: p.currentStock,
+  }));
+  const inventoryRows = (report.currentInventory ?? []).map((p) => ({
+    productName: p.productName,
+    category: p.category ?? "General",
+    currentStock: p.currentStock,
+    unit: p.unit,
+    price: p.price,
+    mrp: p.mrp,
+    status: p.isActive ? "ACTIVE" : "INACTIVE",
+  }));
+
   const buf = await buildMultiSheetXlsx([
     { name: "Sales During Period", columns: PERIOD_SALES_COLUMNS, rows: orderRows },
     { name: "Previous Dues Paid", columns: PREVIOUS_DUES_COLUMNS, rows: previousDuesRows },
+    { name: "Product Sales Summary", columns: PRODUCT_SALES_COLUMNS, rows: productSalesRows },
+    { name: "Warehouse Current Stock", columns: INVENTORY_COLUMNS, rows: inventoryRows },
   ]);
 
   res.setHeader(

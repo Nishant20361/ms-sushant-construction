@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../../db.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { parseIntegerParam } from "../../utils/request.js";
@@ -9,6 +10,12 @@ import { serializeProduct } from "../../utils/serializer.js";
 import { HttpError } from "../../utils/httpError.js";
 import { AuthenticatedRequest } from "../../types.js";
 import { notifyStockTransitions } from "../../services/push.service.js";
+
+const stockAdjustmentSchema = z.object({
+  action: z.enum(["ADD", "SET", "DEDUCT"]),
+  quantity: z.number().positive(),
+  reason: z.string().max(200).optional(),
+});
 
 /**
  * Round to a fixed number of decimal places.
@@ -209,6 +216,56 @@ router.patch(
       entityId: updated.id,
       details: `isActive=${updated.isActive}`,
     });
+    res.json({ product: serializeProduct(updated) });
+  })
+);
+
+// PATCH /api/admin/products/:id/stock
+// Quickly add (+), set, or deduct stock with auto audit logging and alerts.
+router.patch(
+  "/products/:id/stock",
+  requireAdmin,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const id = parseIntegerParam(req.params.id, "product id");
+    const body = stockAdjustmentSchema.parse(req.body);
+    const existing = await prisma.product.findUnique({
+      where: { id },
+      include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
+    });
+    if (!existing) throw new HttpError(404, "Product not found");
+
+    const previousStock = Number(existing.stock);
+    let nextStock = previousStock;
+
+    if (body.action === "ADD") {
+      nextStock = Math.round((previousStock + body.quantity) * 1000) / 1000;
+    } else if (body.action === "SET") {
+      nextStock = Math.round(body.quantity * 1000) / 1000;
+    } else if (body.action === "DEDUCT") {
+      if (previousStock < body.quantity) {
+        throw new HttpError(400, `Cannot deduct ${body.quantity}. Current stock is only ${previousStock}.`);
+      }
+      nextStock = Math.round((previousStock - body.quantity) * 1000) / 1000;
+    }
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data: { stock: nextStock },
+      include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
+    });
+
+    await writeAudit(req, {
+      action: "STOCK_ADJUSTMENT",
+      entity: "Product",
+      entityId: updated.id,
+      details: `${body.action} ${body.quantity} (Stock: ${previousStock} -> ${nextStock})${body.reason ? ` - ${body.reason}` : ""}`,
+    });
+
+    await notifyStockTransitions(
+      [{ productId: updated.id, name: updated.name, previous: previousStock, next: nextStock }],
+      `STOCK_ADJUST:${updated.id}:${updated.updatedAt.toISOString()}`
+    ).catch((e) => console.error("[push] Stock notification failed", e instanceof Error ? e.message : e));
+
     res.json({ product: serializeProduct(updated) });
   })
 );
