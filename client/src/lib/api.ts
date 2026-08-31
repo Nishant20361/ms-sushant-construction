@@ -144,6 +144,10 @@ export const publicApi = {
   getSettings(): Promise<{ settings: SiteSettings }> {
     return request("/settings/public");
   },
+  getCheckoutCustomer(customerMobile: string, signal?: AbortSignal): Promise<{ customer: { customerName: string } | null }> {
+    const q = new URLSearchParams({ customerMobile });
+    return request(`/customers/checkout-profile?${q.toString()}`, { signal });
+  },
   placeOrder(payload: {
     customerName: string;
     customerMobile: string;

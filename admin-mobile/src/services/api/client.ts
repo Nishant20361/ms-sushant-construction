@@ -28,6 +28,7 @@ export class AdminApiClient {
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? environment.requestTimeoutMs);
     const abortFromCaller = () => controller.abort();
     options.signal?.addEventListener("abort", abortFromCaller, { once: true });
+    if (options.signal?.aborted) controller.abort();
     try {
       const auth = await this.auth.prepareRequest({ method, forceCsrfRefresh: csrfRetried });
       const isForm = typeof FormData !== "undefined" && options.body instanceof FormData;

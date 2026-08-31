@@ -18,4 +18,15 @@ describe("React Native runtime regressions", () => {
     expect(reports).toContain("onDismiss=");
     expect(reports).not.toMatch(/<DateTimePicker[^>]*\bonChange=/);
   });
+
+  it("installs push response listeners only once", () => {
+    const coordinator = source("./features/push/PushCoordinator.tsx");
+    expect(coordinator).toMatch(/addNotificationResponseReceivedListener[\s\S]*?\},\[\]\)/);
+  });
+
+  it("does not decode Expo Router params a second time", () => {
+    const route = source("../app/(admin)/dues/[mobile].tsx");
+    expect(route).not.toContain("decodeURIComponent");
+    expect(route).toContain('value??""');
+  });
 });

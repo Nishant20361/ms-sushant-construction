@@ -377,4 +377,29 @@ router.get(
   })
 );
 
+// GET /api/customers/checkout-profile?customerMobile=
+// Checkout convenience only: return the latest name previously used for an
+// exact, valid mobile number. The endpoint is bounded and rate-limited; no
+// address, order, payment, or account data is exposed.
+router.get(
+  "/customers/checkout-profile",
+  trackLimiter,
+  asyncHandler(async (req, res) => {
+    const parsed = orderTrackByMobileSchema.parse({
+      customerMobile: req.query.customerMobile ?? "",
+    });
+    const mobile = normalizeIndianMobile(parsed.customerMobile);
+    if (!mobile) throw new HttpError(400, "Invalid mobile number");
+
+    const latestOrder = await prisma.order.findFirst({
+      where: { customerMobile: mobile },
+      select: { customerName: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ customer: latestOrder ? { customerName: latestOrder.customerName } : null });
+  })
+);
+
 export default router;

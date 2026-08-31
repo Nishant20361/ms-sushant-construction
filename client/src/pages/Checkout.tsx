@@ -1,10 +1,20 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useSettings } from "../context/SettingsContext";
 import { publicApi, ApiRequestError } from "../lib/api";
 import { formatINR } from "../lib/format";
 import { useToast } from "../components/Toast";
+
+function normalizeIndianMobile(value: string): string | null {
+  const digits = value.replace(/\D/g, "");
+  const normalized = digits.length === 12 && digits.startsWith("91")
+    ? digits.slice(2)
+    : digits.length === 11 && digits.startsWith("0")
+      ? digits.slice(1)
+      : digits;
+  return /^[6-9]\d{9}$/.test(normalized) ? normalized : null;
+}
 
 export default function Checkout() {
   const { items, subtotal, clearCart, setQuantity, removeItem } = useCart();
@@ -18,16 +28,50 @@ export default function Checkout() {
     notes: "",
   });
   const [placing, setPlacing] = useState(false);
+  const [customerLookup, setCustomerLookup] = useState<"idle" | "loading" | "found" | "new">("idle");
+  const nameWasAutoFilled = useRef(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [placedOrder, setPlacedOrder] = useState<{ orderNumber: string; subtotal: number } | null>(null);
+
+  useEffect(() => {
+    const mobile = normalizeIndianMobile(form.customerMobile);
+    if (!mobile) {
+      setCustomerLookup("idle");
+      if (nameWasAutoFilled.current) setForm((current) => ({ ...current, customerName: "" }));
+      nameWasAutoFilled.current = false;
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setCustomerLookup("loading");
+      try {
+        const { customer } = await publicApi.getCheckoutCustomer(mobile, controller.signal);
+        if (customer) {
+          setForm((current) => {
+            if (current.customerName.trim() && !nameWasAutoFilled.current) return current;
+            nameWasAutoFilled.current = true;
+            return { ...current, customerName: customer.customerName };
+          });
+          setFieldErrors((current) => ({ ...current, customerName: "" }));
+          setCustomerLookup("found");
+        } else {
+          if (nameWasAutoFilled.current) setForm((current) => ({ ...current, customerName: "" }));
+          nameWasAutoFilled.current = false;
+          setCustomerLookup("new");
+        }
+      } catch (lookupError) {
+        if (!(lookupError instanceof DOMException && lookupError.name === "AbortError")) setCustomerLookup("idle");
+      }
+    }, 350);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [form.customerMobile]);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!form.customerName.trim() || form.customerName.trim().length < 2) {
       errs.customerName = "Please enter your full name";
     }
-    const digits = form.customerMobile.replace(/\D/g, "").replace(/^(0|91)/, "");
-    if (!/^[6-9]\d{9}$/.test(digits)) {
+    if (!normalizeIndianMobile(form.customerMobile)) {
       errs.customerMobile = "Enter a valid 10-digit Indian mobile number";
     }
     setFieldErrors(errs);
@@ -131,20 +175,6 @@ export default function Checkout() {
             <h2 className="text-lg font-semibold text-slate-900">Delivery Details</h2>
             <div className="mt-4 space-y-4">
               <div>
-                <label className="label" htmlFor="customerName">Full Name *</label>
-                <input
-                  id="customerName"
-                  className="input"
-                  placeholder="e.g. Rahul Verma"
-                  value={form.customerName}
-                  onChange={(e) => setForm({ ...form, customerName: e.target.value })}
-                />
-                {fieldErrors.customerName && (
-                  <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.customerName}</p>
-                )}
-              </div>
-
-              <div>
                 <label className="label" htmlFor="customerMobile">Mobile Number *</label>
                 <input
                   id="customerMobile"
@@ -155,8 +185,25 @@ export default function Checkout() {
                   value={form.customerMobile}
                   onChange={(e) => setForm({ ...form, customerMobile: e.target.value })}
                 />
+                {customerLookup === "loading" && <p className="mt-1 text-xs text-slate-500">Checking previous orders…</p>}
+                {customerLookup === "found" && <p className="mt-1 text-xs font-medium text-green-700">Previous customer found. Please confirm or change the name below.</p>}
+                {customerLookup === "new" && <p className="mt-1 text-xs text-slate-500">New mobile number. Please enter your name.</p>}
                 {fieldErrors.customerMobile && (
                   <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.customerMobile}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="label" htmlFor="customerName">Full Name *</label>
+                <input
+                  id="customerName"
+                  className="input"
+                  placeholder="e.g. Rahul Verma"
+                  value={form.customerName}
+                  onChange={(e) => { nameWasAutoFilled.current = false; setForm({ ...form, customerName: e.target.value }); }}
+                />
+                {fieldErrors.customerName && (
+                  <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.customerName}</p>
                 )}
               </div>
 

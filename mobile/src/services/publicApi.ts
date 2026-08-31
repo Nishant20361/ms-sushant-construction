@@ -1,7 +1,7 @@
 import { API_ROOT_URL, API_TIMEOUTS, apiRequest } from "./apiClient";
 import type {
   AssistantRequest, AssistantResponse, CategoriesResponse, CreateOrderPayload, CreateOrderResponse,
-  ProductQuery, ProductResponse, ProductsResponse, SettingsResponse, TrackOrderResponse, TrackOrdersByMobileResponse,
+  CheckoutCustomerResponse, ProductQuery, ProductResponse, ProductsResponse, SettingsResponse, TrackOrderResponse, TrackOrdersByMobileResponse,
 } from "@/types/api";
 
 function queryString(values: Record<string, string | number | boolean | undefined>): string {
@@ -15,6 +15,8 @@ export const publicApi = {
   getProducts: (params: ProductQuery = {}, signal?: AbortSignal) =>
     apiRequest<ProductsResponse>(`/products${queryString({ category: params.category, search: params.search, page: params.page, limit: params.limit, sort: params.sort, inStock: params.inStock })}`, { signal }),
   getProductById: (id: number, signal?: AbortSignal) => apiRequest<ProductResponse>(`/products/${id}`, { signal }),
+  getCheckoutCustomer: (customerMobile: string, signal?: AbortSignal) =>
+    apiRequest<CheckoutCustomerResponse>(`/customers/checkout-profile${queryString({ customerMobile })}`, { signal }),
   createOrder: (payload: CreateOrderPayload, idempotencyKey: string) => apiRequest<CreateOrderResponse>("/orders", { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify(payload), timeoutMs: API_TIMEOUTS.order }),
   trackOrder: (orderNumber: string, customerMobile: string, signal?: AbortSignal) =>
     apiRequest<TrackOrderResponse>(`/orders/track${queryString({ orderNumber, customerMobile })}`, { signal }),

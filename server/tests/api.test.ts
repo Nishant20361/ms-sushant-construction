@@ -8,6 +8,7 @@ import { isAbusiveMessage, respectfulBoundaryReply } from "../src/construction_a
 import { serializeCategory, serializeOrderListForTracking, serializeSettings } from "../src/utils/serializer.js";
 import { categorySchema, settingsSchema } from "../src/validators/index.js";
 import { isWholeNumberUnit, quantityMatchesUnit } from "../src/utils/quantity.js";
+import { normalizeIndianMobile } from "../src/utils/validatePhone.js";
 
 let app: ReturnType<typeof createApp>;
 
@@ -659,6 +660,28 @@ describe("Public data exposure", () => {
 });
 
 describe("Native public API boundary", () => {
+  it("keeps valid 10-digit numbers beginning with 91 intact", () => {
+    expect(normalizeIndianMobile("9123456789")).toBe("9123456789");
+    expect(normalizeIndianMobile("+91 91234 56789")).toBe("9123456789");
+  });
+
+  it("returns only the latest customer name for checkout autofill", async () => {
+    const order = await prisma.order.create({ data: { orderNumber: `LOOKUP-${Date.now()}`, customerName: "Checkout Customer", customerMobile: "9876543210", subtotal: 100 } });
+    try {
+      const found = await supertest(app).get("/api/public/customers/checkout-profile?customerMobile=9876543210");
+      expect(found.status).toBe(200);
+      expect(found.headers["cache-control"]).toBe("no-store");
+      expect(found.body).toEqual({ customer: { customerName: "Checkout Customer" } });
+      expect(Object.keys(found.body.customer)).toEqual(["customerName"]);
+
+      const missing = await supertest(app).get("/api/public/customers/checkout-profile?customerMobile=9876543299");
+      expect(missing.status).toBe(200);
+      expect(missing.body).toEqual({ customer: null });
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  });
+
   it("returns privacy-minimized order summaries for mobile history", async () => {
     const res = await supertest(app).get("/api/public/orders/track-by-mobile?customerMobile=9876543210");
     expect(res.status).toBe(200);
