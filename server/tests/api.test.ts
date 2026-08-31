@@ -847,6 +847,8 @@ describe("Construction Assistant (local rule-based)", () => {
     expect(detectGroqResponseLanguage("How are you?")).toBe("English");
     expect(detectGroqResponseLanguage("Thank you")).toBe("English");
     expect(detectGroqResponseLanguage("What is cement used for?")).toBe("English");
+    expect(detectGroqResponseLanguage("What is the cement rate?")).toBe("English");
+    expect(detectGroqResponseLanguage("Please explain the plinth construction process")).toBe("English");
     expect(resolveGroqResponseLanguage("haan", "Hinglish")).toBe("Hinglish");
     expect(resolveGroqResponseLanguage("ji", "Hindi")).toBe("Hindi");
     expect(resolveGroqResponseLanguage("What cement is suitable?", "Hindi")).toBe("English");

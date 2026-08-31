@@ -54,6 +54,7 @@ Core Rules & Communication Style:
 - Natural & Conversational: Talk naturally with the user without long robotic essays or artificial fluff. Give direct, high-value answers first.
 - Default Language: Hindi / Hinglish is the PRIMARY DEFAULT language. If the user writes in Hindi or Hinglish (e.g. "bhai slab me kitna cement lagega", "chat dhalana h", "kya rate h"), respond warmly in natural conversational Hindi/Hinglish (Roman or Devanagari matching the user). ONLY respond in English if the user asks entirely in pure English.
 - You can have normal, polite conversation as well as construction conversations. Do not reject greetings, thanks, or everyday small talk.
+- For jokes or playful requests, use only light, respectful, family-friendly humour and never target protected groups or individuals.
 - Format responses beautifully with bullet points, bold key terms, and short clean sections so it is effortless to read on mobile.
 - Never invent exact structural design values for critical safety members; always remind that structural drawings should be verified by a qualified structural engineer.
 - Direct customers to the current Products catalogue for live price and stock verification.
@@ -282,14 +283,15 @@ const HINGLISH_TOKENS = new Set([
   "kaise", "kya", "kyu", "kyun", "mujhe", "ghar", "kitna", "kitni", "kitne", "konsa", "kaunsa",
   "chahiye", "lagta", "lagega", "lagi", "batao", "karna", "banana", "banao", "accha", "acha", "dhanyawad",
   "samajh", "thik", "theek", "tum", "aap", "apko", "mera", "meri", "mere", "wala", "wali", "wale",
-  "bhai", "chat", "chhat", "dhalai", "dhalana", "saria", "cement", "eet", "balu", "gitti", "rate",
-  "dam", "paisa", "kharcha", "plinth", "kam", "jyada", "sahi", "kharab", "lelo", "dena", "kab",
+  "bhai", "chat", "chhat", "dhalai", "dhalana", "saria", "eet", "balu", "gitti",
+  "dam", "paisa", "kharcha", "kam", "jyada", "sahi", "kharab", "lelo", "dena", "kab",
   "hai", "h", "hain", "ho", "tha", "thi", "raha", "rahe", "rahi", "hoga", "hogi", "bhi", "aur",
   "sir", "madam", "namaste", "pranam", "kripya", "bataiye", "boliye", "bolo", "karo", "karein",
   "kaun", "kisko", "kaha", "kahan", "jankari", "bhav", "bata", "batao"
 ]);
 
 const ENGLISH_PATTERNS = [
+  /^(?:hello|hi|hey|thanks|thank you|good (?:morning|afternoon|evening))[!.?]*$/i,
   /\b(what|how|why|when|where|which|who|can you|could you|please provide|tell me|calculate|estimate|cost of|price of|specifications|dimensions|difference between|compressive strength|ratio of)\b/i,
   /\b(the|this|that|these|those|is|are|was|were|have|has|had|with|for|from|about)\b/i
 ];
@@ -300,6 +302,7 @@ export function detectGroqResponseLanguage(message: string, fallback: "Hindi" | 
   if (/[\u0900-\u097F]/.test(normalized)) return "Hindi";
   if (HINGLISH_PHRASES.some((phrase) => phrase.test(normalized))) return "Hinglish";
   const tokens = normalized.match(/[a-z]+/g) ?? [];
+  if (ENGLISH_PATTERNS[0].test(normalized)) return "English";
   const hinglishMatches = tokens.filter((token) => HINGLISH_TOKENS.has(token));
   if (hinglishMatches.length >= 1) return "Hinglish";
   
