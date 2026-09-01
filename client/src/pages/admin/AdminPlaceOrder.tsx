@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { adminApi, ApiRequestError } from "../../lib/api";
 import type { Category, Product, Order, CustomerLookupResponse } from "../../types";
@@ -76,6 +76,30 @@ export default function AdminPlaceOrder() {
   const [submitting, setSubmitting] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
 
+  // Customer lookup trigger
+  const handleLookup = useCallback(async (mobileToLookup = mobile) => {
+    const clean = mobileToLookup.replace(/[\s-]/g, "");
+    if (clean.length < 10) return;
+    setLookingUp(true);
+    try {
+      const res = await adminApi.lookupCustomer(clean);
+      setLookupResult(res);
+      if (res.found && res.customer) {
+        setCustomerName(res.customer.name);
+        if (res.customer.address) {
+          setAddress((current) => current || res.customer!.address || "");
+        }
+        success(`पुराना ग्राहक मिला: ${res.customer.name}`);
+      } else {
+        setLookupResult({ found: false, customer: null, previousDue: 0, ordersCount: 0 });
+      }
+    } catch {
+      setLookupResult({ found: false, customer: null, previousDue: 0, ordersCount: 0 });
+    } finally {
+      setLookingUp(false);
+    }
+  }, [mobile, success]);
+
   // Load active products & categories
   useEffect(() => {
     setLoadingCatalogue(true);
@@ -89,7 +113,7 @@ export default function AdminPlaceOrder() {
       })
       .catch(() => toastError("सामग्रियां लोड करने में समस्या आई"))
       .finally(() => setLoadingCatalogue(false));
-  }, []);
+  }, [toastError]);
 
   // Debounced Customer Lookup when mobile number is entered
   useEffect(() => {
@@ -102,7 +126,7 @@ export default function AdminPlaceOrder() {
       handleLookup(clean);
     }, 400);
     return () => clearTimeout(timer);
-  }, [mobile]);
+  }, [mobile, handleLookup]);
 
   // Filtered catalogue
   const filteredProducts = useMemo(() => {
@@ -163,30 +187,6 @@ export default function AdminPlaceOrder() {
 
   const removeFromCart = (productId: number) => {
     setCart((prev) => prev.filter((i) => i.product.id !== productId));
-  };
-
-  // Customer lookup trigger
-  const handleLookup = async (mobileToLookup = mobile) => {
-    const clean = mobileToLookup.replace(/[\s-]/g, "");
-    if (clean.length < 10) return;
-    setLookingUp(true);
-    try {
-      const res = await adminApi.lookupCustomer(clean);
-      setLookupResult(res);
-      if (res.found && res.customer) {
-        setCustomerName(res.customer.name);
-        if (res.customer.address && !address) {
-          setAddress(res.customer.address);
-        }
-        success(`पुराना ग्राहक मिला: ${res.customer.name}`);
-      } else {
-        setLookupResult({ found: false, customer: null, previousDue: 0, ordersCount: 0 });
-      }
-    } catch {
-      setLookupResult({ found: false, customer: null, previousDue: 0, ordersCount: 0 });
-    } finally {
-      setLookingUp(false);
-    }
   };
 
   // Financial calculations
