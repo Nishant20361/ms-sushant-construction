@@ -2,6 +2,7 @@ import { API_BASE } from "../config";
 import type {
   AdminProfile,
   ApiError,
+  AssistedOrderPayload,
   AssistantLanguage,
   Bill,
   ConstructionChatResponse,
@@ -10,6 +11,7 @@ import type {
   CustomerDetail,
   CustomerDue,
   CustomerDueReport,
+  CustomerLookupResponse,
   CustomerStatement,
   DashboardStats,
   Notification,
@@ -144,7 +146,7 @@ export const publicApi = {
   getSettings(): Promise<{ settings: SiteSettings }> {
     return request("/settings/public");
   },
-  getCheckoutCustomer(customerMobile: string, signal?: AbortSignal): Promise<{ customer: { customerName: string } | null }> {
+  getCheckoutCustomer(customerMobile: string, signal?: AbortSignal): Promise<{ customer: { customerName: string; deliveryAddress?: string } | null }> {
     const q = new URLSearchParams({ customerMobile });
     return request(`/customers/checkout-profile?${q.toString()}`, { signal });
   },
@@ -392,6 +394,16 @@ getDuesSummary(params: {
   },
   getProfile(): Promise<{ profile: AdminProfile }> {
     return request("/admin/profile");
+  },
+  lookupCustomer(mobile: string): Promise<CustomerLookupResponse> {
+    return request(`/admin/customers/lookup?mobile=${encodeURIComponent(mobile)}`);
+  },
+  createAssistedOrder(data: AssistedOrderPayload): Promise<{ order: Order; message: string; replayed?: boolean }> {
+    return request(
+      "/admin/orders/assisted",
+      { method: "POST", body: JSON.stringify(data) },
+      { csrf: true }
+    );
   },
   updateProfile(data: { lowStockThreshold: number }): Promise<{ profile: AdminProfile }> {
     return request(

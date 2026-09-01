@@ -138,9 +138,9 @@ export async function getPaymentAnalytics() {
     }),
   ]);
 
-  const cashCollection = round2(cashAgg._sum.amount ?? 0);
-  const onlineCollection = round2(onlineAgg._sum.amount ?? 0);
-  const totalCollected = round2(allPaymentsAgg._sum.amount ?? 0);
+  const cashCollection = round2(Number(cashAgg._sum.amount ?? 0));
+  const onlineCollection = round2(Number(onlineAgg._sum.amount ?? 0));
+  const totalCollected = round2(Number(allPaymentsAgg._sum.amount ?? 0));
 
   // Due outstanding = sum(final - paid) for all non-cancelled orders.
   const orders = await prisma.order.findMany({
@@ -814,7 +814,7 @@ export async function getProductHistory(productId: number) {
       id: product.id,
       name: product.name,
       unit: product.unit,
-      price: round2(product.price),
+      price: round2(Number(product.price)),
       stock: round2(product.stock),
       category: product.category?.name ?? null,
     },

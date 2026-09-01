@@ -77,12 +77,12 @@ const load = () => {
     setSettings({ ...settings, [key]: value ?? "" });
   };
 
-  const handleUpload = async (field: "logoUrl" | "heroBannerUrl" | "mobileHeroBannerUrl" | "businessLogoUrl", file: File) => {
+  const handleUpload = async (field: "logoUrl" | "heroBannerUrl" | "heroVideoUrl" | "mobileHeroBannerUrl" | "mobileHeroVideoUrl" | "businessLogoUrl", file: File) => {
     setUploading(true);
     try {
       const res = await adminApi.uploadImage(file);
       update(field, res.url);
-      success("Image uploaded");
+      success("Uploaded successfully");
     } catch (e) {
       if (e instanceof ApiRequestError) error(e.message);
       else error("Upload failed");
@@ -251,13 +251,119 @@ const load = () => {
         </div>
       </div>
 
-      <div className="card p-6">
-        <h3 className="text-lg font-semibold text-slate-900">Mobile Home Banner</h3>
-        <p className="mt-1 text-sm text-slate-500">This banner is shown only in the mobile app. It is separate from the website hero banner.</p>
-        <div className="mt-5 grid gap-5 sm:grid-cols-2">
-          <div><label className="label" htmlFor="mobileHeroTitle">Mobile Banner Title</label><input id="mobileHeroTitle" className="input" value={settings.mobileHeroTitle} onChange={(event) => update("mobileHeroTitle", event.target.value)} placeholder="Quality Construction Materials" /></div>
-          <div className="sm:col-span-2"><label className="label" htmlFor="mobileHeroSubtitle">Mobile Banner Description</label><textarea id="mobileHeroSubtitle" className="input min-h-[80px]" rows={3} maxLength={400} value={settings.mobileHeroSubtitle} onChange={(event) => update("mobileHeroSubtitle", event.target.value)} placeholder="Describe your mobile-app materials and services." /></div>
-          <div className="sm:col-span-2"><label className="label">Mobile Banner Image</label><div className="mt-2 flex items-center gap-3"><div className="h-16 w-24 overflow-hidden rounded-lg bg-slate-100">{settings.mobileHeroBannerUrl ? <img src={resolveImageUrl(settings.mobileHeroBannerUrl) ?? ""} alt="Mobile banner" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">Mobile</div>}</div><label className="btn-secondary cursor-pointer">{uploading ? "Uploading…" : "Upload"}<input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) handleUpload("mobileHeroBannerUrl", file); event.target.value = ""; }} /></label>{settings.mobileHeroBannerUrl ? <button onClick={() => update("mobileHeroBannerUrl", null)} className="text-xs font-semibold text-red-600 hover:underline">Remove</button> : null}</div></div>
+      <div className="card p-6 space-y-5">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">Mobile Home Banner (Continuous Video & Image)</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Configure the full-bleed continuous looping video or banner image displayed at the top of the mobile app home screen. All text overlays are removed for a cinematic view.
+          </p>
+        </div>
+
+        {/* Video Banner */}
+        <div className="rounded-xl border-2 border-brand-200 bg-brand-50/50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span>🎬 Continuous Banner Video (Mobile App)</span>
+              <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-[11px] font-bold text-brand-800">
+                Recommended
+              </span>
+            </label>
+            {settings.mobileHeroVideoUrl && (
+              <button
+                type="button"
+                onClick={() => update("mobileHeroVideoUrl", null)}
+                className="text-xs font-semibold text-red-600 hover:underline"
+              >
+                Remove Video
+              </button>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-600">
+            Enter a direct video URL (e.g. .mp4, .webm, Cloudinary/CDN link) or upload a video file. This video will continuously loop and autoplay across the full banner.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-3 items-start">
+            <input
+              type="url"
+              className="input text-xs flex-1"
+              value={settings.mobileHeroVideoUrl ?? ""}
+              onChange={(e) => update("mobileHeroVideoUrl", e.target.value)}
+              placeholder="https://.../construction-banner.mp4"
+            />
+            <label className="btn-secondary text-xs cursor-pointer shrink-0">
+              {uploading ? "Uploading…" : "Upload Video / Media"}
+              <input
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) handleUpload("mobileHeroVideoUrl", file);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+
+          {settings.mobileHeroVideoUrl && (
+            <div className="mt-2 space-y-1">
+              <span className="text-[11px] font-semibold text-slate-500">Live Video Preview:</span>
+              <div className="h-36 w-full max-w-md overflow-hidden rounded-xl bg-black border border-slate-300">
+                <video
+                  src={resolveImageUrl(settings.mobileHeroVideoUrl) ?? ""}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  controls
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Fallback Image Banner */}
+        <div>
+          <label className="label">Fallback Banner Image (When video is not playing or loading)</label>
+          <div className="mt-2 flex items-center gap-3">
+            <div className="h-16 w-28 overflow-hidden rounded-lg bg-slate-100 border border-slate-200">
+              {settings.mobileHeroBannerUrl ? (
+                <img
+                  src={resolveImageUrl(settings.mobileHeroBannerUrl) ?? ""}
+                  alt="Mobile banner"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
+                  Fallback Image
+                </div>
+              )}
+            </div>
+            <label className="btn-secondary cursor-pointer text-xs">
+              {uploading ? "Uploading…" : "Upload Image"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) handleUpload("mobileHeroBannerUrl", file);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            {settings.mobileHeroBannerUrl && (
+              <button
+                type="button"
+                onClick={() => update("mobileHeroBannerUrl", null)}
+                className="text-xs font-semibold text-red-600 hover:underline"
+              >
+                Remove
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -39,9 +39,11 @@ export interface SiteSettings {
   heroTitle: string;
   heroSubtitle: string;
   heroBannerUrl: string | null;
+  heroVideoUrl: string | null;
   mobileHeroTitle: string;
   mobileHeroSubtitle: string;
   mobileHeroBannerUrl: string | null;
+  mobileHeroVideoUrl: string | null;
   phone: string;
   whatsappNumber: string;
   email: string;
@@ -102,7 +104,30 @@ export interface OrderPayment {
   paymentDate: string;
   notes: string | null;
   createdAt: string;
-  updatedAt: string;
+}
+
+export interface CustomerLookupResponse {
+  found: boolean;
+  customer: {
+    name: string;
+    mobile: string;
+    address: string;
+  } | null;
+  previousDue: number;
+  ordersCount: number;
+}
+
+export interface AssistedOrderPayload {
+  customerName: string;
+  customerMobile: string;
+  deliveryAddress?: string;
+  notes?: string;
+  items: Array<{ productId: number; quantity: number }>;
+  transportation?: number;
+  discount?: number;
+  paidAmount?: number;
+  paymentMode?: PaymentMode;
+  clientRequestId?: string;
 }
 
 export interface Order {
@@ -112,6 +137,7 @@ export interface Order {
   customerMobile: string;
   deliveryAddress: string | null;
   notes: string | null;
+  source?: string;
   subtotal: number;
   finalAmount: number;
   status: OrderStatus;
@@ -233,6 +259,7 @@ export interface AdminProfile {
 export interface TrackedOrder {
   orderNumber: string;
   status: OrderStatus;
+  source?: string;
   createdAt: string;
   subtotal: number;
   customerName: string;
@@ -249,6 +276,7 @@ export interface TrackedOrder {
 export interface TrackedOrderSummary {
   orderNumber: string;
   status: OrderStatus;
+  source?: string;
   createdAt: string;
   total: number;
   items: {

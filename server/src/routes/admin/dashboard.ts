@@ -4,6 +4,8 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { requireAdmin } from "../../middleware/auth.js";
 import { AuthenticatedRequest } from "../../types.js";
 
+import { computeOrderFinancials, roundCurrency } from "../../utils/financials.js";
+
 const router = Router();
 
 // GET /api/admin/dashboard
@@ -27,7 +29,7 @@ router.get(
       outForDeliveryOrders,
       deliveredOrders,
       cancelledOrders,
-revenueAgg,
+      revenueAgg,
       paymentsAgg,
       cashAgg,
       onlineAgg,
@@ -47,8 +49,6 @@ revenueAgg,
         _sum: { subtotal: true },
         where: { status: { not: "CANCELLED" } },
       }),
-// Total collected = sum of all payments across non-cancelled orders,
-      // split by cash vs online.
       prisma.orderPayment.aggregate({
         _sum: { amount: true },
         where: { order: { status: { not: "CANCELLED" } } },
@@ -70,22 +70,47 @@ revenueAgg,
       }),
     ]);
 
-    // Total due = sum of (final payable - collected) across all non-cancelled
-    // orders. This is a lightweight foundation for customer due management.
+    // Total due and daily metrics
     const dueOrders = await prisma.order.findMany({
       where: { status: { not: "CANCELLED" } },
       include: { bill: true, payments: true },
     });
+
+    // Indian Standard Time (IST, UTC+5:30) bounds
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(Date.now() + istOffsetMs);
+    const y = istNow.getUTCFullYear();
+    const m = istNow.getUTCMonth();
+    const d = istNow.getUTCDate();
+    const todayStart = new Date(Date.UTC(y, m, d) - istOffsetMs);
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
     let totalDue = 0;
+    let todaySales = 0;
+    let todayDue = 0;
+    let todayOrdersCount = 0;
+
     for (const o of dueOrders) {
-      const final = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
-      const paid = (o.payments ?? []).reduce(
-        (s: number, p: any) => s + Number(p.amount),
-        0
-      );
-      totalDue += Math.max(0, Math.round((final - paid) * 100) / 100);
+      const fin = computeOrderFinancials(o);
+      totalDue = roundCurrency(totalDue + fin.due);
+
+      const orderCreated = new Date(o.createdAt);
+      if (orderCreated >= todayStart && orderCreated < todayEnd) {
+        todaySales = roundCurrency(todaySales + fin.finalAmount);
+        todayOrdersCount += 1;
+        todayDue = roundCurrency(todayDue + fin.due);
+      }
     }
-    totalDue = Math.round(totalDue * 100) / 100;
+
+    // Aggregate payments collected today in IST
+    const todayPaymentsAgg = await prisma.orderPayment.aggregate({
+      _sum: { amount: true },
+      where: {
+        paymentDate: { gte: todayStart, lt: todayEnd },
+        order: { status: { not: "CANCELLED" } },
+      },
+    });
+    const todayCollected = roundCurrency(Number(todayPaymentsAgg._sum.amount || 0));
 
     res.json({
       stats: {
@@ -98,11 +123,15 @@ revenueAgg,
         outForDeliveryOrders,
         deliveredOrders,
         cancelledOrders,
-totalRevenue: revenueAgg._sum.subtotal ?? 0,
-        totalCollected: paymentsAgg._sum.amount ?? 0,
-        totalCashCollected: cashAgg._sum.amount ?? 0,
-        totalOnlineCollected: onlineAgg._sum.amount ?? 0,
+        totalRevenue: roundCurrency(Number(revenueAgg._sum.subtotal || 0)),
+        totalCollected: roundCurrency(Number(paymentsAgg._sum.amount || 0)),
+        totalCashCollected: roundCurrency(Number(cashAgg._sum.amount || 0)),
+        totalOnlineCollected: roundCurrency(Number(onlineAgg._sum.amount || 0)),
         totalDue,
+        todaySales,
+        todayCollected,
+        todayDue,
+        todayOrders: todayOrdersCount,
         lowStockCount: lowStock.length,
         lowStockThreshold: threshold,
       },

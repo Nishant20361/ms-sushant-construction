@@ -60,3 +60,11 @@ verify_rag.ts
 # Editor
 .vscode/
 .idea/
+
+# AI Memory & Context
+memory.md
+MEMORY.md
+
+# Expo prebuild output (generated locally; EAS should use app.json as source of truth)
+mobile/android/
+mobile/ios/

@@ -48,11 +48,17 @@ export default function Checkout() {
         const { customer } = await publicApi.getCheckoutCustomer(mobile, controller.signal);
         if (customer) {
           setForm((current) => {
-            if (current.customerName.trim() && !nameWasAutoFilled.current) return current;
-            nameWasAutoFilled.current = true;
-            return { ...current, customerName: customer.customerName };
+            const next = { ...current };
+            if (!current.customerName.trim() || nameWasAutoFilled.current) {
+              next.customerName = customer.customerName;
+              nameWasAutoFilled.current = true;
+            }
+            if (!current.deliveryAddress.trim() && customer.deliveryAddress) {
+              next.deliveryAddress = customer.deliveryAddress;
+            }
+            return next;
           });
-          setFieldErrors((current) => ({ ...current, customerName: "" }));
+          setFieldErrors((current) => ({ ...current, customerName: "", deliveryAddress: "" }));
           setCustomerLookup("found");
         } else {
           if (nameWasAutoFilled.current) setForm((current) => ({ ...current, customerName: "" }));

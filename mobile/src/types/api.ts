@@ -25,7 +25,7 @@ export interface CreateOrderResponse {
 export interface TrackOrdersByMobileResponse {
   orders: TrackedOrderSummary[];
 }
-export interface CheckoutCustomerResponse { customer: { customerName: string } | null }
+export interface CheckoutCustomerResponse { customer: { customerName: string; deliveryAddress?: string } | null }
 export type AssistantLanguage = "Hindi" | "English" | "Hinglish" | "Other";
 export interface AssistantRequest { message: string; sessionId?: string; language?: AssistantLanguage }
 export interface AssistantResponse {

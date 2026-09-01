@@ -10,12 +10,34 @@ import { writeAudit } from "../../middleware/audit.js";
 import { serializeBill, serializeOrder, serializeOrderPayment } from "../../utils/serializer.js";
 import { AuthenticatedRequest } from "../../types.js";
 import { createAdminNotification, notifyStockTransitions } from "../../services/push.service.js";
+import {
+  computeOrderFinancials,
+  allocateCustomerPaymentFIFO,
+  roundCurrency,
+  toPrismaDecimal,
+} from "../../utils/financials.js";
+import { normalizeIndianMobile } from "../../utils/validatePhone.js";
 
-async function paymentNotification(adminId:number,input:{amount:number;mode:string;orderId?:number;orderNumber?:string;customerName:string;key:string}){await createAdminNotification({adminId,type:"PAYMENT_RECEIVED",title:"Payment received",message:`₹${input.amount.toFixed(2)} · ${input.mode} · ${input.customerName}`,orderId:input.orderId,orderNumber:input.orderNumber,customerName:input.customerName,metadata:{amount:input.amount,mode:input.mode},dedupeKey:`PAYMENT_RECEIVED:${input.key}`})}
+async function paymentNotification(
+  adminId: number,
+  input: { amount: number; mode: string; orderId?: number; orderNumber?: string; customerName: string; key: string }
+) {
+  await createAdminNotification({
+    adminId,
+    type: "PAYMENT_RECEIVED",
+    title: "Payment received",
+    message: `₹${input.amount.toFixed(2)} · ${input.mode} · ${input.customerName}`,
+    orderId: input.orderId,
+    orderNumber: input.orderNumber,
+    customerName: input.customerName,
+    metadata: { amount: input.amount, mode: input.mode },
+    dedupeKey: `PAYMENT_RECEIVED:${input.key}`,
+  });
+}
 
 const router = Router();
 
-// GET /api/admin/orders?search=&status=&paymentStatus=&from=&to=&page=&limit=
+// GET /api/admin/orders?search=&status=&paymentStatus=&payment=&from=&to=&page=&limit=
 router.get(
   "/orders",
   requireAdmin,
@@ -26,62 +48,151 @@ router.get(
       from,
       to,
       paymentStatus,
+      payment,
       page = "1",
       limit = "20",
     } = req.query as Record<string, string>;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Support both 'paymentStatus' and 'payment' parameter names
+    const rawPayment = (paymentStatus || payment || "").trim().toUpperCase();
+    const filterPaymentStatus = ["PAID", "PARTIALLY_PAID", "DUE"].includes(rawPayment)
+      ? rawPayment
+      : undefined;
+
+    // Date range filter
+    let fromDate: Date | null = null;
+    let toDate: Date | null = null;
+    if (from) {
+      const d = new Date(from);
+      if (!Number.isNaN(d.getTime())) fromDate = d;
+    }
+    if (to) {
+      const d = new Date(to);
+      if (!Number.isNaN(d.getTime())) {
+        d.setHours(23, 59, 59, 999);
+        toDate = d;
+      }
+    }
+
+    if (filterPaymentStatus) {
+      // Direct SQL-level filtering for exact pagination without empty pages
+      const searchPattern = search?.trim() ? `%${search.trim()}%` : null;
+
+      const results = await prisma.$queryRaw<
+        Array<{ id: number | null; total_count: bigint }>
+      >`
+        WITH order_financials AS (
+          SELECT
+            o.id,
+            o."createdAt",
+            CASE
+              WHEN COALESCE(pm.paid_total, 0) = 0
+                   AND (COALESCE(b."finalAmount", o.subtotal) - COALESCE(pm.paid_total, 0)) > 0
+                THEN 'DUE'
+              WHEN COALESCE(pm.paid_total, 0) > 0
+                   AND (COALESCE(b."finalAmount", o.subtotal) - COALESCE(pm.paid_total, 0)) > 0
+                THEN 'PARTIALLY_PAID'
+              ELSE 'PAID'
+            END AS derived_status
+          FROM "Order" o
+          LEFT JOIN "Bill" b ON b."orderId" = o.id
+          LEFT JOIN (
+            SELECT "orderId", SUM(amount) AS paid_total
+            FROM "OrderPayment"
+            GROUP BY "orderId"
+          ) pm ON pm."orderId" = o.id
+          WHERE 1=1
+            ${status ? Prisma.sql`AND o.status = ${status}` : Prisma.empty}
+            ${searchPattern ? Prisma.sql`AND (
+              o."orderNumber" ILIKE ${searchPattern}
+              OR o."customerName" ILIKE ${searchPattern}
+              OR o."customerMobile" ILIKE ${searchPattern}
+            )` : Prisma.empty}
+            ${fromDate ? Prisma.sql`AND o."createdAt" >= ${fromDate}` : Prisma.empty}
+            ${toDate ? Prisma.sql`AND o."createdAt" <= ${toDate}` : Prisma.empty}
+        ),
+        filtered AS (
+          SELECT id, "createdAt"
+          FROM order_financials
+          WHERE derived_status = ${filterPaymentStatus}
+        ),
+        counted AS (
+          SELECT COUNT(*)::bigint AS total_count FROM filtered
+        ),
+        paged AS (
+          SELECT id, "createdAt"
+          FROM filtered
+          ORDER BY "createdAt" DESC
+          OFFSET ${skip}
+          LIMIT ${limitNum}
+        )
+        SELECT p.id, c.total_count
+        FROM counted c
+        LEFT JOIN paged p ON TRUE
+        ORDER BY p."createdAt" DESC
+      `;
+
+      const total = Number(results[0]?.total_count ?? 0);
+      const orderIds = results.flatMap((r) => (r.id == null ? [] : [r.id]));
+
+      let orders: any[] = [];
+      if (orderIds.length > 0) {
+        const rawOrders = await prisma.order.findMany({
+          where: { id: { in: orderIds } },
+          include: { items: true, bill: true, payments: true },
+        });
+        // Preserve SQL sort order
+        const orderMap = new Map(rawOrders.map((o) => [o.id, o]));
+        orders = orderIds.map((id) => orderMap.get(id)!).filter(Boolean);
+      }
+
+      res.json({
+        orders: orders.map(serializeOrder),
+        total,
+        page: pageNum,
+        pages: Math.max(1, Math.ceil(total / limitNum)),
+      });
+      return;
+    }
+
+    // Default fast Prisma path when no derived payment status filter is needed
     const where: any = {};
     if (status) where.status = status;
-    if (search) {
+    if (search?.trim()) {
+      const term = search.trim();
       where.OR = [
-        { orderNumber: { contains: search, mode: "insensitive" } },
-        { customerName: { contains: search, mode: "insensitive" } },
-        { customerMobile: { contains: search, mode: "insensitive" } },
+        { orderNumber: { contains: term, mode: "insensitive" } },
+        { customerName: { contains: term, mode: "insensitive" } },
+        { customerMobile: { contains: term, mode: "insensitive" } },
       ];
     }
-    // Payment status filter (foundation). The final status is derived from
-    // payments + bill, so we fetch the summary and post-filter in JS when a
-    // filter is requested. All orders are returned when no filter is passed.
-    const filterPaymentStatus = ["PAID", "PARTIALLY_PAID", "DUE"].includes(paymentStatus ?? "")
-      ? paymentStatus
-      : undefined;
-    // Date range filter (from/to) — both optional; from is start-of-day,
-    // to is end-of-day inclusive.
-    if (from || to) {
+    if (fromDate || toDate) {
       const dateFilter: any = {};
-      if (from) {
-        const d = new Date(from);
-        if (!Number.isNaN(d.getTime())) dateFilter.gte = d;
-      }
-      if (to) {
-        const d = new Date(to);
-        if (!Number.isNaN(d.getTime())) {
-          d.setHours(23, 59, 59, 999);
-          dateFilter.lte = d;
-        }
-      }
-      if (Object.keys(dateFilter).length) where.createdAt = dateFilter;
+      if (fromDate) dateFilter.gte = fromDate;
+      if (toDate) dateFilter.lte = toDate;
+      where.createdAt = dateFilter;
     }
-    const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
+
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
         include: { items: true, bill: true, payments: true },
         orderBy: { createdAt: "desc" },
         skip,
-        take: Number(limit),
+        take: limitNum,
       }),
       prisma.order.count({ where }),
     ]);
-    // Payment status is derived (not stored), so post-filter when requested.
-    let serialized = orders.map(serializeOrder);
-    if (filterPaymentStatus) {
-      serialized = serialized.filter((o: any) => o.paymentStatus === filterPaymentStatus);
-    }
+
     res.json({
-      orders: serialized,
+      orders: orders.map(serializeOrder),
       total,
-      page: Number(page),
-      pages: Math.max(1, Math.ceil(total / Number(limit))),
+      page: pageNum,
+      pages: Math.max(1, Math.ceil(total / limitNum)),
     });
   })
 );
@@ -177,17 +288,23 @@ router.get(
         createdAt: o.createdAt,
       };
 
-      const customer = byMobile.get(o.customerMobile);
+      const cleanM = (o.customerMobile || "").replace(/\D/g, "");
+      const key = cleanM.length >= 10 ? cleanM.slice(-10) : (o.customerMobile || "unknown");
+
+      const customer = byMobile.get(key);
       if (customer) {
+        if (o.customerName && o.customerName.trim()) {
+          customer.customerName = o.customerName.trim();
+        }
         customer.totalOrders += 1;
         customer.totalPurchase += Math.round(finalAmount * 100) / 100;
         customer.totalPaid += paid;
         customer.totalDue += due;
         customer.orders.push(entry);
       } else {
-        byMobile.set(o.customerMobile, {
-          customerName: o.customerName,
-          customerMobile: o.customerMobile,
+        byMobile.set(key, {
+          customerName: o.customerName || "Customer",
+          customerMobile: key,
           totalOrders: 1,
           totalPurchase: Math.round(finalAmount * 100) / 100,
           totalPaid: paid,
@@ -227,11 +344,20 @@ router.get(
   "/orders/customer/:mobile",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const mobile = req.params.mobile;
-    if (!mobile) throw new HttpError(400, "Customer mobile is required");
+    const rawMobile = req.params.mobile;
+    if (!rawMobile) throw new HttpError(400, "Customer mobile is required");
+    const last10 = normalizeIndianMobile(rawMobile);
+    if (!last10) throw new HttpError(400, "A valid Indian mobile number is required");
+    const variants = [last10, `+91${last10}`, `91${last10}`, `0${last10}`, rawMobile.trim()];
 
     const orders = await prisma.order.findMany({
-      where: { customerMobile: mobile, status: { not: "CANCELLED" } },
+      where: {
+        OR: [
+          { customerMobile: { in: variants } },
+          { customerMobile: { endsWith: last10 } },
+        ],
+        status: { not: "CANCELLED" },
+      },
       include: { items: true, bill: true, payments: { orderBy: { paymentDate: "asc" } } },
       orderBy: { createdAt: "asc" },
     });
@@ -241,32 +367,23 @@ router.get(
     }
 
     const detailOrders = orders.map((o) => {
-      const finalAmount = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
-      const cash = (o.payments ?? [])
-        .filter((p: any) => p.paymentMode === "CASH")
-        .reduce((s: number, p: any) => s + Number(p.amount), 0);
-      const online = (o.payments ?? [])
-        .filter((p: any) => p.paymentMode === "ONLINE")
-        .reduce((s: number, p: any) => s + Number(p.amount), 0);
-      const paid = Math.round((cash + online) * 100) / 100;
-      const due = Math.max(0, Math.round((finalAmount - paid) * 100) / 100);
+      const fin = computeOrderFinancials(o);
       return {
         id: o.id,
         orderNumber: o.orderNumber,
+        customerName: o.customerName,
+        deliveryAddress: o.deliveryAddress,
         createdAt: o.createdAt,
-        finalAmount: Math.round(finalAmount * 100) / 100,
-        cashPaid: Math.round(cash * 100) / 100,
-        onlinePaid: Math.round(online * 100) / 100,
-        paid,
-        due,
-        paymentStatus: paid <= 0 ? "DUE" : due <= 0 ? "PAID" : "PARTIALLY_PAID",
+        finalAmount: fin.finalAmount,
+        cashPaid: fin.cashTotal,
+        onlinePaid: fin.onlineTotal,
+        paid: fin.paidTotal,
+        due: fin.due,
+        paymentStatus: fin.paymentStatus,
       };
     });
 
-    // Build a running payment history across all the customer's orders,
-    // preserving chronology. For each payment we track the previous due vs
-    // remaining due (approximated by considering the customer's total balance
-    // at that point in time, oldest-first).
+    // Build chronological payment history
     const allPayments = orders.flatMap((o) =>
       (o.payments ?? []).map((p: any) => ({
         ...p,
@@ -280,49 +397,52 @@ router.get(
       return a.id - b.id;
     });
 
-    // Recompute the running total due by replaying payments chronologically.
     const orderDues = new Map<number, { final: number; paid: number }>();
     for (const o of orders) {
-      const finalAmount = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
-      orderDues.set(o.id, { final: finalAmount, paid: 0 });
+      const fin = computeOrderFinancials(o);
+      orderDues.set(o.id, { final: fin.finalAmount, paid: 0 });
     }
     let runningTotalDue = orderDues.size
       ? Array.from(orderDues.values()).reduce((s, v) => s + v.final, 0)
       : 0;
-const history = allPayments.map((p: any) => {
-      const prevDue = Math.round(runningTotalDue * 100) / 100;
+
+    const history = allPayments.map((p: any) => {
+      const prevDue = roundCurrency(runningTotalDue);
       const od = orderDues.get(p.orderId)!;
-      od.paid += Number(p.amount);
-      // Recompute the running total due after applying this payment.
+      od.paid = roundCurrency(od.paid + Number(p.amount));
       runningTotalDue = Array.from(orderDues.values()).reduce(
-        (s, v) => s + Math.max(0, v.final - v.paid),
+        (s, v) => s + Math.max(0, roundCurrency(v.final - v.paid)),
         0
       );
       return {
         id: p.id,
         orderNumber: p.orderNumber,
-        amount: Number(p.amount),
+        amount: roundCurrency(p.amount),
         paymentMode: p.paymentMode,
         paymentDate: p.paymentDate,
         notes: p.notes ?? null,
         previousDue: prevDue,
-        remainingDue: Math.round(runningTotalDue * 100) / 100,
+        remainingDue: roundCurrency(runningTotalDue),
       };
     });
     history.reverse(); // newest first for display
 
-    const totalPurchase = detailOrders.reduce((s, o) => s + o.finalAmount, 0);
-    const totalPaid = detailOrders.reduce((s, o) => s + o.paid, 0);
-    const totalDue = detailOrders.reduce((s, o) => s + o.due, 0);
+    const totalPurchase = roundCurrency(detailOrders.reduce((s, o) => s + o.finalAmount, 0));
+    const totalPaid = roundCurrency(detailOrders.reduce((s, o) => s + o.paid, 0));
+    const totalDue = roundCurrency(detailOrders.reduce((s, o) => s + o.due, 0));
+
+    const orderWithAddress = orders.find((o) => o.deliveryAddress && o.deliveryAddress.trim().length > 0);
+    const customerAddress = orderWithAddress?.deliveryAddress || orders[0].deliveryAddress || "";
 
     res.json({
       customer: {
         customerName: orders[0].customerName,
         customerMobile: orders[0].customerMobile,
+        customerAddress,
         totalOrders: orders.length,
-        totalPurchase: Math.round(totalPurchase * 100) / 100,
-        totalPaid: Math.round(totalPaid * 100) / 100,
-        totalDue: Math.round(totalDue * 100) / 100,
+        totalPurchase,
+        totalPaid,
+        totalDue,
       },
       orders: detailOrders,
       paymentHistory: history,
@@ -331,123 +451,147 @@ const history = allPayments.map((p: any) => {
 );
 
 // POST /api/admin/orders/customer/:mobile/payments
-// Receive a payment against a CUSTOMER's outstanding balance. The amount is
-// allocated to the customer's due orders oldest-first (FIFO). Each allocation
-// creates a fresh OrderPayment record — old records are NEVER modified.
-// MUST be declared before /orders/:id.
+// Concurrency-safe FIFO customer payment. Locks matching order rows in deterministic
+// order (ORDER BY id ASC FOR UPDATE) within an atomic transaction.
 router.post(
   "/orders/customer/:mobile/payments",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const mobile = req.params.mobile;
-    if (!mobile) throw new HttpError(400, "Customer mobile is required");
+    const rawMobile = req.params.mobile;
+    if (!rawMobile) throw new HttpError(400, "Customer mobile is required");
+    const last10 = normalizeIndianMobile(rawMobile);
+    if (!last10) throw new HttpError(400, "A valid Indian mobile number is required");
+    const mobile = last10;
+    const variants = [last10, `+91${last10}`, `91${last10}`, `0${last10}`, mobile];
     const body = receiveCustomerPaymentSchema.parse(req.body);
+    const paymentAmount = roundCurrency(body.amount);
 
-    const orders = await prisma.order.findMany({
-      where: { customerMobile: mobile, status: { not: "CANCELLED" } },
-      include: { bill: true, payments: true },
-      orderBy: { createdAt: "asc" },
-    });
-    if (orders.length === 0) {
-      throw new HttpError(404, "Customer not found or has no orders");
-    }
-
-    // Compute each order's remaining due.
-    const dues = orders.map((o) => {
-      const finalAmount = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
-      const paid = (o.payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-      return {
-        orderId: o.id,
-        orderNumber: o.orderNumber,
-        due: Math.max(0, Math.round((finalAmount - paid) * 100) / 100),
-      };
-    });
-    const totalDue = Math.round(dues.reduce((s, d) => s + d.due, 0) * 100) / 100;
-
-    if (Math.round(body.amount * 100) / 100 > totalDue + 0.001) {
-      throw new HttpError(
-        400,
-        `Payment of ₹${body.amount} exceeds the customer's total outstanding due of ₹${totalDue}.`
-      );
+    if (paymentAmount <= 0) {
+      throw new HttpError(400, "Payment amount must be greater than zero");
     }
 
     const paymentDate = body.paymentDate ? new Date(body.paymentDate) : new Date();
     const paymentMode = body.paymentMode;
     const notes = body.notes?.trim() || null;
 
-    // FIFO allocation: fill the oldest due order first, carry the remainder
-    // to the next. Each allocation becomes its own OrderPayment record.
-    let remaining = Math.round(body.amount * 100) / 100;
-    const createdPayments: any[] = [];
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      for (const d of dues) {
-        if (remaining <= 0) break;
-        if (d.due <= 0) continue;
-        const alloc = Math.min(d.due, remaining);
-        const payment = await tx.orderPayment.create({
+    const { createdPayments, updatedOrders } = await prisma.$transaction(async (tx) => {
+      // 1. Concurrency Lock: Lock all customer order rows deterministically in the first SQL query
+      const lockedRows = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM "Order"
+        WHERE ("customerMobile" IN (${Prisma.join(variants)}) OR "customerMobile" LIKE ${"%" + last10})
+          AND status != 'CANCELLED'
+        ORDER BY id ASC
+        FOR UPDATE
+      `;
+
+      if (!lockedRows || lockedRows.length === 0) {
+        throw new HttpError(404, "Customer not found or has no active orders");
+      }
+
+      const orderIds = lockedRows.map((o) => o.id);
+
+      // 3. Re-read fresh order records with bills and payments inside transaction
+      const orders = await tx.order.findMany({
+        where: { id: { in: orderIds } },
+        include: { items: true, bill: true, payments: true },
+        orderBy: { createdAt: "asc" },
+      });
+
+      // 4. Compute current dues using authoritative financial module
+      const dueOrders = orders.map((o) => {
+        const fin = computeOrderFinancials(o);
+        return {
+          id: o.id,
+          finalAmount: fin.finalAmount,
+          paidTotal: fin.paidTotal,
+          due: fin.due,
+        };
+      });
+
+      const totalDue = roundCurrency(dueOrders.reduce((s, o) => s + o.due, 0));
+
+      if (paymentAmount > totalDue) {
+        throw new HttpError(
+          400,
+          `Payment of ₹${paymentAmount.toFixed(2)} exceeds the customer's total outstanding due of ₹${totalDue.toFixed(2)}.`
+        );
+      }
+
+      // 5. Allocate FIFO
+      const { allocations } = allocateCustomerPaymentFIFO(dueOrders, paymentAmount);
+
+      const paymentsList: any[] = [];
+      for (const alloc of allocations) {
+        if (alloc.allocatedAmount <= 0) continue;
+        const p = await tx.orderPayment.create({
           data: {
-            orderId: d.orderId,
-            amount: alloc,
+            orderId: alloc.orderId,
+            amount: toPrismaDecimal(alloc.allocatedAmount),
             paymentMode,
             paymentDate,
             notes,
           },
         });
-        createdPayments.push(payment);
-        remaining = Math.round((remaining - alloc) * 100) / 100;
+        paymentsList.push(p);
       }
+
+      // 6. Fetch final updated customer orders
+      const refreshed = await tx.order.findMany({
+        where: { id: { in: orderIds } },
+        include: { items: true, bill: true, payments: true },
+        orderBy: { createdAt: "asc" },
+      });
+
+      return { createdPayments: paymentsList, updatedOrders: refreshed };
+    }, {
+      timeout: 15000,
     });
 
     await writeAudit(req, {
       action: "CUSTOMER_PAYMENT",
       entity: "Customer",
       entityId: mobile,
-      details: `Received ${paymentMode} ₹${body.amount} for customer ${mobile} across ${createdPayments.length} order(s)`,
+      details: `Received ${paymentMode} ₹${paymentAmount.toFixed(2)} for customer ${mobile} across ${createdPayments.length} order(s)`,
     });
-    await paymentNotification(Number(req.admin?.sub),{amount:body.amount,mode:paymentMode,customerName:orders[0].customerName,key:`CUSTOMER:${mobile}:${createdPayments.map(p=>p.id).join("-")}`}).catch(e=>console.error("[push] Customer payment notification failed",e instanceof Error?e.message:e));
 
-    // Re-fetch the customer's updated detail.
-    const updatedOrders = await prisma.order.findMany({
-      where: { customerMobile: mobile, status: { not: "CANCELLED" } },
-      include: { items: true, bill: true, payments: true },
-      orderBy: { createdAt: "asc" },
-    });
+    await paymentNotification(Number(req.admin?.sub), {
+      amount: paymentAmount,
+      mode: paymentMode,
+      customerName: updatedOrders[0].customerName,
+      key: `CUSTOMER:${mobile}:${createdPayments.map((p: any) => p.id).join("-")}`,
+    }).catch((e) =>
+      console.error("[push] Customer payment notification failed", e instanceof Error ? e.message : e)
+    );
+
     const detailOrders = updatedOrders.map((o) => {
-      const finalAmount = o.bill ? Number(o.bill.finalAmount) : Number(o.subtotal);
-      const cash = (o.payments ?? [])
-        .filter((p: any) => p.paymentMode === "CASH")
-        .reduce((s: number, p: any) => s + Number(p.amount), 0);
-      const online = (o.payments ?? [])
-        .filter((p: any) => p.paymentMode === "ONLINE")
-        .reduce((s: number, p: any) => s + Number(p.amount), 0);
-      const paid = Math.round((cash + online) * 100) / 100;
-      const due = Math.max(0, Math.round((finalAmount - paid) * 100) / 100);
+      const fin = computeOrderFinancials(o);
       return {
         id: o.id,
         orderNumber: o.orderNumber,
         createdAt: o.createdAt,
-        finalAmount: Math.round(finalAmount * 100) / 100,
-        cashPaid: Math.round(cash * 100) / 100,
-        onlinePaid: Math.round(online * 100) / 100,
-        paid,
-        due,
-        paymentStatus: paid <= 0 ? "DUE" : due <= 0 ? "PAID" : "PARTIALLY_PAID",
+        finalAmount: fin.finalAmount,
+        cashPaid: fin.cashTotal,
+        onlinePaid: fin.onlineTotal,
+        paid: fin.paidTotal,
+        due: fin.due,
+        paymentStatus: fin.paymentStatus,
       };
     });
-const totalPurchase = detailOrders.reduce((s, o) => s + o.finalAmount, 0);
-    const totalPaid = detailOrders.reduce((s, o) => s + o.paid, 0);
-    const newTotalDue = detailOrders.reduce((s, o) => s + o.due, 0);
+
+    const totalPurchase = roundCurrency(detailOrders.reduce((s, o) => s + o.finalAmount, 0));
+    const totalPaid = roundCurrency(detailOrders.reduce((s, o) => s + o.paid, 0));
+    const newTotalDue = roundCurrency(detailOrders.reduce((s, o) => s + o.due, 0));
 
     res.status(201).json({
       message: "Payment recorded successfully",
-      payments: createdPayments.map((p) => serializeOrderPayment(p)),
+      payments: createdPayments.map((p: any) => serializeOrderPayment(p)),
       customer: {
         customerName: updatedOrders[0].customerName,
         customerMobile: updatedOrders[0].customerMobile,
         totalOrders: updatedOrders.length,
-        totalPurchase: Math.round(totalPurchase * 100) / 100,
-        totalPaid: Math.round(totalPaid * 100) / 100,
-        totalDue: Math.round(newTotalDue * 100) / 100,
+        totalPurchase,
+        totalPaid,
+        totalDue: newTotalDue,
       },
       orders: detailOrders,
     });
@@ -470,14 +614,6 @@ router.get(
 );
 
 // DELETE /api/admin/orders/:id
-// TEMPORARY admin-only cleanup helper. This is NOT part of the order status /
-// cancellation flow (which is intentionally left untouched). It permanently
-// deletes an order and all of its dependent records so admins can clean up
-// test data. It may be removed in a future release.
-//
-// Deletion is wrapped in a transaction and deletes child records first
-// (OrderItem -> Bill -> Order) to satisfy the FK constraints. Any failure is
-// surfaced as a clean error — never a Prisma/DB stack trace.
 router.delete(
   "/orders/:id",
   requireAdmin,
@@ -490,21 +626,15 @@ router.delete(
     if (!existing) throw new HttpError(404, "Order not found");
 
     try {
-      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        // 1) Delete related order items first (OrderItem.order has no cascade).
+      await prisma.$transaction(async (tx) => {
         await tx.orderItem.deleteMany({ where: { orderId: id } });
-        // 2) Delete the related bill if one exists.
         if (existing.bill) {
           await tx.bill.deleteMany({ where: { orderId: id } });
         }
-        // 3) Delete related payments (OrderPayment cascades on order delete,
-        //    but we delete them explicitly for clarity and test determinism).
         await tx.orderPayment.deleteMany({ where: { orderId: id } });
-        // 4) Finally delete the order itself.
         await tx.order.delete({ where: { id } });
       });
     } catch {
-      // Never leak a raw Prisma/DB error to the frontend.
       throw new HttpError(400, "Unable to delete order");
     }
 
@@ -519,40 +649,63 @@ router.delete(
 );
 
 // PATCH /api/admin/orders/:id/status
-// Changes the order status. Cancelling an order restores the stock that was
-// reserved when the order was placed (or re-decrements it when an order that
-// was cancelled is re-activated). Stock changes are transactional so the
-// inventory always stays in sync with order state.
+// Changes order status with transactional inventory update and idempotency protection.
 router.patch(
   "/orders/:id/status",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const id = parseIntegerParam(req.params.id, "order id");
     const body = orderStatusSchema.parse(req.body);
-    const existing = await prisma.order.findUnique({
-      where: { id },
-      include: { items: true },
-    });
-    if (!existing) throw new HttpError(404, "Order not found");
-    const wasCancelled = existing.status === "CANCELLED";
-    const nowCancelled = body.status === "CANCELLED";
-    const beforeProducts=await prisma.product.findMany({where:{id:{in:existing.items.map(i=>i.productId)}},select:{id:true,name:true,stock:true}});
 
-    const order = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const { order, wasCancelled, nowCancelled, beforeProducts } = await prisma.$transaction(async (tx) => {
+      // Row lock on Order
+      const [locked] = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM "Order" WHERE id = ${id} FOR UPDATE
+      `;
+      if (!locked) throw new HttpError(404, "Order not found");
+
+      const existing = await tx.order.findUnique({
+        where: { id },
+        include: { items: true, payments: true },
+      });
+      if (!existing) throw new HttpError(404, "Order not found");
+
+      const isCancelling = existing.status !== "CANCELLED" && body.status === "CANCELLED";
+      const isReactivating = existing.status === "CANCELLED" && body.status !== "CANCELLED";
+
+      const productIds = existing.items.map((i) => i.productId);
+      let productsBefore: any[] = [];
+      if (productIds.length > 0) {
+        productsBefore = await tx.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, name: true, stock: true },
+        });
+      }
+
       await tx.order.update({
         where: { id },
         data: { status: body.status },
       });
 
-      if (wasCancelled !== nowCancelled) {
-        // Either cancelling (return stock) or re-activating (re-reserve).
-        const delta = nowCancelled ? 1 : -1; // +1 restores, -1 re-decrements
+      if (isCancelling) {
+        // Return stock for cancelled order items
         for (const item of existing.items) {
           const qty = Number(item.quantity);
-          if (!qty || qty <= 0) continue;
+          if (qty > 0) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stock: { increment: qty } },
+            });
+          }
+        }
+      } else if (isReactivating) {
+        // Re-decrement stock with availability check
+        for (const item of existing.items) {
+          const qty = Number(item.quantity);
+          if (qty <= 0) continue;
           const prod = await tx.product.findUnique({ where: { id: item.productId } });
           if (!prod) continue;
-          if (delta < 0 && Number(prod.stock) < qty) {
+          if (Number(prod.stock) < qty) {
             throw new HttpError(
               400,
               `Only ${prod.stock} units of "${item.productName}" in stock. Cannot re-activate this order.`
@@ -560,12 +713,22 @@ router.patch(
           }
           await tx.product.update({
             where: { id: item.productId },
-            data: { stock: { increment: delta * qty } },
+            data: { stock: { decrement: qty } },
           });
         }
       }
 
-      return tx.order.findUniqueOrThrow({ where: { id } });
+      const updated = await tx.order.findUniqueOrThrow({
+        where: { id },
+        include: { items: true, bill: true, payments: true },
+      });
+
+      return {
+        order: updated,
+        wasCancelled: existing.status === "CANCELLED",
+        nowCancelled: body.status === "CANCELLED",
+        beforeProducts: productsBefore,
+      };
     });
 
     await writeAudit(req, {
@@ -574,81 +737,126 @@ router.patch(
       entityId: order.id,
       details: `${order.orderNumber} -> ${order.status}`,
     });
-    if(wasCancelled&&!nowCancelled){const after=await prisma.product.findMany({where:{id:{in:beforeProducts.map(p=>p.id)}},select:{id:true,name:true,stock:true}});await notifyStockTransitions(after.map(p=>({productId:p.id,name:p.name,previous:Number(beforeProducts.find(x=>x.id===p.id)?.stock??p.stock),next:Number(p.stock)})),`ORDER_REACTIVATE:${order.id}:${order.updatedAt.toISOString()}`).catch(e=>console.error("[push] Reactivation stock notification failed",e instanceof Error?e.message:e))}
+
+    if (wasCancelled && !nowCancelled) {
+      const after = await prisma.product.findMany({
+        where: { id: { in: beforeProducts.map((p) => p.id) } },
+        select: { id: true, name: true, stock: true },
+      });
+      await notifyStockTransitions(
+        after.map((p) => ({
+          productId: p.id,
+          name: p.name,
+          previous: Number(beforeProducts.find((x) => x.id === p.id)?.stock ?? p.stock),
+          next: Number(p.stock),
+        })),
+        `ORDER_REACTIVATE:${order.id}:${order.updatedAt.toISOString()}`
+      ).catch((e) =>
+        console.error("[push] Reactivation stock notification failed", e instanceof Error ? e.message : e)
+      );
+    }
+
     res.json({ order: serializeOrder(order) });
   })
 );
 
 // POST /api/admin/orders/:id/payments
-// Admin receives a pending payment from the customer for an existing order.
-// A new OrderPayment record is created (history is NEVER deleted). The due
-// amount is reduced automatically because it is always derived from the sum
-// of payments vs the order's final payable amount.
+// Concurrency-safe single order payment using PostgreSQL row-level lock.
 router.post(
   "/orders/:id/payments",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const id = parseIntegerParam(req.params.id, "order id");
     const body = receivePaymentSchema.parse(req.body);
+    const paymentAmount = roundCurrency(body.amount);
 
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: { bill: true, payments: true },
-    });
-    if (!order) throw new HttpError(404, "Order not found");
-
-    const finalAmount = order.bill ? Number(order.bill.finalAmount) : Number(order.subtotal);
-    const paidSoFar = order.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-    const due = Math.max(0, Math.round((finalAmount - paidSoFar) * 100) / 100);
-
-    if (body.amount > due + 0.001) {
-      throw new HttpError(
-        400,
-        `Payment of ₹${body.amount} exceeds the remaining due of ₹${due} for this order.`
-      );
+    if (paymentAmount <= 0) {
+      throw new HttpError(400, "Payment amount must be greater than zero");
     }
 
-const payment = await prisma.orderPayment.create({
-      data: {
-        orderId: id,
-        amount: Math.round(body.amount * 100) / 100,
-        paymentMode: body.paymentMode,
-        paymentDate: body.paymentDate ? new Date(body.paymentDate) : new Date(),
-        notes: body.notes?.trim() || null,
-      },
+    const { payment, updatedOrder } = await prisma.$transaction(async (tx) => {
+      // 1. Lock Order row
+      const [locked] = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM "Order" WHERE id = ${id} FOR UPDATE
+      `;
+      if (!locked) throw new HttpError(404, "Order not found");
+
+      const order = await tx.order.findUnique({
+        where: { id },
+        include: { bill: true, payments: true },
+      });
+      if (!order) throw new HttpError(404, "Order not found");
+
+      if (order.status === "CANCELLED") {
+        throw new HttpError(400, "Cannot record payment on a cancelled order");
+      }
+
+      const fin = computeOrderFinancials(order);
+
+      if (paymentAmount > fin.due) {
+        throw new HttpError(
+          400,
+          `Payment of ₹${paymentAmount.toFixed(2)} exceeds the remaining due of ₹${fin.due.toFixed(2)} for this order.`
+        );
+      }
+
+      const createdPayment = await tx.orderPayment.create({
+        data: {
+          orderId: id,
+          amount: toPrismaDecimal(paymentAmount),
+          paymentMode: body.paymentMode,
+          paymentDate: body.paymentDate ? new Date(body.paymentDate) : new Date(),
+          notes: body.notes?.trim() || null,
+        },
+      });
+
+      const updated = await tx.order.findUniqueOrThrow({
+        where: { id },
+        include: { items: true, bill: true, payments: true },
+      });
+
+      return { payment: createdPayment, updatedOrder: updated };
     });
 
     await writeAudit(req, {
       action: "ORDER_PAYMENT",
       entity: "Order",
       entityId: id,
-      details: `${order.orderNumber} received ${body.paymentMode} ₹${body.amount}`,
+      details: `${updatedOrder.orderNumber} received ${body.paymentMode} ₹${paymentAmount.toFixed(2)}`,
     });
-    await paymentNotification(Number(req.admin?.sub),{amount:Number(payment.amount),mode:payment.paymentMode,orderId:order.id,orderNumber:order.orderNumber,customerName:order.customerName,key:`ORDER_PAYMENT:${payment.id}`}).catch(e=>console.error("[push] Order payment notification failed",e instanceof Error?e.message:e));
 
-    const updated = await prisma.order.findUnique({
-      where: { id },
-      include: { items: true, bill: true, payments: true },
-    });
+    await paymentNotification(Number(req.admin?.sub), {
+      amount: paymentAmount,
+      mode: payment.paymentMode,
+      orderId: updatedOrder.id,
+      orderNumber: updatedOrder.orderNumber,
+      customerName: updatedOrder.customerName,
+      key: `ORDER_PAYMENT:${payment.id}`,
+    }).catch((e) =>
+      console.error("[push] Order payment notification failed", e instanceof Error ? e.message : e)
+    );
+
     res.status(201).json({
       message: "Payment recorded successfully",
       payment: serializeOrderPayment(payment),
-      order: serializeOrder(updated),
+      order: serializeOrder(updatedOrder),
     });
   })
 );
 
 // PATCH /api/admin/orders/:id/edit
+// Concurrency-safe order item editing with stock delta check and payment invariant verification.
 router.patch(
   "/orders/:id/edit",
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const id = parseIntegerParam(req.params.id, "order id");
     const body = req.body as { items: { productId: number; quantity: number }[] };
-    // Basic validation: items array
+
     if (!body || !Array.isArray(body.items) || body.items.length === 0) {
       throw new HttpError(400, "Invalid items");
     }
+
     const incomingMap = new Map<number, number>();
     for (const it of body.items) {
       const pid = Number(it.productId);
@@ -658,76 +866,109 @@ router.patch(
       incomingMap.set(pid, (incomingMap.get(pid) ?? 0) + q);
     }
 
-    const order = await prisma.order.findUnique({ where: { id }, include: { items: true, bill: true } });
-    if (!order) throw new HttpError(404, "Order not found");
-
-    const productIds = Array.from(
-      new Set([...order.items.map((i: { productId: number }) => i.productId), ...Array.from(incomingMap.keys())])
-    );
-
-    const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
-    if (products.length !== productIds.length) throw new HttpError(400, "One or more products are no longer available.");
-
-    const newItems = new Map<number, { product: any; quantity: number }>();
-    for (const [pid, qty] of incomingMap.entries()) {
-      const prod = products.find((p: { id: number }) => p.id === pid);
-      if (!prod) throw new HttpError(400, "Invalid product in items");
-      if (!prod.isActive) throw new HttpError(400, `"${prod.name}" is not available.`);
-      const unit = (prod.unit || "").toLowerCase();
-      const requiresInteger = unit === "bag" || unit === "piece";
-      if (requiresInteger && !Number.isInteger(qty)) {
-        throw new HttpError(400, `Quantity for "${prod.name}" must be a whole number (${prod.unit}).`);
-      }
-      newItems.set(pid, { product: prod, quantity: qty });
-    }
-
-    const deltas: Array<{ productId: number; delta: number }> = [];
-    for (const pid of productIds) {
-      const oldItem = order.items.find((it: { productId: number }) => it.productId === pid);
-      const oldQty = oldItem ? Number(oldItem.quantity) : 0;
-      const newQty = newItems.get(pid)?.quantity ?? 0;
-      const delta = Math.round((newQty - oldQty) * 1000) / 1000;
-      if (delta > 0) {
-        const prod = products.find((p: { id: number }) => p.id === pid)!;
-        if (prod.stock < delta) {
-          throw new HttpError(400, `Only ${prod.stock} units in stock. Please reduce quantity.`);
-        }
-      }
-      deltas.push({ productId: pid, delta });
-    }
-
-    let subtotal = 0;
-    const createItems: any[] = [];
-    for (const [pid, ni] of newItems.entries()) {
-      if (ni.quantity <= 0) continue;
-      const price = Number(ni.product.price);
-      const total = Math.round(price * ni.quantity * 100) / 100;
-      subtotal += total;
-      createItems.push({
-        productId: pid,
-        productName: ni.product.name,
-        unit: ni.product.unit,
-        price,
-        quantity: ni.quantity,
-        total,
-      });
-    }
-
-    subtotal = Math.round(subtotal * 100) / 100;
-
     const result = await prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
+      async (tx) => {
+        // Lock the Order row
+        const [lockedOrder] = await tx.$queryRaw<Array<{ id: number }>>`
+          SELECT id FROM "Order" WHERE id = ${id} FOR UPDATE
+        `;
+        if (!lockedOrder) throw new HttpError(404, "Order not found");
+
+        const order = await tx.order.findUnique({
+          where: { id },
+          include: { items: true, bill: true, payments: true },
+        });
+        if (!order) throw new HttpError(404, "Order not found");
+
+        if (order.status === "CANCELLED") {
+          throw new HttpError(400, "Cannot edit items on a cancelled order");
+        }
+
+        const productIds = Array.from(
+          new Set([...order.items.map((i) => i.productId), ...Array.from(incomingMap.keys())])
+        ).sort((a, b) => a - b);
+
+        // Lock product rows deterministically
+        await tx.$queryRaw`
+          SELECT id FROM "Product"
+          WHERE id IN (${Prisma.join(productIds)})
+          ORDER BY id ASC
+          FOR UPDATE
+        `;
+
+        const products = await tx.product.findMany({ where: { id: { in: productIds } } });
+        if (products.length !== productIds.length) {
+          throw new HttpError(400, "One or more products are no longer available.");
+        }
+
+        const newItems = new Map<number, { product: any; quantity: number }>();
+        for (const [pid, qty] of incomingMap.entries()) {
+          const prod = products.find((p) => p.id === pid);
+          if (!prod) throw new HttpError(400, "Invalid product in items");
+          if (!prod.isActive) throw new HttpError(400, `"${prod.name}" is not available.`);
+          const unit = (prod.unit || "").toLowerCase();
+          const requiresInteger = unit === "bag" || unit === "piece";
+          if (requiresInteger && !Number.isInteger(qty)) {
+            throw new HttpError(400, `Quantity for "${prod.name}" must be a whole number (${prod.unit}).`);
+          }
+          newItems.set(pid, { product: prod, quantity: qty });
+        }
+
+        const deltas: Array<{ productId: number; delta: number }> = [];
+        for (const pid of productIds) {
+          const oldItem = order.items.find((it) => it.productId === pid);
+          const oldQty = oldItem ? Number(oldItem.quantity) : 0;
+          const newQty = newItems.get(pid)?.quantity ?? 0;
+          const delta = Math.round((newQty - oldQty) * 1000) / 1000;
+          if (delta > 0) {
+            const prod = products.find((p) => p.id === pid)!;
+            if (prod.stock < delta) {
+              throw new HttpError(400, `Only ${prod.stock} units of "${prod.name}" in stock. Please reduce quantity.`);
+            }
+          }
+          deltas.push({ productId: pid, delta });
+        }
+
+        let subtotal = 0;
+        const createItems: any[] = [];
+        for (const [pid, ni] of newItems.entries()) {
+          if (ni.quantity <= 0) continue;
+          const price = roundCurrency(ni.product.price);
+          const total = roundCurrency(price * ni.quantity);
+          subtotal = roundCurrency(subtotal + total);
+          createItems.push({
+            productId: pid,
+            productName: ni.product.name,
+            unit: ni.product.unit,
+            price: toPrismaDecimal(price),
+            quantity: ni.quantity,
+            total: toPrismaDecimal(total),
+          });
+        }
+
+        // Check invariant: new final bill cannot be less than already recorded paidTotal
+        const existingDiscount = order.bill ? roundCurrency(order.bill.discount) : 0;
+        if (existingDiscount > subtotal) {
+          throw new HttpError(400, `Existing discount of ₹${existingDiscount} cannot exceed new subtotal of ₹${subtotal}`);
+        }
+        const newFinal = Math.max(0, roundCurrency(subtotal - existingDiscount));
+        const fin = computeOrderFinancials(order);
+
+        if (newFinal < fin.paidTotal) {
+          throw new HttpError(
+            400,
+            `Editing items would reduce the final bill to ₹${newFinal.toFixed(2)}, which is less than the ₹${fin.paidTotal.toFixed(2)} already paid.`
+          );
+        }
+
+        // Apply stock deltas
         for (const d of deltas) {
           if (d.delta === 0) continue;
           if (d.delta > 0) {
-            const updated = await tx.product.updateMany({
-              where: { id: d.productId, stock: { gte: d.delta } },
+            await tx.product.update({
+              where: { id: d.productId },
               data: { stock: { decrement: d.delta } },
             });
-            if (updated.count === 0) {
-              const prod = products.find((p: { id: number }) => p.id === d.productId)!;
-              throw new HttpError(400, `Only ${prod.stock} units in stock. Please reduce quantity.`);
-            }
           } else {
             await tx.product.update({
               where: { id: d.productId },
@@ -737,16 +978,30 @@ router.patch(
         }
 
         await tx.orderItem.deleteMany({ where: { orderId: id } });
-        await tx.order.update({ where: { id }, data: { subtotal, items: { create: createItems } } });
+        await tx.order.update({
+          where: { id },
+          data: {
+            subtotal: toPrismaDecimal(subtotal),
+            items: { create: createItems },
+          },
+        });
 
         if (order.bill) {
-          const newFinal = Math.max(0, Math.round((subtotal - order.bill.discount) * 100) / 100);
-          await tx.bill.update({ where: { orderId: id }, data: { subtotal, finalAmount: newFinal } });
+          await tx.bill.update({
+            where: { orderId: id },
+            data: {
+              subtotal: toPrismaDecimal(subtotal),
+              finalAmount: toPrismaDecimal(newFinal),
+            },
+          });
         }
 
-        const updatedOrder = await tx.order.findUnique({ where: { id }, include: { items: true, bill: true } });
-        if (!updatedOrder) throw new HttpError(404, "Order not found");
-        return updatedOrder;
+        const updatedOrder = await tx.order.findUniqueOrThrow({
+          where: { id },
+          include: { items: true, bill: true, payments: true },
+        });
+
+        return { updatedOrder, productIds };
       },
       {
         maxWait: 10000,
@@ -757,12 +1012,11 @@ router.patch(
     await writeAudit(req, {
       action: "ORDER_EDIT",
       entity: "Order",
-      entityId: String(order.id),
-      details: `Edited order ${order.orderNumber}`,
+      entityId: String(result.updatedOrder.id),
+      details: `Edited order ${result.updatedOrder.orderNumber}`,
     });
-    const changed=await prisma.product.findMany({where:{id:{in:productIds}},select:{id:true,name:true,stock:true}});await notifyStockTransitions(changed.map(p=>({productId:p.id,name:p.name,previous:Number(products.find(x=>x.id===p.id)?.stock??p.stock),next:Number(p.stock)})),`ORDER_EDIT:${order.id}:${result.updatedAt.toISOString()}`).catch(e=>console.error("[push] Order edit stock notification failed",e instanceof Error?e.message:e));
 
-    res.json({ order: serializeOrder(result) });
+    res.json({ order: serializeOrder(result.updatedOrder) });
   })
 );
 

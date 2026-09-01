@@ -52,7 +52,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Sales & Invoicing",
     items: [
-      { to: "/admin/khatabook", label: "खाताबुक (Khatabook)", icon: BookOpen, badge: "NEW" },
+      { to: "/admin/place-order", label: "+ नया ऑर्डर (Place Order)", icon: PlusCircle, badge: "NEW" },
+      { to: "/admin/khatabook", label: "खाताबुक (Khatabook)", icon: BookOpen },
       { to: "/admin/orders", label: "Orders Management", icon: ShoppingBag },
       { to: "/admin/billing", label: "Billing & Invoices", icon: Receipt },
       { to: "/admin/dues", label: "Customer Dues", icon: WalletCards },

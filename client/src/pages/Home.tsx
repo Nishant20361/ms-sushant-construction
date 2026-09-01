@@ -531,7 +531,14 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
                       className="flex w-full items-center justify-between gap-2 px-2 py-3 text-left transition hover:bg-slate-50"
                     >
                       <div>
-                        <p className="font-semibold text-slate-900">{o.orderNumber}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-900">{o.orderNumber}</p>
+                          {o.source === "ADMIN_ASSISTED" && (
+                            <span className="rounded-md bg-purple-100 border border-purple-200 px-2 py-0.5 text-[10px] font-bold text-purple-800">
+                              👤 Ordered by Admin
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-500">
                           {new Date(o.createdAt).toLocaleString("en-IN")} · {o.items.length} item(s)
                         </p>
@@ -824,7 +831,14 @@ function OrderDetailCard({ order }: { order: TrackedOrder }) {
     <div className="card mt-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-lg font-bold text-slate-900">{order.orderNumber}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-bold text-slate-900">{order.orderNumber}</h3>
+            {order.source === "ADMIN_ASSISTED" && (
+              <span className="rounded-md bg-purple-100 border border-purple-200 px-2.5 py-0.5 text-xs font-bold text-purple-800">
+                👤 Ordered by Admin
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500">
             {order.customerName} · {new Date(order.createdAt).toLocaleString("en-IN")}
           </p>

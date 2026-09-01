@@ -665,14 +665,26 @@ describe("Native public API boundary", () => {
     expect(normalizeIndianMobile("+91 91234 56789")).toBe("9123456789");
   });
 
-  it("returns only the latest customer name for checkout autofill", async () => {
-    const order = await prisma.order.create({ data: { orderNumber: `LOOKUP-${Date.now()}`, customerName: "Checkout Customer", customerMobile: "9876543210", subtotal: 100 } });
+  it("returns the latest customer name and address for checkout autofill", async () => {
+    const order = await prisma.order.create({
+      data: {
+        orderNumber: `LOOKUP-${Date.now()}`,
+        customerName: "Checkout Customer",
+        customerMobile: "9876543210",
+        deliveryAddress: "123 Test Street",
+        subtotal: 100,
+      },
+    });
     try {
       const found = await supertest(app).get("/api/public/customers/checkout-profile?customerMobile=9876543210");
       expect(found.status).toBe(200);
       expect(found.headers["cache-control"]).toBe("no-store");
-      expect(found.body).toEqual({ customer: { customerName: "Checkout Customer" } });
-      expect(Object.keys(found.body.customer)).toEqual(["customerName"]);
+      expect(found.body).toEqual({
+        customer: {
+          customerName: "Checkout Customer",
+          deliveryAddress: "123 Test Street",
+        },
+      });
 
       const missing = await supertest(app).get("/api/public/customers/checkout-profile?customerMobile=9876543299");
       expect(missing.status).toBe(200);

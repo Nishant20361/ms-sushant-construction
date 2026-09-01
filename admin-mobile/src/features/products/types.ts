@@ -6,3 +6,6 @@ export interface ProductPage {products:Product[];total:number;page:number;pages:
 export interface ProductPayload {name:string;description:string;unit:string;price:number;mrp:number;stock:number;categoryId:number;isActive:boolean;imageUrl:string|null}
 export interface CategoryPayload {name:string;slug?:string;imageUrl:string|null;displayOrder:number;isActive:boolean}
 export interface LocalImage {uri:string;mimeType:string;fileName:string}
+export interface StockAdjustmentPayload {action:"ADD"|"DEDUCT"|"SET";quantity:number;reason?:string;purchaseRate?:number;supplier?:string;note?:string}
+export interface StockHistoryItem {id:string;type:"ADD"|"REMOVE"|"SET"|"ORDER";quantity:number;oldStock?:number;newStock?:number;reason?:string;note?:string;supplier?:string;purchaseRate?:number;orderNumber?:string;customerName?:string;adminUsername?:string;createdAt:string}
+export interface ProductStockHistoryResponse {productId:number;productName:string;unit:string;currentStock:number;history:StockHistoryItem[]}

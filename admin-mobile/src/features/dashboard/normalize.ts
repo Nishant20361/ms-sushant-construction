@@ -15,6 +15,7 @@ function normalizeStats(value: unknown): DashboardStats { const v = record(value
   deliveredOrders: nonNegative(v.deliveredOrders), cancelledOrders: nonNegative(v.cancelledOrders), totalRevenue: nonNegative(v.totalRevenue),
   totalCollected: nonNegative(v.totalCollected), totalCashCollected: nonNegative(v.totalCashCollected), totalOnlineCollected: nonNegative(v.totalOnlineCollected),
   totalDue: nonNegative(v.totalDue), lowStockCount: nonNegative(v.lowStockCount), lowStockThreshold: nonNegative(v.lowStockThreshold),
+  todaySales: nonNegative(v.todaySales), todayDue: nonNegative(v.todayDue), todayCollected: nonNegative(v.todayCollected), todayOrders: nonNegative(v.todayOrders),
 }; }
 function normalizeOrder(value: unknown): DashboardOrder { const v = record(value); return { id: id(v.id), orderNumber: text(v.orderNumber, "Order"), customerName: text(v.customerName, "Customer not provided"), subtotal: nonNegative(v.subtotal), status: normalizeOrderStatus(v.status), createdAt: date(v.createdAt) }; }
 function normalizeProduct(value: unknown): LowStockProduct { const v = record(value); return { id: id(v.id), name: text(v.name, "Unnamed product"), stock: nonNegative(v.stock), unit: text(v.unit, "unit"), imageUrl: typeof v.imageUrl === "string" ? v.imageUrl : null }; }

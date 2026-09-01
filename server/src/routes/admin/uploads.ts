@@ -35,16 +35,31 @@ router.post(
     let optimizedPath = originalPath;
 
     try {
-      // Re-encode safely with Sharp (always to WebP when possible).
-      await sharp(originalPath)
+      // Strictly verify and re-encode with Sharp (limits decompression bomb risks)
+      const image = sharp(originalPath, { failOn: "error" });
+      const meta = await image.metadata();
+
+      if (!meta.format || !["jpeg", "png", "webp", "jpg"].includes(meta.format)) {
+        removeFile(originalPath);
+        throw new HttpError(400, "Invalid image format. Only JPEG, PNG, and WebP are allowed.");
+      }
+
+      if ((meta.width && meta.width > 5000) || (meta.height && meta.height > 5000)) {
+        removeFile(originalPath);
+        throw new HttpError(400, "Image dimensions exceed the maximum allowed size (5000x5000px).");
+      }
+
+      await image
         .rotate()
-        .resize({ width: 1200, withoutEnlargement: true })
+        .resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true })
         .webp({ quality: 82 })
         .toFile(webpPath);
       optimizedPath = webpPath;
     } catch (e) {
-      // If re-encode fails, keep the original (already validated jpeg/png/webp).
-      console.error("[upload] re-encode failed, keeping original", e);
+      removeFile(originalPath);
+      removeFile(webpPath);
+      if (e instanceof HttpError) throw e;
+      throw new HttpError(400, "Corrupted or invalid image file.");
     }
 
     let url: string;

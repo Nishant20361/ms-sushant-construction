@@ -158,11 +158,21 @@ export function buildBillText(bill: BillData): string {
   lines.push(`Final Amount (Total): ${fmtINR(bill.finalAmount)}`);
   lines.push("");
   lines.push("Payment Details:");
-  lines.push(`  Cash Received: ${fmtINR(bill.cashPaid)}`);
-  lines.push(`  Online Received: ${fmtINR(bill.onlinePaid)}`);
+  lines.push(`  Total Paid: ${fmtINR(bill.totalPaid)}`);
+  if (bill.cashPaid > 0) {
+    lines.push(`  Cash Received: ${fmtINR(bill.cashPaid)}`);
+  }
+  if (bill.onlinePaid > 0) {
+    lines.push(`  Online Received: ${fmtINR(bill.onlinePaid)}`);
+  }
+  if (bill.totalPaid > bill.finalAmount) {
+    const excess = Math.round((bill.totalPaid - bill.finalAmount) * 100) / 100;
+    lines.push(`  ↳ Applied to this Bill: ${fmtINR(bill.finalAmount)} (PAID)`);
+    lines.push(`  ↳ Applied to Previous Dues (पुरानी बकाया): ${fmtINR(excess)}`);
+  }
   lines.push(`  Payment Status: ${paymentStatusLabel(bill.paymentStatus)}`);
   if (bill.due > 0) {
-    lines.push(`  Remaining Due: ${fmtINR(bill.due)}`);
+    lines.push(`  Remaining Due on this Bill: ${fmtINR(bill.due)}`);
   }
   lines.push("");
   lines.push("Thank you 🙏");
@@ -173,6 +183,16 @@ export function buildBillText(bill: BillData): string {
   return lines.join("\n");
 }
 
+function escapeHtml(str: string | null | undefined): string {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 /**
  * Professional printable HTML invoice (also used for print / save-as-PDF).
  */
@@ -181,20 +201,20 @@ export function buildBillHtml(bill: BillData): string {
     .map(
       (it) => `
         <tr>
-          <td>${it.productName}</td>
-          <td class="num">${it.quantity} ${it.unit}</td>
+          <td>${escapeHtml(it.productName)}</td>
+          <td class="num">${it.quantity} ${escapeHtml(it.unit)}</td>
           <td class="num">${fmtINR(it.price)}</td>
           <td class="num">${fmtINR(it.total)}</td>
         </tr>`
     )
     .join("");
 
-  const bizName = bill.businessName || bill.companyName || companyName;
-  const bizAddr = bill.businessAddress || "";
-  const bizGst = bill.gstNumber || "";
-  const bizPhone = bill.businessMobile || "";
-  const bizEmail = bill.businessEmail || "";
-  const bizLogo = bill.businessLogoUrl || "";
+  const bizName = escapeHtml(bill.businessName || bill.companyName || companyName);
+  const bizAddr = escapeHtml(bill.businessAddress || "");
+  const bizGst = escapeHtml(bill.gstNumber || "");
+  const bizPhone = escapeHtml(bill.businessMobile || "");
+  const bizEmail = escapeHtml(bill.businessEmail || "");
+  const bizLogo = escapeHtml(bill.businessLogoUrl || "");
 
   const discountRow =
     bill.discount > 0
@@ -217,7 +237,7 @@ export function buildBillHtml(bill: BillData): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Invoice ${bill.orderNumber}</title>
+<title>Invoice ${escapeHtml(bill.orderNumber)}</title>
 <style>
   ${getEmbeddedFontCss()}
   @page { size: A4 portrait; margin: 7mm; }
@@ -297,22 +317,22 @@ export function buildBillHtml(bill: BillData): string {
     <div class="meta">
       <div>
         <p class="label">Invoice No</p>
-        <p>${bill.orderNumber}</p>
+        <p>${escapeHtml(bill.orderNumber)}</p>
         <p class="label">Invoice Date</p>
         <p>${fmtDateShort(bill.createdAt)}</p>
       </div>
       <div>
         <p class="label">Customer Name</p>
-        <p>${bill.customerName}</p>
+        <p>${escapeHtml(bill.customerName)}</p>
         <p class="label">Customer Mobile</p>
-        <p>${bill.customerMobile}</p>
+        <p>${escapeHtml(bill.customerMobile)}</p>
       </div>
       <div>
         <p class="label">Status</p>
-        <p>${bill.status} · ${paymentStatusBadge}</p>
+        <p>${escapeHtml(bill.status)} · ${paymentStatusBadge}</p>
         ${
           bill.deliveryAddress
-            ? `<p class="label">Delivery Address</p><p>${bill.deliveryAddress}</p>`
+            ? `<p class="label">Delivery Address</p><p>${escapeHtml(bill.deliveryAddress)}</p>`
             : ""
         }
       </div>
@@ -341,17 +361,35 @@ export function buildBillHtml(bill: BillData): string {
     <div class="payment-box">
       <div class="head">Payment Details</div>
       <div class="row">
-        <span class="label">Total Amount</span>
+        <span class="label">Total Order Bill</span>
         <span class="val">${fmtINR(bill.finalAmount)}</span>
       </div>
       <div class="row">
-        <span class="label">Cash Received</span>
-        <span class="val">${fmtINR(bill.cashPaid)}</span>
+        <span class="label">Total Paid Amount</span>
+        <span class="val" style="color: #15803d; font-weight: 700;">${fmtINR(bill.totalPaid)}</span>
       </div>
-      <div class="row">
-        <span class="label">Online Received</span>
-        <span class="val">${fmtINR(bill.onlinePaid)}</span>
-      </div>
+      ${
+        bill.cashPaid > 0
+          ? `<div class="row"><span class="label">Cash Received</span><span class="val">${fmtINR(bill.cashPaid)}</span></div>`
+          : ""
+      }
+      ${
+        bill.onlinePaid > 0
+          ? `<div class="row"><span class="label">Online Received</span><span class="val">${fmtINR(bill.onlinePaid)}</span></div>`
+          : ""
+      }
+      ${
+        bill.totalPaid > bill.finalAmount
+          ? `<div class="row" style="background: #f0fdf4;">
+              <span class="label" style="color: #15803d; font-weight: 600;">↳ Applied to Previous Dues (पुरानी बकाया चुकता)</span>
+              <span class="val" style="color: #15803d; font-weight: 700;">${fmtINR(Math.round((bill.totalPaid - bill.finalAmount) * 100) / 100)}</span>
+             </div>
+             <div class="row">
+              <span class="label">↳ Applied to This Order Bill</span>
+              <span class="val" style="font-weight: 700;">${fmtINR(bill.finalAmount)} (PAID)</span>
+             </div>`
+          : ""
+      }
       <div class="row">
         <span class="label">Payment Status</span>
         <span class="val">${paymentStatusBadge}</span>

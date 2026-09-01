@@ -4,6 +4,7 @@ export interface DashboardStats {
   processingOrders: number; outForDeliveryOrders: number; deliveredOrders: number; cancelledOrders: number;
   totalRevenue: number; totalCollected: number; totalCashCollected: number; totalOnlineCollected: number;
   totalDue: number; lowStockCount: number; lowStockThreshold: number;
+  todaySales?: number; todayDue?: number; todayCollected?: number; todayOrders?: number;
 }
 export interface DashboardOrder { id: number; orderNumber: string; customerName: string; subtotal: number; status: KnownOrderStatus | "UNKNOWN"; createdAt: string | null }
 export interface LowStockProduct { id: number; name: string; stock: number; unit: string; imageUrl: string | null }

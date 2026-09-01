@@ -160,9 +160,11 @@ export const settingsSchema = z.object({
   heroTitle: z.string().trim().max(200),
   heroSubtitle: z.string().trim().max(400),
   heroBannerUrl: z.string().trim().max(500).nullable().transform((v) => v ?? ""),
+  heroVideoUrl: z.string().trim().max(1000).nullable().optional().transform((v) => v ?? ""),
   mobileHeroTitle: z.string().trim().max(200).optional().default("Quality Construction Materials"),
   mobileHeroSubtitle: z.string().trim().max(400).optional().default("ACC Cement, Nuvoco Cement, Tata & Mongia steel rods, roofing sheets, waterproofing chemicals and more — at the best prices."),
   mobileHeroBannerUrl: z.string().trim().max(500).nullable().optional().transform((v) => v ?? ""),
+  mobileHeroVideoUrl: z.string().trim().max(1000).nullable().optional().transform((v) => v ?? ""),
   phone: z.string().trim().max(30),
   whatsappNumber: z.string().trim().max(20),
   email: optionalEmail,
@@ -301,4 +303,37 @@ export const adminEmailSchema = z.object({
       .nullable()
       .optional()
   ),
+});
+
+// ------------------------- Admin Assisted Order -------------------------
+export const customerLookupQuerySchema = z.object({
+  mobile: z
+    .string()
+    .trim()
+    .min(5, "Please enter a mobile number")
+    .max(30, "Mobile number too long"),
+});
+
+export const assistedOrderSchema = z.object({
+  customerName: z.string().trim().min(2, "Customer name is required").max(120),
+  customerMobile: z
+    .string()
+    .trim()
+    .regex(/^(?:\+91|91|0)?[6-9]\d{9}$/, "Please enter a valid 10-digit Indian mobile number"),
+  deliveryAddress: z.string().trim().max(500).optional().default(""),
+  notes: z.string().trim().max(1000).optional().default(""),
+  items: z
+    .array(
+      z.object({
+        productId: z.coerce.number().int().positive(),
+        quantity: z.coerce.number().min(0.001, "Quantity must be at least 0.001").max(1000000),
+      })
+    )
+    .min(1, "Cart is empty")
+    .max(50, "Too many line items"),
+  transportation: z.coerce.number().min(0, "Transportation charge cannot be negative").default(0),
+  discount: z.coerce.number().min(0, "Discount cannot be negative").default(0),
+  paidAmount: z.coerce.number().min(0, "Paid amount cannot be negative").default(0),
+  paymentMode: z.enum(["CASH", "ONLINE"]).default("CASH"),
+  clientRequestId: z.string().trim().max(128).optional(),
 });

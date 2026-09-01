@@ -209,41 +209,48 @@ router.post(
     }
 
     const tokenHash = hashResetToken(token);
-
-    // Find valid, unused token that hasn't expired
-    const tokenRecord = await prisma.adminPasswordResetToken.findFirst({
-      where: {
-        tokenHash,
-        usedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-    });
-
-    if (!tokenRecord) {
-      throw new HttpError(400, "Invalid or expired reset token.");
-    }
-
-    // Find admin
-    const admin = await prisma.admin.findUnique({
-      where: { id: tokenRecord.adminId, isActive: true },
-    });
-
-    if (!admin) {
-      throw new HttpError(400, "Invalid or expired reset token.");
-    }
-
-    // Hash new password and update
     const passwordHash = await hashPassword(newPassword);
     const now = new Date();
-    await prisma.admin.update({
-      where: { id: admin.id },
-      data: { passwordHash, passwordChangedAt: now },
-    });
 
-    // Mark token as used (single-use)
-    await prisma.adminPasswordResetToken.update({
-      where: { id: tokenRecord.id },
-      data: { usedAt: new Date() },
+    const admin = await prisma.$transaction(async (tx) => {
+      // Atomically mark token as used (single-use concurrency protection)
+      const consumed = await tx.adminPasswordResetToken.updateMany({
+        where: {
+          tokenHash,
+          usedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: {
+          usedAt: now,
+        },
+      });
+
+      if (consumed.count !== 1) {
+        throw new HttpError(400, "Invalid or expired reset token.");
+      }
+
+      const tokenRecord = await tx.adminPasswordResetToken.findFirst({
+        where: { tokenHash },
+      });
+
+      if (!tokenRecord) {
+        throw new HttpError(400, "Invalid or expired reset token.");
+      }
+
+      const targetAdmin = await tx.admin.findUnique({
+        where: { id: tokenRecord.adminId, isActive: true },
+      });
+
+      if (!targetAdmin) {
+        throw new HttpError(400, "Invalid or expired reset token.");
+      }
+
+      await tx.admin.update({
+        where: { id: targetAdmin.id },
+        data: { passwordHash, passwordChangedAt: now },
+      });
+
+      return targetAdmin;
     });
 
     await writeAudit(req as AuthenticatedRequest, {

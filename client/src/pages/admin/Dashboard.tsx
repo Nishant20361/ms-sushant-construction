@@ -77,16 +77,23 @@ export default function Dashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <Link
+              to="/admin/place-order"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 hover:from-emerald-500 hover:to-teal-500 transition active:scale-95 border border-emerald-400/30"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>+ ग्राहक के लिए ऑर्डर (Place Order)</span>
+            </Link>
             <button
               onClick={load}
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition active:scale-95 shadow-sm"
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              <span>Refresh Data</span>
+              <span>Refresh</span>
             </button>
             <Link
               to="/admin/billing"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-amber-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-brand-600/30 hover:from-brand-500 hover:to-amber-500 transition active:scale-95"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 px-3.5 py-2 text-xs font-bold text-slate-200 hover:bg-slate-700 hover:text-white transition active:scale-95 border border-slate-700"
             >
               <PlusCircle className="h-4 w-4" />
               <span>New Bill / Invoice</span>

@@ -6,7 +6,8 @@ import { HttpError } from "../utils/httpError.js";
 import { createOrderSchema, orderTrackSchema, orderTrackByMobileSchema, publicProductQuerySchema } from "../validators/index.js";
 import { generateOrderNumber } from "../utils/orderNumber.js";
 import { normalizeIndianMobile } from "../utils/validatePhone.js";
-import { serializeProduct, serializeCategory, serializeSettings, serializeOrderForTracking, serializeOrderListForTracking } from "../utils/serializer.js";
+import { serializeProduct, serializeCategory, serializeSettings, serializeOrder, serializeOrderForTracking, serializeOrderListForTracking } from "../utils/serializer.js";
+import { roundCurrency, toPrismaDecimal } from "../utils/financials.js";
 import { orderLimiter, trackLimiter } from "../middleware/rateLimit.js";
 import { sendOrderNotificationEmail } from "../services/email.service.js";
 import { config } from "../config.js";
@@ -223,7 +224,7 @@ router.post(
           }
         }
 
-        subtotal = Math.round(subtotal * 100) / 100;
+        subtotal = roundCurrency(subtotal);
 
         return tx.order.create({
           data: {
@@ -232,27 +233,22 @@ router.post(
             customerMobile: mobile,
             deliveryAddress: body.deliveryAddress || null,
             notes: body.notes || null,
-            subtotal,
+            subtotal: toPrismaDecimal(subtotal),
             clientRequestId: rawIdempotencyKey,
             clientRequestHash: requestHash,
             items: { create: orderItems },
           },
-          include: { items: true },
+          include: { items: true, bill: true, payments: true },
         });
       },
       {
-        // Order placement does several sequential DB writes (fetch products,
-        // decrement stock per line item, re-verify, create order). The default
-        // interactive-transaction timeout of 5000ms can be exceeded under load
-        // or when the DB is slow, causing "Transaction already closed" errors.
-        // Raise it to a safe value (matches the admin edit-order transaction).
         maxWait: 10000,
         timeout: 30000,
       }
     );
     } catch (error) {
       if (!(rawIdempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
-      const concurrent = await prisma.order.findUnique({ where: { clientRequestId: rawIdempotencyKey }, include: { items: true } });
+      const concurrent = await prisma.order.findUnique({ where: { clientRequestId: rawIdempotencyKey }, include: { items: true, bill: true, payments: true } });
       if (!concurrent || concurrent.clientRequestHash !== requestHash) throw new HttpError(409, "This order attempt could not be safely confirmed.");
       order = concurrent;
       replayed = true;
@@ -283,7 +279,7 @@ router.post(
           customerName: order.customerName,
           customerMobile: order.customerMobile,
           deliveryAddress: order.deliveryAddress,
-          subtotal: order.subtotal,
+          subtotal: Number(order.subtotal),
           status: order.status,
           createdAt: order.createdAt,
           items: orderItems.map((it) => ({
@@ -307,14 +303,7 @@ router.post(
 
     res.status(replayed ? 200 : 201).json({
       message: replayed ? "Order already placed" : "Order placed successfully",
-      order: {
-        id: order.id,
-        orderNumber: order.orderNumber,
-        customerName: order.customerName,
-        subtotal: order.subtotal,
-        status: order.status,
-        createdAt: order.createdAt,
-      },
+      order: serializeOrder(order),
     });
   })
 );
@@ -365,6 +354,8 @@ router.get(
       select: {
         orderNumber: true,
         status: true,
+        source: true,
+        notes: true,
         createdAt: true,
         subtotal: true,
         items: { select: { productName: true, quantity: true, unit: true } },
@@ -378,9 +369,8 @@ router.get(
 );
 
 // GET /api/customers/checkout-profile?customerMobile=
-// Checkout convenience only: return the latest name previously used for an
-// exact, valid mobile number. The endpoint is bounded and rate-limited; no
-// address, order, payment, or account data is exposed.
+// Checkout convenience: returns the latest name and delivery address used
+// for this mobile number to auto-fill customer details seamlessly.
 router.get(
   "/customers/checkout-profile",
   trackLimiter,
@@ -391,14 +381,39 @@ router.get(
     const mobile = normalizeIndianMobile(parsed.customerMobile);
     if (!mobile) throw new HttpError(400, "Invalid mobile number");
 
-    const latestOrder = await prisma.order.findFirst({
-      where: { customerMobile: mobile },
-      select: { customerName: true },
+    const last10 = mobile.slice(-10);
+    const variants = [mobile, last10, `+91${last10}`, `91${last10}`, `0${last10}`];
+
+    const allOrders = await prisma.order.findMany({
+      where: {
+        OR: [
+          { customerMobile: { in: variants } },
+          { customerMobile: { endsWith: last10 } },
+        ],
+      },
+      select: { customerName: true, deliveryAddress: true, createdAt: true },
       orderBy: { createdAt: "desc" },
+      take: 20,
     });
 
+    if (allOrders.length === 0) {
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ customer: null });
+    }
+
+    const orderWithName = allOrders.find((o) => o.customerName && o.customerName.trim().length > 0);
+    const orderWithAddress = allOrders.find((o) => o.deliveryAddress && o.deliveryAddress.trim().length > 0);
+
+    const customerName = orderWithName?.customerName || allOrders[0].customerName;
+    const deliveryAddress = orderWithAddress?.deliveryAddress || allOrders[0].deliveryAddress || "";
+
     res.setHeader("Cache-Control", "no-store");
-    res.json({ customer: latestOrder ? { customerName: latestOrder.customerName } : null });
+    res.json({
+      customer: {
+        customerName,
+        deliveryAddress,
+      },
+    });
   })
 );
 

@@ -10,9 +10,11 @@ import crypto from "crypto";
  * (which keeps the format human readable while remaining collision-safe).
  */
 export function generateOrderNumber(date = new Date()): string {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
+  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(date.getTime() + istOffsetMs);
+  const yyyy = istDate.getUTCFullYear();
+  const mm = String(istDate.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(istDate.getUTCDate()).padStart(2, "0");
   const datePart = `${yyyy}${mm}${dd}`;
   // Random suffix makes the whole string unique even if the sequence
   // counter races across concurrent requests on the same date.

@@ -15,7 +15,57 @@ export function DashboardHeader({ username, unreadCount, onNotifications, onProf
 export function FinancialHero({ stats }: { stats: DashboardStats }) { const t = useTheme(); return <Card style={[s.hero, { backgroundColor: t.colors.brandSoft, borderColor: t.colors.brand }]}><View style={s.heroTitle}><View style={[s.heroIcon, { backgroundColor: t.colors.brand }]}><Ionicons name="trending-up" size={22} color={t.colors.brandForeground} /></View><View style={s.flex}><AppText role="overline" style={{ color: t.colors.brand }}>RECORDED SALES VALUE</AppText><AppText role="caption" style={{ color: t.colors.textSecondary }}>Non-cancelled order subtotals</AppText></View></View><AppText accessibilityLabel={`Recorded sales value ${formatINR(stats.totalRevenue)}`} role="financialHero" adjustsFontSizeToFit numberOfLines={1} style={{ color: t.colors.brand }}>{formatINR(stats.totalRevenue)}</AppText><Divider /><View style={s.heroSupport}><HeroValue label="Collected" value={formatINR(stats.totalCollected)} /><HeroValue label="Outstanding" value={formatINR(stats.totalDue)} /><HeroValue label="Orders" value={String(stats.totalOrders)} /></View></Card>; }
 function HeroValue({ label, value }: { label: string; value: string }) { const t = useTheme(); return <View style={s.heroValue}><AppText role="caption" style={{ color: t.colors.textMuted }}>{label}</AppText><AppText role="financialCompact" adjustsFontSizeToFit numberOfLines={1}>{value}</AppText></View>; }
 
-export function DashboardMetricGrid({ stats, cardWidth }: { stats: DashboardStats; cardWidth: number }) { return <View style={s.grid}><DashboardMetric icon="time-outline" label="Pending orders" value={String(stats.pendingOrders)} tone="warning" width={cardWidth} /><DashboardMetric icon="cube-outline" label="Active products" value={String(stats.activeProducts)} tone="brand" width={cardWidth} /><DashboardMetric icon="wallet-outline" label="Total due" value={formatINR(stats.totalDue)} tone="danger" width={cardWidth} /><DashboardMetric icon="warning-outline" label="Low-stock preview" value={String(stats.lowStockCount)} context={`Up to 10 · threshold ${stats.lowStockThreshold}`} tone="warning" width={cardWidth} /></View>; }
+export function DashboardMetricGrid({ stats, cardWidth }: { stats: DashboardStats; cardWidth: number }) {
+  return (
+    <View style={s.grid}>
+      <DashboardMetric
+        icon="cash-outline"
+        label="आज की बिक्री / Daily Sales"
+        value={formatINR(stats.todaySales ?? 0)}
+        context={stats.todayOrders !== undefined ? `${stats.todayOrders} new orders today` : undefined}
+        tone="brand"
+        width={cardWidth}
+      />
+      <DashboardMetric
+        icon="receipt-outline"
+        label="आज की उधारी / Daily Dues"
+        value={formatINR(stats.todayDue ?? 0)}
+        context={stats.todayCollected ? `₹${stats.todayCollected} received today` : undefined}
+        tone="danger"
+        width={cardWidth}
+      />
+      <DashboardMetric
+        icon="wallet-outline"
+        label="कुल उधारी / Total Due"
+        value={formatINR(stats.totalDue)}
+        tone="warning"
+        width={cardWidth}
+      />
+      <DashboardMetric
+        icon="time-outline"
+        label="Pending orders"
+        value={String(stats.pendingOrders)}
+        tone="warning"
+        width={cardWidth}
+      />
+      <DashboardMetric
+        icon="cube-outline"
+        label="Active products"
+        value={String(stats.activeProducts)}
+        tone="brand"
+        width={cardWidth}
+      />
+      <DashboardMetric
+        icon="warning-outline"
+        label="Low-stock preview"
+        value={String(stats.lowStockCount)}
+        context={`Threshold ${stats.lowStockThreshold}`}
+        tone="danger"
+        width={cardWidth}
+      />
+    </View>
+  );
+}
 const DashboardMetric = memo(function DashboardMetric({ icon, label, value, context, tone, width }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; context?: string; tone: "brand" | "warning" | "danger"; width: number }) { const t = useTheme(); const color = tone === "warning" ? t.colors.warning : tone === "danger" ? t.colors.danger : t.colors.brand; const soft = tone === "warning" ? t.colors.warningSoft : tone === "danger" ? t.colors.dangerSoft : t.colors.brandSoft; return <Card style={{ width, gap: t.spacing.sm }}><View style={[s.metricIcon, { backgroundColor: soft }]}><Ionicons name={icon} size={20} color={color} /></View><AppText role="financialValue" adjustsFontSizeToFit numberOfLines={1}>{value}</AppText><AppText role="label" style={{ color: t.colors.textSecondary }}>{label}</AppText>{context && <AppText role="caption" style={{ color: t.colors.textMuted }}>{context}</AppText>}</Card>; });
 
 export function DashboardSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) { const t = useTheme(); return <Card style={{ gap: t.spacing.sm }}><View style={s.sectionTitle}><AppText role="cardTitle" style={s.flex}>{title}</AppText>{action}</View>{children}</Card>; }

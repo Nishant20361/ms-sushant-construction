@@ -187,12 +187,12 @@ describe("Payment management", () => {
     expect(order.due).toBe(0);
     expect(order.paymentStatus).toBe("PAID");
 
-    // Create a bill with a discount so final amount = 800 (1000-200).
+    // Attempting to create a bill with discount 200 (final amount 800 < paid 1000) must be rejected with 400
     const bill = await agent
       .post(`/api/admin/orders/${orderId}/bill`)
       .set("X-CSRF-Token", token)
       .send({ discount: 200 });
-    expect(bill.status).toBe(201);
+    expect(bill.status).toBe(400);
 
     // Now due = 800 - 1000 = 0 (overpaid). Instead, create a fresh partially
     // paid order, then receive the balance later.
@@ -344,6 +344,21 @@ it("subtotals collected and due on the dashboard", async () => {
     expect(pay.body.orders[0].due).toBe(0); // oldest order cleared
     expect(pay.body.orders[1].due).toBe(500); // remainder on newer order
 
+    // Ledger running balances must account for each order's own payments.
+    const detail = await agent.get("/api/admin/orders/customer/9010000001");
+    expect(detail.status).toBe(200);
+    expect(detail.body.paymentHistory).toHaveLength(2);
+    const oldestPayment = detail.body.paymentHistory.find(
+      (p: any) => p.orderNumber === o1.body.order.orderNumber
+    );
+    const newerPayment = detail.body.paymentHistory.find(
+      (p: any) => p.orderNumber === o2.body.order.orderNumber
+    );
+    expect(oldestPayment.previousDue).toBe(2000);
+    expect(oldestPayment.remainingDue).toBe(1000);
+    expect(newerPayment.previousDue).toBe(1000);
+    expect(newerPayment.remainingDue).toBe(500);
+
     // History preserved: each order now has exactly 1 payment record.
     const p1 = await prisma.orderPayment.count({ where: { orderId: o1.body.order.id } });
     const p2 = await prisma.orderPayment.count({ where: { orderId: o2.body.order.id } });
@@ -357,6 +372,15 @@ it("subtotals collected and due on the dashboard", async () => {
       .post("/api/admin/orders/customer/9010000001/payments")
       .set("X-CSRF-Token", token)
       .send({ amount: 10000, paymentMode: "CASH" });
+    expect(pay.status).toBe(400);
+  });
+
+  it("rejects malformed customer mobile paths instead of suffix matching", async () => {
+    expect((await agent.get("/api/admin/orders/customer/001")).status).toBe(400);
+    const pay = await agent
+      .post("/api/admin/orders/customer/001/payments")
+      .set("X-CSRF-Token", token)
+      .send({ amount: 1, paymentMode: "CASH" });
     expect(pay.status).toBe(400);
   });
 

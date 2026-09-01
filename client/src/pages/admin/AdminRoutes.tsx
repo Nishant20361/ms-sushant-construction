@@ -20,6 +20,7 @@ import AnalyticsDashboard from "./AnalyticsDashboard";
 import CustomerDueReport from "./CustomerDueReport";
 import CustomerStatement from "./CustomerStatement";
 import ProductHistory from "./ProductHistory";
+import AdminPlaceOrder from "./AdminPlaceOrder";
 
 function Protected() {
   const { user, loading } = useAdminAuth();
@@ -43,6 +44,7 @@ export function AdminRoutes() {
         <Route path="reset-password" element={<ResetPassword />} />
         <Route element={<Protected />}>
           <Route index element={<Dashboard />} />
+          <Route path="place-order" element={<AdminPlaceOrder />} />
           <Route path="khatabook" element={<Khatabook />} />
           <Route path="products" element={<AdminProducts />} />
           <Route path="categories" element={<AdminCategories />} />

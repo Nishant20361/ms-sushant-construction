@@ -16,6 +16,7 @@ import {
   Phone,
   MapPin,
   Calendar,
+  PlusCircle,
 } from "lucide-react";
 
 const STATUS_OPTIONS = [
@@ -220,13 +221,20 @@ export default function AdminOrders() {
             Track customer orders, update delivery progress, and open invoices in Billing.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/admin/place-order"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:from-emerald-500 hover:to-teal-500 transition"
+          >
+            <PlusCircle className="h-4 w-4" />
+            <span>+ ग्राहक के लिए ऑर्डर</span>
+          </Link>
           <span className="rounded-xl bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700">
             {total} Total Orders
           </span>
           <Link
             to="/admin/billing"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-amber-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:from-brand-500 hover:to-amber-500 transition"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-slate-800 transition"
           >
             <Receipt className="h-4 w-4" />
             <span>Go to Billing</span>
@@ -352,6 +360,11 @@ export default function AdminOrders() {
                       >
                         {o.paymentStatus === "PARTIALLY_PAID" ? "PARTIALLY PAID" : o.paymentStatus}
                       </span>
+                      {o.source === "ADMIN_ASSISTED" && (
+                        <span className="rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-[10px] font-bold text-purple-700">
+                          Ordered by Admin
+                        </span>
+                      )}
                     </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">

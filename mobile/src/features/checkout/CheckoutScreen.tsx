@@ -37,8 +37,25 @@ export default function CheckoutScreen() {
       setCustomerLookup("loading");
       try {
         const { customer } = await publicApi.getCheckoutCustomer(mobile, controller.signal);
-        if (customer) { setForm((current) => { if (current.customerName.trim() && !nameWasAutoFilled.current) return current; nameWasAutoFilled.current = true; return { ...current, customerName: customer.customerName }; }); setErrors((current) => ({ ...current, customerName: undefined })); setCustomerLookup("found"); }
-        else { if (nameWasAutoFilled.current) setForm((current) => ({ ...current, customerName: "" })); nameWasAutoFilled.current = false; setCustomerLookup("new"); }
+        if (customer) {
+          setForm((current) => {
+            const next = { ...current };
+            if (!current.customerName.trim() || nameWasAutoFilled.current) {
+              next.customerName = customer.customerName;
+              nameWasAutoFilled.current = true;
+            }
+            if (!current.deliveryAddress.trim() && customer.deliveryAddress) {
+              next.deliveryAddress = customer.deliveryAddress;
+            }
+            return next;
+          });
+          setErrors((current) => ({ ...current, customerName: undefined, deliveryAddress: undefined }));
+          setCustomerLookup("found");
+        } else {
+          if (nameWasAutoFilled.current) setForm((current) => ({ ...current, customerName: "" }));
+          nameWasAutoFilled.current = false;
+          setCustomerLookup("new");
+        }
       } catch (error) { if (!(error instanceof Error && error.name === "AbortError")) setCustomerLookup("idle"); }
     }, 350);
     return () => { clearTimeout(timer); controller.abort(); };

@@ -1,5 +1,7 @@
-import { RefreshControl, StyleSheet, useWindowDimensions, View } from "react-native";
-import { router } from "expo-router";
+import React, { useCallback } from "react";
+import { Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useNetInfo } from "@react-native-community/netinfo";
 import { AppText } from "@/components/AppText";
 import { Screen } from "@/components/Screen";
@@ -7,7 +9,7 @@ import { EmptyState, ErrorState } from "@/components/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { AdminAppError } from "@/types/errors";
 import { useTheme } from "@/theme";
-import { DashboardHeader, DashboardMetricGrid, DashboardSection, DashboardSkeleton, FinancialHero, LowStockRow, OfflineBanner, QuickActionHub, RecentOrderRow, TextAction } from "./components";
+import { DashboardHeader, DashboardMetricGrid, DashboardSection, DashboardSkeleton, FinancialHero, LowStockRow, OfflineBanner, RecentOrderRow, TextAction } from "./components";
 import { updatedLabel } from "./presentation";
 import { useDashboardOverview, useNotificationSummary } from "./useDashboard";
 function dashboardError(error: unknown) { if (error instanceof AdminAppError) { if (error.kind === "network" || error.kind === "timeout") return "You're offline. Connect to the internet and try again."; if (error.kind === "forbidden") return "You don't have access to this overview."; if (error.kind === "rate_limited") return "Too many requests. Please try again later."; if (error.kind === "server") return "The Dashboard service is unavailable. Please try again."; } return "The Dashboard could not be loaded. Please try again."; }
@@ -16,6 +18,13 @@ export function DashboardScreen() {
   const offline = network.isConnected === false || network.isInternetReachable === false;
   const available = Math.min(width, 620) - t.spacing.lg * 2; const cardWidth = Math.max(128, (available - 12) / 2);
   const refresh = async () => { await Promise.allSettled([overview.refetch(), notifications.refetch()]); };
+
+  // Automatically refresh live numbers on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [])
+  );
   if (!overview.data && offline) return <Screen centered><ErrorState title="You're offline" description="Connect to the internet to load the business overview." onRetry={() => void refresh()} /></Screen>;
   if (!overview.data && overview.isPending) return <Screen contentStyle={{ paddingBottom: t.spacing.xxxl }}><DashboardSkeleton cardWidth={cardWidth} /></Screen>;
   if (!overview.data && overview.error) return <Screen centered><ErrorState description={dashboardError(overview.error)} onRetry={() => void refresh()} /></Screen>;
@@ -25,12 +34,53 @@ export function DashboardScreen() {
     <DashboardHeader username={auth.admin?.username ?? "Admin"} unreadCount={notifications.data?.unreadCount} onNotifications={() => router.push("/(admin)/notifications" as never)} onProfile={() => router.push("/(admin)/(tabs)/more" as never)} />
     {offline ? <OfflineBanner /> : staleError && <OfflineBanner message={`${staleError} Showing last loaded data.`} />}
     <FinancialHero stats={data.stats} />
-    <View style={s.sectionHeading}><AppText role="sectionTitle">त्वरित कार्य / Quick Actions</AppText><AppText role="caption" style={{ color: t.colors.textMuted }}>Direct 1-tap</AppText></View>
-    <QuickActionHub />
+    <Pressable
+      onPress={() => router.push("/(admin)/place-order" as never)}
+      style={[
+        s.placeOrderBanner,
+        { backgroundColor: t.colors.brand },
+      ]}
+    >
+      <View style={s.placeOrderIconBox}>
+        <Ionicons name="cart" size={20} color={t.colors.brand} />
+      </View>
+      <View style={s.flex}>
+        <AppText style={{ color: "#ffffff", fontSize: 15, fontWeight: "900" }}>
+          + ग्राहक के लिए नया ऑर्डर
+        </AppText>
+        <AppText style={{ color: "rgba(255, 255, 255, 0.8)", fontSize: 11 }}>
+          Place Customer Order & Instant Bill
+        </AppText>
+      </View>
+      <Ionicons name="arrow-forward" size={18} color="#ffffff" />
+    </Pressable>
     <View style={s.sectionHeading}><AppText role="sectionTitle">व्यापार का हाल / At a glance</AppText><AppText role="caption" style={{ color: t.colors.textMuted }}>{updatedLabel(overview.dataUpdatedAt)}</AppText></View>
     <DashboardMetricGrid stats={data.stats} cardWidth={cardWidth} />
     <DashboardSection title="Recent orders" action={<TextAction label="View all" onPress={() => router.push("/(admin)/(tabs)/orders" as never)} />}>{data.recentOrders.length ? data.recentOrders.map((order, index) => <RecentOrderRow key={order.id || `${order.orderNumber}-${index}`} order={order} last={index === data.recentOrders.length - 1} />) : <EmptyState title="No orders yet" description="Recent orders will appear here when business activity begins." />}</DashboardSection>
     <DashboardSection title="Low-stock preview" action={<TextAction label="Products" onPress={() => router.push("/(admin)/(tabs)/products" as never)} />}>{data.lowStockProducts.length ? data.lowStockProducts.slice(0, 5).map((product, index) => <LowStockRow key={product.id || `${product.name}-${index}`} product={product} last={index === Math.min(data.lowStockProducts.length, 5) - 1} />) : <EmptyState title="Stock levels look healthy" description="No active products are at or below the configured threshold." />}<AppText role="caption" style={{ color: t.colors.textMuted }}>Preview only · backend returns at most 10 flagged products.</AppText></DashboardSection>
   </Screen>;
 }
-const s = StyleSheet.create({ content: { width: "100%", maxWidth: 620, alignSelf: "center" }, sectionHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 12 } });
+const s = StyleSheet.create({
+  content: { width: "100%", maxWidth: 620, alignSelf: "center" },
+  flex: { flex: 1 },
+  sectionHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 12 },
+  placeOrderBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  placeOrderIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

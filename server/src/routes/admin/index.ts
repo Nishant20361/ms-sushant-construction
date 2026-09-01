@@ -11,14 +11,15 @@ import billRoutes from "./bills.js";
 import reportRoutes from "./reports.js";
 import analyticsRoutes from "./analytics.js";
 import khatabookAuthRoutes from "./khatabookAuth.js";
+import assistedOrderRoutes from "./assistedOrder.js";
 
 const router = Router();
 
-// authRoutes already declare /auth/... paths
 router.use("/", authRoutes);
 router.use("/", dashboardRoutes);
 router.use("/", productRoutes);
 router.use("/", categoryRoutes);
+router.use("/", assistedOrderRoutes);
 router.use("/", orderRoutes);
 router.use("/", settingsRoutes);
 router.use("/", uploadRoutes);
@@ -29,4 +30,3 @@ router.use("/", analyticsRoutes);
 router.use("/", khatabookAuthRoutes);
 
 export default router;
-

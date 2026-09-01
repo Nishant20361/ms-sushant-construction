@@ -93,8 +93,8 @@ model Product {
   name        String
   description String?
   unit        String         @default("bag")
-  price       Float
-  mrp         Float
+  price       Decimal        @db.Decimal(12, 2)
+  mrp         Decimal        @db.Decimal(12, 2)
   stock       Float          @default(0)
   isActive    Boolean        @default(true)
   categoryId  Int
@@ -129,7 +129,8 @@ model Order {
   customerMobile    String
   deliveryAddress   String?
   notes             String?
-  subtotal          Float
+  source            String         @default("CUSTOMER_WEB") // "CUSTOMER_WEB" | "CUSTOMER_APP" | "ADMIN_ASSISTED"
+  subtotal          Decimal        @db.Decimal(12, 2)
   status            String         @default("PENDING")
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
@@ -147,7 +148,7 @@ model Order {
 model OrderPayment {
   id          Int      @id @default(autoincrement())
   orderId     Int
-  amount      Float
+  amount      Decimal  @db.Decimal(12, 2)
   paymentMode String   @default("CASH") // "CASH" | "ONLINE"
   paymentDate DateTime @default(now())
   notes       String?
@@ -163,9 +164,9 @@ model OrderPayment {
 model Bill {
   id          Int      @id @default(autoincrement())
   orderId     Int      @unique
-  subtotal    Float
-  discount    Float    @default(0)
-  finalAmount Float
+  subtotal    Decimal  @db.Decimal(12, 2)
+  discount    Decimal  @default(0) @db.Decimal(12, 2)
+  finalAmount Decimal  @db.Decimal(12, 2)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -179,9 +180,9 @@ model OrderItem {
   productId   Int
   productName String
   unit        String
-  price       Float
+  price       Decimal @db.Decimal(12, 2)
   quantity    Float
-  total       Float
+  total       Decimal @db.Decimal(12, 2)
   order       Order   @relation(fields: [orderId], references: [id])
   product     Product @relation(fields: [productId], references: [id])
 
@@ -197,9 +198,11 @@ model SiteSetting {
   heroTitle           String   @default("Quality Construction Materials")
   heroSubtitle        String   @default("Cement, steel, roofing sheets and more at the best prices.")
   heroBannerUrl       String?
+  heroVideoUrl        String?
   mobileHeroTitle     String   @default("Quality Construction Materials")
   mobileHeroSubtitle  String   @default("ACC Cement, Nuvoco Cement, Tata & Mongia steel rods, roofing sheets, waterproofing chemicals and more — at the best prices.")
   mobileHeroBannerUrl String?
+  mobileHeroVideoUrl  String?
   phone               String   @default("")
   whatsappNumber      String   @default("")
   email               String   @default("")
