@@ -10,11 +10,14 @@ import { FALLBACK_IMAGE, IMAGE_BLURHASH, resolveImageUrl } from "@/utils/images"
 import { publicApi } from "@/services/publicApi";
 import { queryKeys } from "@/services/queryKeys";
 import { ProductQuantityInput } from "@/components/ProductQuantityInput";
-import { validateQuantityInput } from "@/utils/quantity";
+import { isWholeNumberUnit, validateQuantityInput } from "@/utils/quantity";
 
 function ProductCardComponent({ product, onAdd, style }: { product: Product; onAdd?: (quantity: number) => void; style?: StyleProp<ViewStyle> }) {
   const [quantityText, setQuantityText] = useState("");
   const validation = validateQuantityInput(quantityText, product.unit, product.stock);
+  const defaultQuantity = isWholeNumberUnit(product.unit) ? 1 : 0.5;
+  const effectiveQuantity = quantityText.trim() === "" ? Math.min(defaultQuantity, product.stock) : validation.quantity;
+  const isInvalid = quantityText.trim() !== "" && validation.quantity === null;
   const source = resolveImageUrl(product.imageUrl, 400) || FALLBACK_IMAGE;
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -77,15 +80,15 @@ function ProductCardComponent({ product, onAdd, style }: { product: Product; onA
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Add ${product.name} to cart`}
-            disabled={!inStock || validation.quantity === null}
+            disabled={!inStock || isInvalid || effectiveQuantity === null || effectiveQuantity <= 0}
             style={({ pressed }) => [
               styles.add,
-              (!inStock || validation.quantity === null) && styles.disabled,
-              pressed && validation.quantity !== null && styles.addPressed,
+              (!inStock || isInvalid || effectiveQuantity === null || effectiveQuantity <= 0) && styles.disabled,
+              pressed && inStock && !isInvalid && styles.addPressed,
             ]}
             onPress={() => {
-              if (validation.quantity !== null) {
-                onAdd(validation.quantity);
+              if (effectiveQuantity !== null && effectiveQuantity > 0) {
+                onAdd(effectiveQuantity);
                 setQuantityText("");
               }
             }}

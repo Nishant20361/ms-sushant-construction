@@ -11,7 +11,7 @@ import { useProduct } from "./hooks/useProduct";
 import { useCartStore } from "@/store/cartStore";
 import { theme } from "@/theme";
 import { formatINR } from "@/utils/format";
-import { validateQuantityInput } from "@/utils/quantity";
+import { isWholeNumberUnit, validateQuantityInput } from "@/utils/quantity";
 
 export default function ProductDetailsScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
@@ -160,26 +160,35 @@ export default function ProductDetailsScreen() {
           onChange={setQuantityText}
         />
         <View style={styles.actionRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Add ${quantityText || "selected quantity"} ${product.unit} of ${product.name} to cart`}
-            disabled={outOfStock || validation.quantity === null}
-            onPress={() => {
-              if (validation.quantity !== null) {
-                cart.addProduct(product, validation.quantity);
-                setQuantityText("");
-              }
-            }}
-            style={({ pressed }) => [
-              styles.add,
-              (outOfStock || validation.quantity === null) && styles.disabled,
-              pressed && validation.quantity !== null && styles.pressed,
-            ]}
-          >
-            <Text style={styles.addText}>
-              {outOfStock ? "Out of Stock" : "🛒  Add to Cart"}
-            </Text>
-          </Pressable>
+          {(() => {
+            const defaultQty = isWholeNumberUnit(product.unit) ? 1 : 0.5;
+            const effectiveQty = quantityText.trim() === "" ? Math.min(defaultQty, product.stock) : validation.quantity;
+            const isInvalid = quantityText.trim() !== "" && validation.quantity === null;
+            const canAdd = !outOfStock && !isInvalid && effectiveQty !== null && effectiveQty > 0;
+
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${quantityText || "selected quantity"} ${product.unit} of ${product.name} to cart`}
+                disabled={!canAdd}
+                onPress={() => {
+                  if (effectiveQty !== null && effectiveQty > 0) {
+                    cart.addProduct(product, effectiveQty);
+                    setQuantityText("");
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.add,
+                  !canAdd && styles.disabled,
+                  pressed && canAdd && styles.pressed,
+                ]}
+              >
+                <Text style={styles.addText}>
+                  {outOfStock ? "Out of Stock" : "🛒  Add to Cart"}
+                </Text>
+              </Pressable>
+            );
+          })()}
 
           <Link href="/(tabs)/cart" asChild>
             <Pressable
