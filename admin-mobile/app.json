@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sushant Control",
     "slug": "sushant-control",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "sushantcontrol",
     "userInterfaceStyle": "automatic",
