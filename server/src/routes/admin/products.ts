@@ -32,10 +32,6 @@ const stockAdjustmentSchema = z
       return true;
     },
     { message: "Reason is required for manual stock reduction (DEDUCT).", path: ["reason"] }
-  )
-  .refine(
-    (data) => data.action !== "ADD" || data.totalPurchaseCost !== undefined || data.purchaseRate !== undefined,
-    { message: "Purchase cost or purchase rate is required when adding stock.", path: ["totalPurchaseCost"] }
   );
 
 /**
@@ -170,11 +166,24 @@ router.put(
     const price = normalizeCurrency(body.price);
     const mrp = normalizeCurrency(body.mrp);
     const requestedStock = normalizeStock(body.stock);
-    if (requestedStock !== normalizeStock(Number(existing.stock))) {
-      throw new HttpError(400, "Use Stock Khata to change quantity so purchase cost and FIFO valuation stay accurate.");
-    }
+    const currentStock = normalizeStock(Number(existing.stock));
 
     const product = await prisma.$transaction(async (tx) => {
+      const decrease = Math.max(0, roundTo(currentStock - requestedStock, 3));
+      const increase = Math.max(0, roundTo(requestedStock - currentStock, 3));
+
+      if (decrease > 0) {
+        await consumePurchaseBatchesFifo(tx, id, decrease);
+      } else if (increase > 0) {
+        await createPurchaseBatch(tx, {
+          productId: id,
+          quantity: increase,
+          totalPurchaseCost: roundTo(increase * price, 2),
+          costPricePerUnit: price,
+          note: "Stock updated via product edit form",
+        });
+      }
+
       await tx.product.update({
         where: { id },
         data: {
@@ -183,7 +192,7 @@ router.put(
           unit: body.unit,
           price,
           mrp,
-          stock: existing.stock,
+          stock: requestedStock,
           isActive: body.isActive,
           categoryId: body.categoryId,
         },
@@ -264,9 +273,6 @@ router.patch(
       if (nextStock < 0) throw new HttpError(400, `Cannot deduct ${body.quantity} ${existing.unit}. Current stock is only ${previousStock} ${existing.unit}.`);
       const decrease = Math.max(0, roundTo(previousStock - nextStock, 3));
       const increase = Math.max(0, roundTo(nextStock - previousStock, 3));
-      if (increase > 0 && body.totalPurchaseCost === undefined && body.purchaseRate === undefined) {
-        throw new HttpError(400, "Purchase cost or purchase rate is required when stock increases.");
-      }
       if (decrease > 0) await consumePurchaseBatchesFifo(tx, id, decrease);
       const p = await tx.product.update({
         where: { id },

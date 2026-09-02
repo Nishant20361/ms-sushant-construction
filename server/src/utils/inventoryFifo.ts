@@ -49,7 +49,8 @@ export async function createPurchaseBatch(
     if (unitCostDec.lt(0)) throw new Error("Cost price per unit cannot be negative.");
     totalCostDec = unitCostDec.mul(qty).toDecimalPlaces(2);
   } else {
-    throw new Error("Either totalPurchaseCost or costPricePerUnit must be provided.");
+    unitCostDec = new Decimal(0);
+    totalCostDec = new Decimal(0);
   }
 
   const pDate = input.purchaseDate ? new Date(input.purchaseDate) : new Date();
