@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import type { SiteSettings } from "@/types/domain";
 import { theme } from "@/theme";
 import { businessDirectionsUrl, emailUrl, openExternalUrl, telephoneUrl } from "@/utils/externalLinks";
@@ -11,15 +11,38 @@ export function ContactCard({ settings, loading, error, onRetry }: { settings?: 
   const maps = businessDirectionsUrl(settings);
   const act = async (url: string) => setActionError((await openExternalUrl(url)) ? "" : "This action could not be opened. Check the configured contact details and try again.");
 
-  if (loading && !settings) return <View style={[styles.card, styles.skeleton]}><View style={styles.skeletonLine} /><View style={styles.skeletonSmall} /></View>;
-  if (error && !settings) return <Pressable accessibilityRole="button" onPress={onRetry} style={styles.card}><Text style={styles.title}>Contact details are temporarily unavailable.</Text><Text style={styles.retry}>Tap to retry</Text></Pressable>;
+  if (loading && !settings)
+    return (
+      <View style={[styles.card, styles.skeleton]}>
+        <View style={styles.skeletonLine} />
+        <View style={styles.skeletonSmall} />
+      </View>
+    );
+
+  if (error && !settings)
+    return (
+      <Pressable accessibilityRole="button" onPress={onRetry} style={styles.card}>
+        <Text style={styles.title}>Contact details are temporarily unavailable.</Text>
+        <Text style={styles.retryText}>Tap to retry</Text>
+      </Pressable>
+    );
+
   return (
     <View style={styles.card}>
+      {/* Decorative gradient corner */}
+      <View style={styles.decorativeCorner} />
+
       <View style={styles.badgePill}>
         <Text style={styles.eyebrow}>💬 DIRECT SUPPORT</Text>
       </View>
       <Text style={styles.title}>Talk to MS Sushant Construction</Text>
-      {settings?.address ? <Text style={styles.address}>{settings.address}</Text> : null}
+      {settings?.address ? (
+        <View style={styles.addressRow}>
+          <Text style={styles.addressIcon}>📍</Text>
+          <Text style={styles.address}>{settings.address}</Text>
+        </View>
+      ) : null}
+
       <View style={styles.actions}>
         {phone ? (
           <Pressable
@@ -28,7 +51,8 @@ export function ContactCard({ settings, loading, error, onRetry }: { settings?: 
             onPress={() => void act(telephoneUrl(phone))}
             style={({ pressed }) => [styles.primary, pressed && styles.buttonPressed]}
           >
-            <Text style={styles.primaryText}>📞  Call Now</Text>
+            <Text style={styles.primaryIcon}>📞</Text>
+            <Text style={styles.primaryText}>Call Now</Text>
           </Pressable>
         ) : null}
         {email ? (
@@ -38,7 +62,8 @@ export function ContactCard({ settings, loading, error, onRetry }: { settings?: 
             onPress={() => void act(emailUrl(email))}
             style={({ pressed }) => [styles.secondary, pressed && styles.buttonPressed]}
           >
-            <Text style={styles.secondaryText}>✉️  Email</Text>
+            <Text style={styles.secondaryIcon}>✉️</Text>
+            <Text style={styles.secondaryText}>Email</Text>
           </Pressable>
         ) : null}
         {maps ? (
@@ -48,26 +73,41 @@ export function ContactCard({ settings, loading, error, onRetry }: { settings?: 
             onPress={() => void act(maps)}
             style={({ pressed }) => [styles.secondary, pressed && styles.buttonPressed]}
           >
-            <Text style={styles.secondaryText}>📍  Directions</Text>
+            <Text style={styles.secondaryIcon}>🗺️</Text>
+            <Text style={styles.secondaryText}>Directions</Text>
           </Pressable>
         ) : null}
       </View>
-      {actionError ? <Text accessibilityRole="alert" style={styles.actionError}>{actionError}</Text> : null}
+      {actionError ? (
+        <Text accessibilityRole="alert" style={styles.actionError}>
+          {actionError}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: 140,
+    minHeight: 150,
     marginTop: 28,
     padding: 20,
-    borderRadius: 22,
+    borderRadius: 24,
     backgroundColor: "#F0FDFA",
     borderWidth: 1.5,
     borderColor: "#CCFBF1",
+    overflow: "hidden",
     ...theme.shadow,
     elevation: 2,
+  },
+  decorativeCorner: {
+    position: "absolute",
+    right: -30,
+    top: -30,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "rgba(13, 148, 136, 0.08)",
   },
   skeleton: {
     justifyContent: "center",
@@ -76,21 +116,23 @@ const styles = StyleSheet.create({
     width: "70%",
     height: 18,
     borderRadius: 9,
-    backgroundColor: theme.colors.border,
+    backgroundColor: "#CCFBF1",
   },
   skeletonSmall: {
     width: "45%",
     height: 12,
     marginTop: 10,
     borderRadius: 6,
-    backgroundColor: theme.colors.border,
+    backgroundColor: "#CCFBF1",
   },
   badgePill: {
     alignSelf: "flex-start",
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 999,
     backgroundColor: "#CCFBF1",
+    borderWidth: 1,
+    borderColor: "#99F6E4",
   },
   eyebrow: {
     color: theme.colors.primaryDark,
@@ -99,29 +141,48 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   title: {
-    marginTop: 8,
-    fontSize: 19,
+    marginTop: 10,
+    fontSize: 20,
     fontWeight: "900",
     color: theme.colors.text,
+    letterSpacing: -0.3,
+  },
+  addressRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginTop: 8,
+  },
+  addressIcon: {
+    fontSize: 13,
+    marginTop: 1,
   },
   address: {
-    marginTop: 6,
+    flex: 1,
     fontSize: 12.5,
     lineHeight: 18,
     color: theme.colors.muted,
   },
   actions: {
-    marginTop: 16,
+    marginTop: 18,
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
   },
   primary: {
-    minHeight: 42,
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
     justifyContent: "center",
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    paddingHorizontal: 18,
+    borderRadius: 14,
     backgroundColor: theme.colors.primary,
+    ...theme.shadow,
+    elevation: 2,
+  },
+  primaryIcon: {
+    fontSize: 15,
   },
   primaryText: {
     color: "white",
@@ -129,13 +190,19 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   secondary: {
-    minHeight: 42,
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     justifyContent: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderWidth: 1.5,
-    borderColor: "#CCFBF1",
-    borderRadius: 12,
+    borderColor: "#99F6E4",
+    borderRadius: 14,
     backgroundColor: theme.colors.surface,
+  },
+  secondaryIcon: {
+    fontSize: 14,
   },
   secondaryText: {
     color: theme.colors.primaryDark,
@@ -144,9 +211,9 @@ const styles = StyleSheet.create({
   },
   buttonPressed: {
     opacity: 0.8,
-    transform: [{ scale: 0.98 }],
+    transform: [{ scale: 0.97 }],
   },
-  retry: {
+  retryText: {
     marginTop: 8,
     color: theme.colors.primary,
     fontWeight: "700",

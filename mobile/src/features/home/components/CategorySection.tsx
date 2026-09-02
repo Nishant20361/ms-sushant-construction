@@ -8,13 +8,24 @@ import { theme } from "@/theme";
 import { resolveImageUrl } from "@/utils/images";
 
 const HOME_HORIZONTAL_PADDING = 16;
-const CATEGORY_GAP = 12;
+const CATEGORY_GAP = 10;
 const VISIBLE_CATEGORY_COUNT = 4;
 
 export function calculateCategoryCardWidth(viewportWidth: number): number {
   if (viewportWidth <= 0) return 0;
   return Math.floor((viewportWidth - CATEGORY_GAP * (VISIBLE_CATEGORY_COUNT - 1)) / VISIBLE_CATEGORY_COUNT);
 }
+
+const CATEGORY_COLORS: Record<string, { bg: string; border: string }> = {
+  cement: { bg: "#F0FDF4", border: "#BBF7D0" },
+  steel: { bg: "#EFF6FF", border: "#BFDBFE" },
+  iron: { bg: "#EFF6FF", border: "#BFDBFE" },
+  roof: { bg: "#FFF7ED", border: "#FED7AA" },
+  brick: { bg: "#FEF2F2", border: "#FECACA" },
+  paint: { bg: "#F5F3FF", border: "#DDD6FE" },
+  tile: { bg: "#ECFEFF", border: "#A5F3FC" },
+  pipe: { bg: "#F0FDFA", border: "#99F6E4" },
+};
 
 const categoryGlyph = (slug: string) => {
   const value = slug.toLowerCase();
@@ -26,6 +37,14 @@ const categoryGlyph = (slug: string) => {
   if (value.includes("tile")) return "◻️";
   if (value.includes("pipe")) return "🔧";
   return "📦";
+};
+
+const getCategoryColor = (slug: string) => {
+  const value = slug.toLowerCase();
+  for (const [key, color] of Object.entries(CATEGORY_COLORS)) {
+    if (value.includes(key)) return color;
+  }
+  return { bg: "#F0FDFA", border: "#CCFBF1" };
 };
 
 function CategorySkeleton({ width }: { width: number }) {
@@ -42,9 +61,10 @@ function CategorySkeleton({ width }: { width: number }) {
 function CategoryArtwork({ name, slug, imageUrl }: { name: string; slug: string; imageUrl?: string | null }) {
   const [failed, setFailed] = useState(false);
   const image = failed ? null : resolveImageUrl(imageUrl, 180);
+  const color = getCategoryColor(slug);
 
   return (
-    <View style={styles.iconCircle}>
+    <View style={[styles.iconCircle, { backgroundColor: color.bg, borderColor: color.border }]}>
       {image ? (
         <Image
           source={image}
@@ -77,7 +97,7 @@ export function CategorySection({ categories, loading, error, onRetry }: Categor
   return (
     <View style={styles.section}>
       <SectionHeader
-        title="Shop by category"
+        title="Shop by Category"
         subtitle="Construction essentials, organized"
         actionLabel="See all"
         href="/(tabs)/products"
@@ -93,7 +113,7 @@ export function CategorySection({ categories, loading, error, onRetry }: Categor
 
         {error && !visible.length ? (
           <Pressable accessibilityRole="button" onPress={onRetry} style={styles.error}>
-            <Text style={styles.errorTitle}>Categories couldn’t load.</Text>
+            <Text style={styles.errorTitle}>Categories couldn't load.</Text>
             <Text style={styles.retry}>Tap to retry</Text>
           </Pressable>
         ) : null}
@@ -131,9 +151,11 @@ export function CategorySection({ categories, loading, error, onRetry }: Categor
                       </Text>
                     </View>
                     {category.productCount !== undefined ? (
-                      <Text maxFontSizeMultiplier={1} numberOfLines={1} style={styles.count}>
-                        {category.productCount} items
-                      </Text>
+                      <View style={styles.countPill}>
+                        <Text maxFontSizeMultiplier={1} numberOfLines={1} style={styles.count}>
+                          {category.productCount} items
+                        </Text>
+                      </View>
                     ) : null}
                   </Pressable>
                 </Link>
@@ -160,7 +182,7 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   itemSlot: {
-    minHeight: 118,
+    minHeight: 128,
     flexGrow: 0,
     flexShrink: 0,
   },
@@ -171,28 +193,26 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
-    transform: [{ scale: 0.96 }],
+    transform: [{ scale: 0.95 }],
   },
   iconCircle: {
-    width: 58,
-    height: 58,
+    width: 62,
+    height: 62,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 18,
-    backgroundColor: "#F0FDFA",
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: "#CCFBF1",
     ...theme.shadow,
-    elevation: 1.5,
+    elevation: 2,
   },
   categoryImage: {
-    width: 58,
-    height: 58,
-    borderRadius: 16,
+    width: 62,
+    height: 62,
+    borderRadius: 18,
   },
   icon: {
-    fontSize: 24,
+    fontSize: 26,
   },
   nameRegion: {
     width: "100%",
@@ -211,11 +231,17 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     includeFontPadding: false,
   },
+  countPill: {
+    marginTop: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "#F1F5F9",
+  },
   count: {
-    marginTop: 2,
     textAlign: "center",
-    fontSize: 10,
-    fontWeight: "500",
+    fontSize: 9.5,
+    fontWeight: "600",
     color: theme.colors.muted,
   },
   skeleton: {
@@ -223,24 +249,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   skeletonIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: theme.colors.border,
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: "#E2E8F0",
   },
   skeletonLine: {
     width: 48,
     height: 10,
     marginTop: 8,
     borderRadius: 5,
-    backgroundColor: theme.colors.border,
+    backgroundColor: "#E2E8F0",
   },
   error: {
     minHeight: 72,
     marginTop: 14,
     justifyContent: "center",
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
     borderColor: "#FECACA",

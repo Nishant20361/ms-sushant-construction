@@ -23,53 +23,137 @@ function ProductCardComponent({ product, onAdd, style }: { product: Product; onA
     void queryClient.prefetchQuery({ queryKey: queryKeys.products.detail(product.id), queryFn: ({ signal }) => publicApi.getProductById(product.id, signal), staleTime: 0 });
     router.push({ pathname: "/product/[id]", params: { id: String(product.id) } });
   }, [product.id, queryClient, router]);
-  return <View style={[styles.card, style]}>
-      <Pressable accessibilityRole="link" accessibilityLabel={`${product.name}, ${formatINR(product.price)} per ${product.unit}`} onPress={openProduct} style={({ pressed }) => pressed && styles.pressed}>
-        <Image source={source} placeholder={{ blurhash: IMAGE_BLURHASH }} cachePolicy="memory-disk" contentFit="cover" transition={150} accessibilityLabel={product.images[0]?.alt || product.name} style={styles.image} />
-        <View style={[styles.stockBadge, product.stock <= 0 && styles.outBadge]}><Text style={[styles.stockText, product.stock <= 0 && styles.outText]}>{product.stock > 0 ? "In stock" : "Unavailable"}</Text></View>
-        <Text numberOfLines={2} style={styles.name}>{product.name}</Text>
-        <Text style={styles.price}>{formatINR(product.price)} / {product.unit}</Text>
+
+  const inStock = product.stock > 0;
+
+  return (
+    <View style={[styles.card, style]}>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`${product.name}, ${formatINR(product.price)} per ${product.unit}`}
+        onPress={openProduct}
+        style={({ pressed }) => pressed && styles.pressed}
+      >
+        {/* Image with overlay badge */}
+        <View style={styles.imageContainer}>
+          <Image
+            source={source}
+            placeholder={{ blurhash: IMAGE_BLURHASH }}
+            cachePolicy="memory-disk"
+            contentFit="cover"
+            transition={150}
+            accessibilityLabel={product.images[0]?.alt || product.name}
+            style={styles.image}
+          />
+          {/* Stock badge */}
+          <View style={[styles.stockBadge, !inStock && styles.outBadge]}>
+            <View style={[styles.stockDot, !inStock && styles.outDot]} />
+            <Text style={[styles.stockText, !inStock && styles.outText]}>
+              {inStock ? "In Stock" : "Unavailable"}
+            </Text>
+          </View>
+        </View>
+
+        {/* Product info */}
+        <View style={styles.info}>
+          <Text numberOfLines={2} style={styles.name}>
+            {product.name}
+          </Text>
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>{formatINR(product.price)}</Text>
+            <Text style={styles.unit}>/ {product.unit}</Text>
+          </View>
+        </View>
       </Pressable>
-    {onAdd ? <><ProductQuantityInput value={quantityText} unit={product.unit} maxStock={product.stock} onChange={setQuantityText} /><Pressable accessibilityRole="button" accessibilityLabel={`Add ${product.name} to cart`} disabled={product.stock <= 0 || validation.quantity === null} style={({ pressed }) => [styles.add, (product.stock <= 0 || validation.quantity === null) && styles.disabled, pressed && validation.quantity !== null && styles.addPressed]} onPress={() => { if (validation.quantity !== null) { onAdd(validation.quantity); setQuantityText(""); } }}><Text style={styles.addText}>{product.stock > 0 ? "Add to cart" : "Out of stock"}</Text></Pressable></> : null}
-  </View>;
+
+      {onAdd ? (
+        <View style={styles.addSection}>
+          <ProductQuantityInput
+            value={quantityText}
+            unit={product.unit}
+            maxStock={product.stock}
+            onChange={setQuantityText}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${product.name} to cart`}
+            disabled={!inStock || validation.quantity === null}
+            style={({ pressed }) => [
+              styles.add,
+              (!inStock || validation.quantity === null) && styles.disabled,
+              pressed && validation.quantity !== null && styles.addPressed,
+            ]}
+            onPress={() => {
+              if (validation.quantity !== null) {
+                onAdd(validation.quantity);
+                setQuantityText("");
+              }
+            }}
+          >
+            <Text style={styles.addText}>
+              {inStock ? "🛒  Add to Cart" : "Out of Stock"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
 }
+
 export const ProductCard = memo(ProductCardComponent);
+
 const styles = StyleSheet.create({
   card: {
     width: "48%",
     minWidth: 140,
-    padding: 11,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 18,
+    borderRadius: 20,
     backgroundColor: theme.colors.surface,
+    overflow: "hidden",
     ...theme.shadow,
+    shadowOpacity: 0.06,
     elevation: 2,
   },
   pressed: {
-    opacity: 0.85,
+    opacity: 0.88,
     transform: [{ scale: 0.985 }],
+  },
+  imageContainer: {
+    width: "100%",
+    position: "relative",
   },
   image: {
     width: "100%",
-    aspectRatio: 1.15,
-    borderRadius: 13,
+    aspectRatio: 1.1,
     backgroundColor: "#F1F5F9",
   },
   stockBadge: {
     position: "absolute",
     left: 8,
     top: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3.5,
+    paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "rgba(220, 252, 231, 0.95)",
     borderWidth: 1,
     borderColor: "#BBF7D0",
   },
   outBadge: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "rgba(254, 226, 226, 0.95)",
     borderColor: "#FECACA",
+  },
+  stockDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#15803D",
+  },
+  outDot: {
+    backgroundColor: "#DC2626",
   },
   stockText: {
     color: "#15803D",
@@ -80,34 +164,54 @@ const styles = StyleSheet.create({
   outText: {
     color: "#DC2626",
   },
+  info: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
   name: {
-    minHeight: 38,
-    marginTop: 10,
+    minHeight: 36,
     color: theme.colors.text,
     fontSize: 13.5,
     lineHeight: 18,
     fontWeight: "700",
+    letterSpacing: -0.1,
+  },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 3,
+    marginTop: 4,
   },
   price: {
-    marginTop: 4,
     color: theme.colors.primaryDark,
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  unit: {
+    color: theme.colors.muted,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  addSection: {
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    paddingTop: 4,
   },
   add: {
     minHeight: 42,
-    marginTop: 10,
+    marginTop: 8,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
+    borderRadius: 13,
     backgroundColor: theme.colors.primary,
   },
   addPressed: {
-    opacity: 0.85,
+    opacity: 0.88,
     transform: [{ scale: 0.98 }],
   },
   disabled: {
-    opacity: 0.45,
+    opacity: 0.4,
     backgroundColor: "#94A3B8",
   },
   addText: {

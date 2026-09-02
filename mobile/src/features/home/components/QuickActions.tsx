@@ -4,17 +4,17 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SectionHeader } from "./SectionHeader";
 import { theme } from "@/theme";
 
-const actions: Array<{ label: string; hint: string; icon: string; bg: string; href: Href }> = [
-  { label: "AI से पूछें", hint: "Construction help", icon: "✨", bg: "#EEF2FF", href: "/(tabs)/assistant" },
-  { label: "Track Order", hint: "Check live status", icon: "🚚", bg: "#ECFDF5", href: "/(tabs)/track" },
-  { label: "Products", hint: "Browse catalogue", icon: "🧱", bg: "#F0FDFA", href: "/(tabs)/products" },
-  { label: "Contact Us", hint: "Direct support", icon: "📞", bg: "#FFFBEB", href: "/about" },
+const actions: Array<{ label: string; hint: string; icon: string; bg: string; accent: string; href: Href }> = [
+  { label: "AI से पूछें", hint: "Material estimate", icon: "✨", bg: "#EEF2FF", accent: "#6366F1", href: "/(tabs)/assistant" },
+  { label: "Track Order", hint: "Live status", icon: "🚚", bg: "#ECFDF5", accent: "#10B981", href: "/(tabs)/track" },
+  { label: "Products", hint: "Full catalogue", icon: "🧱", bg: "#F0FDFA", accent: "#0D9488", href: "/(tabs)/products" },
+  { label: "Contact Us", hint: "Direct support", icon: "📞", bg: "#FFFBEB", accent: "#D97706", href: "/about" },
 ];
 
 export function QuickActions() {
   return (
     <View style={styles.section}>
-      <SectionHeader title="Quick actions" />
+      <SectionHeader title="Quick Actions" />
       <View style={styles.grid}>
         {actions.map((action) => (
           <Link key={action.label} href={action.href} asChild>
@@ -31,6 +31,9 @@ export function QuickActions() {
                 <Text numberOfLines={1} style={styles.hint}>
                   {action.hint}
                 </Text>
+              </View>
+              <View style={[styles.arrowCircle, { backgroundColor: action.bg }]}>
+                <Text style={[styles.arrow, { color: action.accent }]}>›</Text>
               </View>
             </Pressable>
           </Link>
@@ -53,43 +56,61 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "48.5%",
-    minHeight: 74,
+    minHeight: 76,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    padding: 10,
+    gap: 9,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 16,
+    borderRadius: 18,
     backgroundColor: theme.colors.surface,
     ...theme.shadow,
+    shadowOpacity: 0.06,
     elevation: 2,
   },
   pressed: {
     opacity: 0.8,
-    transform: [{ scale: 0.98 }],
+    transform: [{ scale: 0.97 }],
+    borderColor: theme.colors.primary,
   },
   iconBox: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 13,
+    borderRadius: 14,
   },
   icon: {
-    fontSize: 20,
+    fontSize: 21,
   },
   copy: {
     flex: 1,
+    gap: 2,
   },
   label: {
     fontSize: 13,
     fontWeight: "800",
     color: theme.colors.text,
+    letterSpacing: -0.1,
   },
   hint: {
-    marginTop: 2,
     fontSize: 10.5,
     color: theme.colors.muted,
+    fontWeight: "500",
+  },
+  arrowCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  arrow: {
+    fontSize: 16,
+    fontWeight: "900",
+    marginTop: -1,
   },
 });

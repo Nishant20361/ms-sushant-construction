@@ -28,7 +28,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!cartMessage) return;
-    const timeout = setTimeout(() => setCartMessage(""), 1_800);
+    const timeout = setTimeout(() => setCartMessage(""), 2_000);
     return () => clearTimeout(timeout);
   }, [cartMessage]);
 
@@ -38,21 +38,169 @@ export default function HomeScreen() {
     setCartMessage(`${product.name} added to cart`);
   };
 
-  return <SafeAreaView edges={["top"]} style={styles.safe}><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refreshAll} tintColor={theme.colors.primary} colors={[theme.colors.primary]} />}>
-    <HomeHeader companyName={siteSettings?.companyName || "MS Sushant Construction"} logoUrl={siteSettings?.logoUrl || siteSettings?.businessLogoUrl} />
-    <HomeSearchBar />
-    <HeroBanner settings={siteSettings} loading={settings.isPending} />
-    {hasColdStart && !hasCachedContent ? <ColdStartState onRetry={refreshAll} /> : null}
-    {hasColdStart && hasCachedContent ? <View style={styles.coldNotice}><Text style={styles.coldTitle}>Connecting to MS Sushant Construction…</Text><Text style={styles.coldText}>Showing saved content while the server starts.</Text></View> : null}
-    <LatestUpdateTicker enabled={siteSettings?.latestUpdateEnabled} text={siteSettings?.latestUpdateText} />
-    <CategorySection categories={categories.data?.categories} loading={categories.isPending} error={categories.isError} onRetry={() => void categories.refetch()} />
-    <QuickActions />
-    <ProductSection products={products.data?.products} loading={products.isPending} error={products.isError} onRetry={() => void products.refetch()} onAdd={addToCart} />
-    <AIConstructionCard />
-    <TrustSection />
-    <ContactCard settings={siteSettings} loading={settings.isPending} error={settings.isError} onRetry={() => void settings.refetch()} />
-    <Text style={styles.footnote}>Prices shown in the app are for browsing. The server verifies current price, stock and final subtotal when an order is placed.</Text>
-    <Text style={styles.developer}>Developed by Nishant</Text>
-  </ScrollView>{cartMessage ? <View accessibilityRole="alert" style={styles.toast}><Text numberOfLines={2} style={styles.toastText}>✓  {cartMessage}</Text></View> : null}</SafeAreaView>;
+  return (
+    <SafeAreaView edges={["top"]} style={styles.safe}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={refreshAll}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
+      >
+        <HomeHeader
+          companyName={siteSettings?.companyName || "MS Sushant Construction"}
+          logoUrl={siteSettings?.logoUrl || siteSettings?.businessLogoUrl}
+        />
+        <HomeSearchBar />
+        <HeroBanner settings={siteSettings} loading={settings.isPending} />
+
+        {hasColdStart && !hasCachedContent ? <ColdStartState onRetry={refreshAll} /> : null}
+        {hasColdStart && hasCachedContent ? (
+          <View style={styles.coldNotice}>
+            <Text style={styles.coldTitle}>Connecting to server…</Text>
+            <Text style={styles.coldText}>Showing cached catalogue while services initialize.</Text>
+          </View>
+        ) : null}
+
+        <LatestUpdateTicker enabled={siteSettings?.latestUpdateEnabled} text={siteSettings?.latestUpdateText} />
+        <CategorySection
+          categories={categories.data?.categories}
+          loading={categories.isPending}
+          error={categories.isError}
+          onRetry={() => void categories.refetch()}
+        />
+        <QuickActions />
+        <ProductSection
+          products={products.data?.products}
+          loading={products.isPending}
+          error={products.isError}
+          onRetry={() => void products.refetch()}
+          onAdd={addToCart}
+        />
+        <AIConstructionCard />
+        <TrustSection />
+        <ContactCard
+          settings={siteSettings}
+          loading={settings.isPending}
+          error={settings.isError}
+          onRetry={() => void settings.refetch()}
+        />
+
+        <View style={styles.footerWrap}>
+          <Text style={styles.footnote}>
+            Prices shown in the app are for browsing. The server verifies current price, stock and final subtotal when an order is placed.
+          </Text>
+          <View style={styles.brandBadge}>
+            <Text style={styles.brandBadgeText}>★ MS Sushant Construction · Bihar</Text>
+          </View>
+          <Text style={styles.developer}>Designed & Developed by Nishant</Text>
+        </View>
+      </ScrollView>
+
+      {cartMessage ? (
+        <View accessibilityRole="alert" style={styles.toast}>
+          <View style={styles.toastDot} />
+          <Text numberOfLines={2} style={styles.toastText}>
+            ✓ {cartMessage}
+          </Text>
+        </View>
+      ) : null}
+    </SafeAreaView>
+  );
 }
-const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: theme.colors.background }, content: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 112 }, coldNotice: { marginTop: 14, padding: 13, borderRadius: 12, backgroundColor: "#FFFBEB", borderWidth: 1, borderColor: "#FDE68A" }, coldTitle: { color: theme.colors.warning, fontWeight: "800" }, coldText: { marginTop: 3, fontSize: 12, color: theme.colors.muted }, footnote: { marginTop: 20, paddingHorizontal: 6, textAlign: "center", fontSize: 11, lineHeight: 16, color: theme.colors.muted }, developer: { marginTop: 14, paddingBottom: 8, textAlign: "center", fontSize: 11, color: theme.colors.muted }, toast: { position: "absolute", left: 18, right: 18, bottom: 82, minHeight: 48, justifyContent: "center", paddingHorizontal: 16, borderRadius: 14, backgroundColor: theme.colors.text, ...theme.shadow }, toastText: { color: "white", fontWeight: "700" } });
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 110,
+  },
+  coldNotice: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  coldTitle: {
+    color: theme.colors.warning,
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  coldText: {
+    marginTop: 3,
+    fontSize: 12,
+    color: theme.colors.muted,
+  },
+  footerWrap: {
+    marginTop: 28,
+    alignItems: "center",
+    gap: 10,
+    paddingBottom: 12,
+  },
+  footnote: {
+    paddingHorizontal: 10,
+    textAlign: "center",
+    fontSize: 11,
+    lineHeight: 16,
+    color: theme.colors.muted,
+  },
+  brandBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#E2E8F0",
+  },
+  brandBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#475569",
+    letterSpacing: 0.3,
+  },
+  developer: {
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "600",
+    color: theme.colors.muted,
+  },
+  toast: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 84,
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: "#0F172A",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.15)",
+    ...theme.shadow,
+    elevation: 8,
+  },
+  toastDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#10B981",
+  },
+  toastText: {
+    flex: 1,
+    color: "white",
+    fontWeight: "800",
+    fontSize: 13,
+  },
+});

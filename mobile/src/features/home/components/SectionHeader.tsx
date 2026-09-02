@@ -7,7 +7,10 @@ export function SectionHeader({ title, subtitle, actionLabel, href }: { title: s
   return (
     <View style={styles.row}>
       <View style={styles.copy}>
-        <Text style={styles.title}>{title}</Text>
+        <View style={styles.titleRow}>
+          <View style={styles.accentBar} />
+          <Text style={styles.title}>{title}</Text>
+        </View>
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
       {href && actionLabel ? (
@@ -15,10 +18,10 @@ export function SectionHeader({ title, subtitle, actionLabel, href }: { title: s
           <Pressable
             accessibilityRole="link"
             hitSlop={8}
-            style={({ pressed }) => [styles.action, pressed && { opacity: 0.75 }]}
+            style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
           >
             <Text style={styles.actionText}>{actionLabel}</Text>
-            <Text style={styles.actionArrow}>›</Text>
+            <Text style={styles.actionArrow}>→</Text>
           </Pressable>
         </Link>
       ) : null}
@@ -36,25 +39,44 @@ const styles = StyleSheet.create({
   copy: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  accentBar: {
+    width: 3.5,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: theme.colors.primary,
+  },
   title: {
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: "900",
     color: theme.colors.text,
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   subtitle: {
-    marginTop: 2,
+    marginTop: 3,
+    marginLeft: 11.5,
     fontSize: 12,
     color: theme.colors.muted,
+    fontWeight: "500",
   },
   action: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 999,
     backgroundColor: "#F0FDFA",
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+  },
+  actionPressed: {
+    opacity: 0.75,
+    backgroundColor: "#CCFBF1",
   },
   actionText: {
     color: theme.colors.primary,
@@ -63,8 +85,7 @@ const styles = StyleSheet.create({
   },
   actionArrow: {
     color: theme.colors.primary,
-    fontSize: 16,
-    fontWeight: "700",
-    marginTop: -1,
+    fontSize: 13,
+    fontWeight: "800",
   },
 });
