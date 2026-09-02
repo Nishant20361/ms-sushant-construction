@@ -10,7 +10,7 @@ export function signAdminToken(payload: AdminJwtPayload): string {
     issuer: "ms-sushant-construction",
     audience: "ms-sushant-admin",
   };
-  return jwt.sign(payload, config.jwtSecret, opts);
+  return jwt.sign({ ...payload, sessionIssuedAtMs: Date.now() }, config.jwtSecret, opts);
 }
 
 export function verifyAdminToken(token: string): AdminJwtPayload {
@@ -23,4 +23,3 @@ export function verifyAdminToken(token: string): AdminJwtPayload {
   }
   return decoded as unknown as AdminJwtPayload;
 }
-

@@ -120,10 +120,49 @@ export function DuesScreen() {
   const [paySaving, setPaySaving] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
 
+  // Profit Khata Date Filter
+  const [profitFromInput, setProfitFromInput] = useState("");
+  const [profitToInput, setProfitToInput] = useState("");
+  const [appliedProfitFrom, setAppliedProfitFrom] = useState("");
+  const [appliedProfitTo, setAppliedProfitTo] = useState("");
+  const [profitDatePreset, setProfitDatePreset] = useState<"ALL" | "TODAY" | "THIS_MONTH" | "CUSTOM">("ALL");
+  const [showProfitDateModal, setShowProfitDateModal] = useState(false);
+  const [profitFilterError, setProfitFilterError] = useState<string | null>(null);
+
+  const getTodayIso = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const getMonthStartIso = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}-01`;
+  };
+
+  const applyProfitDateFilter = (from: string, to: string, preset: "ALL" | "TODAY" | "THIS_MONTH" | "CUSTOM") => {
+    setAppliedProfitFrom(from);
+    setAppliedProfitTo(to);
+    setProfitFromInput(from);
+    setProfitToInput(to);
+    setProfitDatePreset(preset);
+  };
+
+  const profitFilters = useMemo(() => {
+    if (appliedProfitFrom || appliedProfitTo) {
+      return { from: appliedProfitFrom || undefined, to: appliedProfitTo || undefined };
+    }
+    return undefined;
+  }, [appliedProfitFrom, appliedProfitTo]);
+
   // Data Queries (Active only when unlocked)
   const duesQ = useDueSnapshot({ search: "", dateRange: "", paymentStatus: "", from: "", to: "" }, isUnlocked);
   const stockQ = useKhatabookStock(isUnlocked);
-  const profitQ = useKhatabookProfit(isUnlocked);
+  const profitQ = useKhatabookProfit(profitFilters, isUnlocked);
 
   // Automatically refresh Khatabook ledger, stock and profit upon screen focus
   useFocusEffect(
@@ -1054,6 +1093,112 @@ export function DuesScreen() {
                   <AppText role="caption" style={{ color: "#92400e" }}>{formatINR(profitQ.data.costingCoverage.uncostedRevenue)} बिक्री को मुनाफे में शामिल नहीं किया गया।</AppText>
                 </Card>
               )}
+
+              {/* Date Range Filter Card */}
+              <Card style={{ gap: 10, padding: 12 }}>
+                <View style={s.rowBetween}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Ionicons name="calendar" size={16} color={t.colors.brand} />
+                    <AppText style={{ fontSize: 13, fontWeight: "800", color: t.colors.text }}>
+                      अवधि चुनें (Date Filter)
+                    </AppText>
+                  </View>
+                  {(appliedProfitFrom || appliedProfitTo) && (
+                    <Pressable onPress={() => applyProfitDateFilter("", "", "ALL")} hitSlop={8}>
+                      <AppText style={{ color: "#dc2626", fontSize: 12, fontWeight: "700" }}>
+                        रीसेट (Clear) ✕
+                      </AppText>
+                    </Pressable>
+                  )}
+                </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  <FilterChip
+                    label="📅 सभी (All Time)"
+                    selected={profitDatePreset === "ALL"}
+                    onPress={() => applyProfitDateFilter("", "", "ALL")}
+                  />
+                  <FilterChip
+                    label="🟢 आज (Today)"
+                    selected={profitDatePreset === "TODAY"}
+                    onPress={() => applyProfitDateFilter(getTodayIso(), getTodayIso(), "TODAY")}
+                  />
+                  <FilterChip
+                    label="🔵 इस महीने (This Month)"
+                    selected={profitDatePreset === "THIS_MONTH"}
+                    onPress={() => applyProfitDateFilter(getMonthStartIso(), getTodayIso(), "THIS_MONTH")}
+                  />
+                  <FilterChip
+                    label={
+                      appliedProfitFrom || appliedProfitTo
+                        ? `🗓️ ${appliedProfitFrom || 'Start'} से ${appliedProfitTo || 'Today'}`
+                        : "🗓️ तारीख से तारीख (Custom)"
+                    }
+                    selected={profitDatePreset === "CUSTOM"}
+                    onPress={() => setShowProfitDateModal(true)}
+                  />
+                </ScrollView>
+              </Card>
+
+              {/* Custom Date Range Active Highlight Banner */}
+              {(appliedProfitFrom || appliedProfitTo) && profitQ.data?.customRange && (
+                <Card style={{ gap: 10, padding: 14, backgroundColor: "#eff6ff", borderColor: "#3b82f6", borderWidth: 1.5 }}>
+                  <View style={s.rowBetween}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#3b82f6", alignItems: "center", justifyContent: "center" }}>
+                        <Ionicons name="calendar-outline" size={16} color="#ffffff" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <AppText style={{ color: "#1e40af", fontWeight: "900", fontSize: 14 }}>
+                          कस्टम अवधि का कुल मुनाफा
+                        </AppText>
+                        <AppText role="caption" style={{ color: "#3b82f6", fontWeight: "700" }}>
+                          📅 {appliedProfitFrom || "शुरुआत"} से {appliedProfitTo || "आज"} तक
+                        </AppText>
+                      </View>
+                    </View>
+                    <Pressable
+                      onPress={() => setShowProfitDateModal(true)}
+                      style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#bfdbfe" }}
+                    >
+                      <AppText style={{ color: "#1d4ed8", fontSize: 11, fontWeight: "800" }}>
+                        ✏️ बदलें
+                      </AppText>
+                    </Pressable>
+                  </View>
+
+                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 2 }}>
+                    <AppText style={{ fontSize: 26, fontWeight: "900", color: "#15803d" }}>
+                      {formatINR(profitQ.data.customRange.netProfit)}
+                    </AppText>
+                    <AppText style={{ fontSize: 12, color: "#166534", fontWeight: "700" }}>
+                      ({profitQ.data.customRange.ordersCount} ऑर्डर्स)
+                    </AppText>
+                  </View>
+
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 8, borderTopWidth: 1, borderTopColor: "#bfdbfe" }}>
+                    <View>
+                      <AppText role="caption" style={{ color: "#64748b" }}>कुल बिक्री राजस्व</AppText>
+                      <AppText style={{ color: "#1e293b", fontSize: 13, fontWeight: "800" }}>
+                        {formatINR(profitQ.data.customRange.totalRevenue)}
+                      </AppText>
+                    </View>
+                    <View>
+                      <AppText role="caption" style={{ color: "#64748b" }}>क्रय लागत</AppText>
+                      <AppText style={{ color: "#1e293b", fontSize: 13, fontWeight: "800" }}>
+                        {formatINR(profitQ.data.customRange.totalCost)}
+                      </AppText>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <AppText role="caption" style={{ color: "#64748b" }}>दी गई छूट</AppText>
+                      <AppText style={{ color: "#dc2626", fontSize: 13, fontWeight: "800" }}>
+                        -{formatINR(profitQ.data.customRange.discountGiven)}
+                      </AppText>
+                    </View>
+                  </View>
+                </Card>
+              )}
+
               {/* 4 Hero KPI Cards */}
               <View style={s.kpiGrid}>
                 {/* Today Profit */}
@@ -1827,6 +1972,101 @@ export function DuesScreen() {
       </ModalShell>
 
       {/* ========================================== */}
+      {/* PROFIT DATE RANGE MODAL                    */}
+      {/* ========================================== */}
+      <ModalShell
+        visible={showProfitDateModal}
+        onClose={() => setShowProfitDateModal(false)}
+        title="तारीख के अनुसार मुनाफा निकालें"
+      >
+        <View style={{ gap: 14 }}>
+          <AppText style={{ color: t.colors.textSecondary, fontSize: 13 }}>
+            शुरुआती और अंतिम तारीख चुनकर उस अवधि का शुद्ध लाभ व बिक्री का हिसाब देखें:
+          </AppText>
+          {profitFilterError && (
+            <AppText style={{ color: t.colors.danger, fontSize: 13, fontWeight: "700" }}>
+              {profitFilterError}
+            </AppText>
+          )}
+
+          <Input
+            label="प्रारंभिक तारीख (From Date)"
+            placeholder="YYYY-MM-DD (उदा. 2026-08-01)"
+            value={profitFromInput}
+            onChangeText={setProfitFromInput}
+            prefix={<Ionicons name="calendar-outline" size={18} color={t.colors.textMuted} />}
+            helper="वर्ष-महीना-दिन प्रारूप (YYYY-MM-DD)"
+          />
+
+          <Input
+            label="अंतिम तारीख (To Date)"
+            placeholder="YYYY-MM-DD (उदा. 2026-09-02)"
+            value={profitToInput}
+            onChangeText={setProfitToInput}
+            prefix={<Ionicons name="calendar-outline" size={18} color={t.colors.textMuted} />}
+            helper="वर्ष-महीना-दिन प्रारूप (YYYY-MM-DD)"
+          />
+
+          <View style={{ gap: 6 }}>
+            <AppText role="caption" style={{ color: t.colors.textMuted, fontWeight: "700" }}>
+              त्वरित विकल्प (Quick Presets):
+            </AppText>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <Button
+                title="आज (Today)"
+                variant="outline"
+                onPress={() => {
+                  setProfitFromInput(getTodayIso());
+                  setProfitToInput(getTodayIso());
+                }}
+              />
+              <Button
+                title="इस महीने (This Month)"
+                variant="outline"
+                onPress={() => {
+                  setProfitFromInput(getMonthStartIso());
+                  setProfitToInput(getTodayIso());
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={s.rowBetween}>
+            <Button
+              title="रद्द करें (Cancel)"
+              variant="outline"
+              style={{ flex: 1 }}
+              onPress={() => setShowProfitDateModal(false)}
+            />
+            <Button
+              title="मुनाफा निकालें (Apply)"
+              style={{ flex: 1 }}
+              onPress={() => {
+                const from = profitFromInput.trim();
+                const to = profitToInput.trim();
+                const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+                if (!from && !to) {
+                  setProfitFilterError("कम से कम एक तारीख दर्ज करें");
+                  return;
+                }
+                if ((from && !isoDate.test(from)) || (to && !isoDate.test(to))) {
+                  setProfitFilterError("तारीख YYYY-MM-DD प्रारूप में दर्ज करें");
+                  return;
+                }
+                if (from && to && from > to) {
+                  setProfitFilterError("प्रारंभिक तारीख अंतिम तारीख के बाद नहीं हो सकती");
+                  return;
+                }
+                setProfitFilterError(null);
+                applyProfitDateFilter(from, to, "CUSTOM");
+                setShowProfitDateModal(false);
+              }}
+            />
+          </View>
+        </View>
+      </ModalShell>
+
+      {/* ========================================== */}
       {/* ADD STOCK MODAL                            */}
       {/* ========================================== */}
       <AddStockModal
@@ -1859,6 +2099,7 @@ export function DuesScreen() {
         visible={!!selectedHistoryProduct}
         onClose={() => setSelectedHistoryProduct(null)}
         title="स्टॉक इतिहास (Stock History)"
+        scrollable={false}
       >
         {selectedHistoryProduct && (
           <StockHistoryModalContent
@@ -2268,138 +2509,203 @@ function StockHistoryModalContent({
           justifyContent: "space-between",
           alignItems: "center",
           padding: 12,
-          borderRadius: 12,
+          borderRadius: 14,
           backgroundColor: t.colors.surfaceMuted,
+          borderWidth: 1,
+          borderColor: t.colors.border,
         }}
       >
-        <View style={{ flex: 1 }}>
-          <AppText role="bodyStrong" numberOfLines={1}>{product.name}</AppText>
-          <AppText role="caption" style={{ color: t.colors.textSecondary }}>
-            {product.category?.name || "General"} · इकाई: {product.unit}
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <AppText role="bodyStrong" numberOfLines={1} style={{ fontSize: 16 }}>
+            {product.name}
+          </AppText>
+          <AppText role="caption" style={{ color: t.colors.textSecondary, marginTop: 2 }}>
+            📂 {product.category?.name || "General"} · इकाई: {product.unit}
           </AppText>
         </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <AppText role="caption" style={{ color: t.colors.textMuted }}>वर्तमान स्टॉक</AppText>
-          <AppText style={{ fontWeight: "900", fontSize: 16, color: product.stock <= 0 ? "#dc2626" : product.stock <= 10 ? "#d97706" : t.colors.brand }}>
+        <View style={{ alignItems: "flex-end", backgroundColor: t.colors.surfaceElevated, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 }}>
+          <AppText role="caption" style={{ color: t.colors.textMuted, fontSize: 11 }}>वर्तमान स्टॉक</AppText>
+          <AppText style={{ fontWeight: "900", fontSize: 16, color: product.stock <= 0 ? "#dc2626" : product.stock <= 10 ? "#d97706" : "#16a34a" }}>
             {product.stock} {product.unit}
           </AppText>
         </View>
       </View>
 
       {/* Filter chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-        <FilterChip label="सभी (All)" selected={filter === "ALL"} onPress={() => setFilter("ALL")} />
-        <FilterChip label="+ स्टॉक आया (Added)" selected={filter === "ADD"} onPress={() => setFilter("ADD")} />
-        <FilterChip label="- स्टॉक घटाया (Removed)" selected={filter === "REMOVE"} onPress={() => setFilter("REMOVE")} />
-        <FilterChip label="🛒 बिक्री ऑर्डर (Orders)" selected={filter === "ORDER"} onPress={() => setFilter("ORDER")} />
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 8, paddingHorizontal: 2, paddingVertical: 2 }}
+      >
+        <FilterChip
+          label={`सभी (${items.length})`}
+          selected={filter === "ALL"}
+          onPress={() => setFilter("ALL")}
+        />
+        <FilterChip
+          label="🟢 + आया (Stock In)"
+          selected={filter === "ADD"}
+          onPress={() => setFilter("ADD")}
+        />
+        <FilterChip
+          label="🔴 - घटाया (Stock Out)"
+          selected={filter === "REMOVE"}
+          onPress={() => setFilter("REMOVE")}
+        />
+        <FilterChip
+          label="🔵 🛒 बिक्री (Orders)"
+          selected={filter === "ORDER"}
+          onPress={() => setFilter("ORDER")}
+        />
       </ScrollView>
 
-      {/* Timeline items */}
+      {/* Timeline items with smooth scroll */}
       {historyQ.isPending ? (
         <LoadingState label="स्टॉक इतिहास लोड हो रहा है…" />
       ) : historyQ.isError ? (
         <ErrorState description={historyQ.error?.message ?? "Failed to load stock history"} onRetry={() => historyQ.refetch()} />
       ) : filteredItems.length === 0 ? (
-        <EmptyState title="कोई गतिविधि नहीं मिली" description="इस उत्पाद के लिए अभी तक कोई स्टॉक मूवमेंट दर्ज नहीं है।" />
+        <EmptyState title="कोई गतिविधि नहीं मिली" description="इस श्रेणी में अभी तक कोई स्टॉक मूवमेंट दर्ज नहीं है।" />
       ) : (
-        <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ gap: 10 }}>
+        <ScrollView
+          nestedScrollEnabled={true}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+          keyboardShouldPersistTaps="handled"
+          style={{ maxHeight: 420 }}
+          contentContainerStyle={{ gap: 10, paddingBottom: 8 }}
+        >
           {filteredItems.map((item: any, idx: number) => {
             const isAdd = item.type === "ADD";
             const isRemove = item.type === "REMOVE";
             const isOrder = item.type === "ORDER";
 
-            const tone = isAdd ? "success" : isOrder ? "info" : "danger";
-            const icon = isAdd ? "arrow-down-circle" : isOrder ? "cart" : "arrow-up-circle";
-            const label = isAdd ? "+ स्टॉक जोड़ा गया" : isOrder ? "🛒 बिक्री ऑर्डर" : "- स्टॉक घटाया गया";
+            const cardBg = isAdd ? "#f0fdf4" : isOrder ? "#f0f9ff" : "#fef2f2";
+            const cardBorder = isAdd ? "#86efac" : isOrder ? "#93c5fd" : "#fca5a5";
+            const iconName = isAdd ? "arrow-down-circle" : isOrder ? "cart" : "arrow-up-circle";
+            const iconColor = isAdd ? "#16a34a" : isOrder ? "#0284c7" : "#dc2626";
+            const typeTitle = isAdd
+              ? "🟢 + स्टॉक आया (Stock Added)"
+              : isOrder
+              ? "🔵 🛒 ग्राहक को बेचा (Customer Order)"
+              : "🔴 - स्टॉक घटाया (Stock Removed)";
 
             return (
               <View
                 key={item.id || idx}
                 style={{
-                  borderWidth: 1,
-                  borderColor: t.colors.border,
-                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: cardBorder,
+                  borderRadius: 14,
                   padding: 12,
-                  backgroundColor: t.colors.surface,
-                  gap: 6,
+                  backgroundColor: cardBg,
+                  gap: 8,
                 }}
               >
+                {/* Header Row */}
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Ionicons
-                      name={icon as any}
-                      size={16}
-                      color={isAdd ? "#15803d" : isOrder ? "#0284c7" : "#dc2626"}
-                    />
-                    <StatusBadge label={label} tone={tone} />
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, paddingRight: 6 }}>
+                    <Ionicons name={iconName as any} size={18} color={iconColor} />
+                    <AppText style={{ fontWeight: "800", fontSize: 13, color: iconColor }} numberOfLines={1}>
+                      {typeTitle}
+                    </AppText>
                   </View>
-                  <AppText style={{ fontWeight: "900", fontSize: 14, color: isAdd ? "#15803d" : "#dc2626" }}>
-                    {isAdd ? "+" : "-"}{item.quantity} {product.unit}
-                  </AppText>
+                  <View style={{ backgroundColor: "#ffffff", paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: cardBorder }}>
+                    <AppText style={{ fontWeight: "900", fontSize: 14, color: iconColor }}>
+                      {isAdd ? "+" : "-"}{item.quantity} {product.unit}
+                    </AppText>
+                  </View>
                 </View>
 
-                {isOrder ? (
-                  <View style={{ backgroundColor: "rgba(2, 132, 199, 0.08)", padding: 8, borderRadius: 8, gap: 4 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                      <AppText style={{ color: "#0369a1", fontSize: 12, fontWeight: "700" }}>
-                        👤 ग्राहक: {item.customerName || "Customer"}
+                {/* Customer Order Details */}
+                {isOrder && (
+                  <View style={{ backgroundColor: "#ffffff", padding: 10, borderRadius: 10, borderWidth: 1, borderColor: "#bfdbfe", gap: 4 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <AppText style={{ color: "#0369a1", fontSize: 13, fontWeight: "800" }}>
+                        👤 {item.customerName || "Customer"}
                       </AppText>
                       {item.orderNumber && (
-                        <AppText style={{ color: "#0369a1", fontSize: 11, fontWeight: "600" }}>
-                          #{item.orderNumber}
-                        </AppText>
+                        <View style={{ backgroundColor: "#e0f2fe", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                          <AppText style={{ color: "#0369a1", fontSize: 11, fontWeight: "700" }}>
+                            #{item.orderNumber}
+                          </AppText>
+                        </View>
                       )}
                     </View>
                     {item.customerMobile && (
-                      <AppText role="caption" style={{ color: t.colors.textSecondary }}>
-                        📞 {item.customerMobile}
+                      <AppText role="caption" style={{ color: "#475569", fontWeight: "600" }}>
+                        📞 मोबाइल: {item.customerMobile}
                       </AppText>
                     )}
                   </View>
-                ) : null}
-
-                {item.oldStock !== undefined && item.newStock !== undefined && (
-                  <AppText role="caption" style={{ color: t.colors.textSecondary }}>
-                    स्टॉक परिवर्तन: <AppText style={{ fontWeight: "700" }}>{item.oldStock}</AppText>
-                    {" ➔ "}
-                    <AppText style={{ fontWeight: "700" }}>{item.newStock} {product.unit}</AppText>
-                  </AppText>
                 )}
 
+                {/* Stock Transition Box */}
+                {item.oldStock !== undefined && item.newStock !== undefined && (
+                  <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.7)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, gap: 8 }}>
+                    <AppText style={{ fontSize: 12, color: t.colors.textSecondary, fontWeight: "600" }}>
+                      स्टॉक:
+                    </AppText>
+                    <AppText style={{ fontSize: 12, fontWeight: "800", color: t.colors.text }}>
+                      {item.oldStock} {product.unit}
+                    </AppText>
+                    <AppText style={{ fontSize: 12, fontWeight: "900", color: iconColor }}>
+                      ➔
+                    </AppText>
+                    <AppText style={{ fontSize: 12, fontWeight: "900", color: iconColor }}>
+                      {item.newStock} {product.unit}
+                    </AppText>
+                  </View>
+                )}
+
+                {/* Reason / Details */}
                 {item.reason && !isOrder && (
-                  <AppText role="caption" style={{ color: t.colors.text }}>
-                    📌 कारण: <AppText style={{ fontWeight: "600" }}>{item.reason}</AppText>
-                  </AppText>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <AppText style={{ fontSize: 12, color: "#1e293b", fontWeight: "600" }}>
+                      📌 कारण: <AppText style={{ fontWeight: "700" }}>{item.reason}</AppText>
+                    </AppText>
+                  </View>
                 )}
 
                 {item.supplier && (
-                  <AppText role="caption" style={{ color: t.colors.textMuted }}>
-                    🏢 सप्लायर: {item.supplier}
+                  <AppText role="caption" style={{ color: "#334155", fontWeight: "600" }}>
+                    🏢 सप्लायर: <AppText style={{ fontWeight: "700" }}>{item.supplier}</AppText>
                   </AppText>
                 )}
 
                 {item.purchaseRate && (
-                  <AppText role="caption" style={{ color: t.colors.textMuted }}>
+                  <AppText role="caption" style={{ color: "#15803d", fontWeight: "700" }}>
                     💰 खरीद दर: {formatINR(item.purchaseRate)} / {product.unit}
                   </AppText>
                 )}
 
                 {item.note && !isOrder && (
-                  <AppText role="caption" style={{ color: t.colors.textMuted, fontStyle: "italic" }}>
-                    📝 {item.note}
+                  <AppText role="caption" style={{ color: "#475569", fontStyle: "italic" }}>
+                    📝 नोट: {item.note}
                   </AppText>
                 )}
 
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: t.colors.border }}>
+                {/* Footer Time & Admin */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 2,
+                    paddingTop: 6,
+                    borderTopWidth: 1,
+                    borderTopColor: "rgba(0,0,0,0.06)",
+                  }}
+                >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Ionicons name="time-outline" size={13} color={t.colors.textSecondary} />
-                    <AppText style={{ color: t.colors.text, fontSize: 11, fontWeight: "700" }}>
+                    <Ionicons name="time-outline" size={13} color="#64748b" />
+                    <AppText style={{ color: "#334155", fontSize: 11, fontWeight: "700" }}>
                       {formatDateTime(item.createdAt)}
                     </AppText>
                   </View>
                   {item.adminUsername && (
-                    <AppText role="caption" style={{ color: t.colors.textMuted, fontSize: 10 }}>
-                      द्वारा: {item.adminUsername}
+                    <AppText role="caption" style={{ color: "#64748b", fontSize: 10, fontWeight: "600" }}>
+                      दर्जकर्ता: {item.adminUsername}
                     </AppText>
                   )}
                 </View>

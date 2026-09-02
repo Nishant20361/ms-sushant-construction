@@ -101,6 +101,11 @@ export default function Khatabook() {
   const [profitData, setProfitData] = useState<ProfitAnalyticsData | null>(null);
   const [profitLoading, setProfitLoading] = useState(false);
   const [profitError, setProfitError] = useState<string | null>(null);
+  const [profitFromInput, setProfitFromInput] = useState("");
+  const [profitToInput, setProfitToInput] = useState("");
+  const [appliedProfitFrom, setAppliedProfitFrom] = useState("");
+  const [appliedProfitTo, setAppliedProfitTo] = useState("");
+  const [profitPreset, setProfitPreset] = useState<"ALL" | "TODAY" | "THIS_MONTH" | "CUSTOM">("ALL");
 
   // Stock Khata State
   const [products, setProducts] = useState<Product[]>([]);
@@ -150,12 +155,13 @@ export default function Khatabook() {
   }, [isUnlocked, search]);
 
   // Load Profit Analytics (only when unlocked)
-  const loadProfit = useCallback(() => {
+  const loadProfit = useCallback((from?: string, to?: string) => {
     if (!isUnlocked) return;
     setProfitLoading(true);
     setProfitError(null);
+    const filters = (from || to) ? { from, to } : undefined;
     adminApi
-      .getKhatabookProfit()
+      .getKhatabookProfit(filters)
       .then((data) => setProfitData(data))
       .catch(() => setProfitError("मुनाफा डेटा लोड नहीं हो सका"))
       .finally(() => setProfitLoading(false));
@@ -1128,6 +1134,164 @@ export default function Khatabook() {
                   <p className="mt-1 text-xs">{formatINR(profitData.costingCoverage.uncostedRevenue)} बिक्री को मुनाफे में शामिल नहीं किया गया। सही रिपोर्ट के लिए नया स्टॉक खरीद लागत के साथ जोड़ें।</p>
                 </div>
               )}
+
+              {/* Date Filter Controls */}
+              <div className="card p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 font-bold text-slate-800 text-sm">
+                    <Calendar className="h-4 w-4 text-emerald-600" />
+                    <span>तारीख अनुसार मुनाफा निकालें (Filter Profit by Date)</span>
+                  </div>
+                  {(appliedProfitFrom || appliedProfitTo) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppliedProfitFrom("");
+                        setAppliedProfitTo("");
+                        setProfitFromInput("");
+                        setProfitToInput("");
+                        setProfitPreset("ALL");
+                        loadProfit();
+                      }}
+                      className="text-xs text-red-600 hover:text-red-700 font-semibold"
+                    >
+                      रीसेट (Clear Filter) ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppliedProfitFrom("");
+                        setAppliedProfitTo("");
+                        setProfitFromInput("");
+                        setProfitToInput("");
+                        setProfitPreset("ALL");
+                        loadProfit();
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                        profitPreset === "ALL"
+                          ? "bg-emerald-700 text-white shadow-sm"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                    >
+                      सभी (All Time)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                        setAppliedProfitFrom(today);
+                        setAppliedProfitTo(today);
+                        setProfitFromInput(today);
+                        setProfitToInput(today);
+                        setProfitPreset("TODAY");
+                        loadProfit(today, today);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                        profitPreset === "TODAY"
+                          ? "bg-emerald-700 text-white shadow-sm"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                    >
+                      आज (Today)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+                        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                        setAppliedProfitFrom(start);
+                        setAppliedProfitTo(today);
+                        setProfitFromInput(start);
+                        setProfitToInput(today);
+                        setProfitPreset("THIS_MONTH");
+                        loadProfit(start, today);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                        profitPreset === "THIS_MONTH"
+                          ? "bg-emerald-700 text-white shadow-sm"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                    >
+                      इस महीने (This Month)
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-auto">
+                    <input
+                      type="date"
+                      value={profitFromInput}
+                      onChange={(e) => setProfitFromInput(e.target.value)}
+                      className="input py-1 px-2 text-xs"
+                    />
+                    <span className="text-xs text-slate-400">से</span>
+                    <input
+                      type="date"
+                      value={profitToInput}
+                      onChange={(e) => setProfitToInput(e.target.value)}
+                      className="input py-1 px-2 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (profitFromInput || profitToInput) {
+                          if (profitFromInput && profitToInput && profitFromInput > profitToInput) {
+                            setProfitError("प्रारंभिक तारीख अंतिम तारीख के बाद नहीं हो सकती");
+                            return;
+                          }
+                          setAppliedProfitFrom(profitFromInput);
+                          setAppliedProfitTo(profitToInput);
+                          setProfitPreset("CUSTOM");
+                          loadProfit(profitFromInput || undefined, profitToInput || undefined);
+                        }
+                      }}
+                      className="btn btn-primary py-1 px-3 text-xs"
+                    >
+                      लागू करें (Filter)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom Date Range Active Banner */}
+              {(appliedProfitFrom || appliedProfitTo) && profitData.customRange && (
+                <div className="rounded-2xl border-2 border-blue-400 bg-gradient-to-r from-blue-50 via-white to-blue-50 p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-2">
+                      <span>🗓️</span>
+                      <span>कस्टम अवधि का कुल मुनाफा (Custom Period Profit): {appliedProfitFrom || "Start"} से {appliedProfitTo || "Today"}</span>
+                    </span>
+                    <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full">
+                      {profitData.customRange.ordersCount} ऑर्डर्स
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-1">
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">शुद्ध मुनाफा (Net Profit)</p>
+                      <p className="text-2xl font-black text-emerald-700">{formatINR(profitData.customRange.netProfit)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">कुल बिक्री (Revenue)</p>
+                      <p className="text-lg font-bold text-slate-800">{formatINR(profitData.customRange.totalRevenue)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">क्रय लागत (COGS Cost)</p>
+                      <p className="text-lg font-bold text-slate-800">{formatINR(profitData.customRange.totalCost)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">दी गई छूट (Discount)</p>
+                      <p className="text-lg font-bold text-red-600">-{formatINR(profitData.customRange.discountGiven)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* 4 Main Profit KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Daily Profit Card */}

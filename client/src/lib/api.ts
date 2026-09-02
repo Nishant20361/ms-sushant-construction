@@ -605,8 +605,12 @@ const q = new URLSearchParams();
   getAnalyticsProducts(): Promise<{ products: { id: number; name: string; unit: string; category: { name: string } | null }[] }> {
     return request("/admin/analytics/products");
   },
-  getKhatabookProfit(): Promise<import("../types").ProfitAnalyticsData> {
-    return request("/admin/khatabook/profit");
+  getKhatabookProfit(filters?: { from?: string; to?: string }): Promise<import("../types").ProfitAnalyticsData> {
+    const params = new URLSearchParams();
+    if (filters?.from) params.set("from", filters.from);
+    if (filters?.to) params.set("to", filters.to);
+    const qs = params.toString();
+    return request(qs ? `/admin/khatabook/profit?${qs}` : "/admin/khatabook/profit");
   },
   getProductBatches(id: number): Promise<{ product: import("../types").Product; batches: import("../types").ProductPurchaseBatch[] }> {
     return request(`/admin/products/${id}/batches`);

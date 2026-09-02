@@ -135,6 +135,18 @@ export interface ProfitAnalyticsData {
     netProfit: number;
     ordersCount: number;
   };
+  customRange: {
+    from: string;
+    to: string;
+    grossProfit: number;
+    discountGiven: number;
+    netProfit: number;
+    totalRevenue: number;
+    totalCost: number;
+    ordersCount: number;
+    productProfits: ProductProfitItem[];
+  } | null;
+  allProductProfits: ProductProfitItem[];
   currentStockValuation: number;
   activeBatchesCount: number;
   costingCoverage: { uncostedRevenue: number; uncostedUnits: number; isComplete: boolean };

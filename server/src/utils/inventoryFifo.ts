@@ -219,7 +219,10 @@ export async function restoreInventoryFifo(
 /**
  * Comprehensive Profit & Loss Analytics Engine for Khatabook.
  */
-export async function getProfitAnalytics(prisma: PrismaClient) {
+export async function getProfitAnalytics(
+  prisma: PrismaClient,
+  options?: { from?: string; to?: string }
+) {
   const now = new Date();
   const IST_OFFSET_MS = 330 * 60 * 1000;
   const istNow = new Date(now.getTime() + IST_OFFSET_MS);
@@ -227,6 +230,16 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
   const monthStart = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - IST_OFFSET_MS);
   const monthEnd = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth() + 1, 1) - IST_OFFSET_MS - 1);
+
+  // Parse custom range if provided
+  let customStart: Date | null = null;
+  let customEnd: Date | null = null;
+  if (options?.from && options.from.trim()) {
+    customStart = new Date(`${options.from.trim()}T00:00:00+05:30`);
+  }
+  if (options?.to && options.to.trim()) {
+    customEnd = new Date(`${options.to.trim()}T23:59:59.999+05:30`);
+  }
 
   // 1. Fetch non-cancelled orders with their items, cost allocations, and bills
   const orders = await prisma.order.findMany({
@@ -262,8 +275,31 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
   let uncostedRevenue = new Decimal(0);
   let uncostedUnits = 0;
 
-  // Product-wise aggregation
+  // Custom range buckets
+  let customGross = new Decimal(0);
+  let customDiscount = new Decimal(0);
+  let customRevenue = new Decimal(0);
+  let customCost = new Decimal(0);
+  let customOrdersCount = 0;
+
+  // Product-wise aggregation (All-time or custom)
   const productMap = new Map<
+    number,
+    {
+      productId: number;
+      productName: string;
+      categoryName: string;
+      unit: string;
+      unitsSold: number;
+      totalRevenue: Decimal;
+      totalCost: Decimal;
+      grossProfit: Decimal;
+      discountGiven: Decimal;
+      uncostedRevenue: Decimal;
+    }
+  >();
+
+  const customProductMap = new Map<
     number,
     {
       productId: number;
@@ -283,8 +319,12 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
     const createdAt = new Date(o.createdAt);
     const isToday = createdAt >= todayStart && createdAt <= todayEnd;
     const isThisMonth = createdAt >= monthStart && createdAt <= monthEnd;
+    const isCustom =
+      (!customStart || createdAt >= customStart) && (!customEnd || createdAt <= customEnd);
 
     let orderGross = new Decimal(0);
+    let orderCost = new Decimal(0);
+    let orderRevenue = new Decimal(0);
     const orderDiscount = o.bill ? new Decimal(o.bill.discount) : new Decimal(0);
 
     for (const item of o.items) {
@@ -306,7 +346,6 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
           }
         }
       } else {
-        // Historic order cost is unknown: report revenue, never fake profit.
         itemRevenue = new Decimal(item.total);
         itemCost = new Decimal(0);
         itemGross = new Decimal(0);
@@ -315,8 +354,10 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
       }
 
       orderGross = orderGross.add(itemGross);
+      orderCost = orderCost.add(itemCost);
+      orderRevenue = orderRevenue.add(itemRevenue);
 
-      // Product-wise map
+      // Product-wise map (All-time)
       const prodId = item.productId;
       if (!productMap.has(prodId)) {
         productMap.set(prodId, {
@@ -345,14 +386,47 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
             : new Decimal(item.total)
         );
       }
+
+      // Product-wise map (Custom Range)
+      if (isCustom && (customStart || customEnd)) {
+        if (!customProductMap.has(prodId)) {
+          customProductMap.set(prodId, {
+            productId: prodId,
+            productName: item.productName || item.product?.name || `Product #${prodId}`,
+            categoryName: item.product?.category?.name || "General",
+            unit: item.unit || item.product?.unit || "unit",
+            unitsSold: 0,
+            totalRevenue: new Decimal(0),
+            totalCost: new Decimal(0),
+            grossProfit: new Decimal(0),
+            discountGiven: new Decimal(0),
+            uncostedRevenue: new Decimal(0),
+          });
+        }
+        const cEntry = customProductMap.get(prodId)!;
+        cEntry.unitsSold += itemQty;
+        cEntry.totalRevenue = cEntry.totalRevenue.add(itemRevenue);
+        cEntry.totalCost = cEntry.totalCost.add(itemCost);
+        cEntry.grossProfit = cEntry.grossProfit.add(itemGross);
+        if (item.costAllocations?.some((allocation) => allocation.batchId === null) || !item.costAllocations?.length) {
+          cEntry.uncostedRevenue = cEntry.uncostedRevenue.add(
+            item.costAllocations?.length
+              ? item.costAllocations.filter((allocation) => allocation.batchId === null).reduce((sum, allocation) => sum.add(new Decimal(allocation.totalRevenue)), new Decimal(0))
+              : new Decimal(item.total)
+          );
+        }
+      }
     }
 
-    // Allocate order discount proportionally across products for true product net profit.
-    const orderRevenue = o.items.reduce((sum, item) => sum.add(new Decimal(item.total)), new Decimal(0));
-    if (orderDiscount.gt(0) && orderRevenue.gt(0)) {
+    // Allocate order discount proportionally
+    const oTotalRev = o.items.reduce((sum, item) => sum.add(new Decimal(item.total)), new Decimal(0));
+    if (orderDiscount.gt(0) && oTotalRev.gt(0)) {
       for (const item of o.items) {
-        const share = orderDiscount.mul(new Decimal(item.total)).div(orderRevenue);
+        const share = orderDiscount.mul(new Decimal(item.total)).div(oTotalRev);
         productMap.get(item.productId)!.discountGiven = productMap.get(item.productId)!.discountGiven.add(share);
+        if (isCustom && (customStart || customEnd) && customProductMap.has(item.productId)) {
+          customProductMap.get(item.productId)!.discountGiven = customProductMap.get(item.productId)!.discountGiven.add(share);
+        }
       }
     }
 
@@ -366,6 +440,13 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
       monthlyGross = monthlyGross.add(orderGross);
       monthlyDiscount = monthlyDiscount.add(orderDiscount);
       monthlyOrdersCount++;
+    }
+    if (isCustom && (customStart || customEnd)) {
+      customGross = customGross.add(orderGross);
+      customDiscount = customDiscount.add(orderDiscount);
+      customRevenue = customRevenue.add(orderRevenue);
+      customCost = customCost.add(orderCost);
+      customOrdersCount++;
     }
     allTimeGross = allTimeGross.add(orderGross);
     allTimeDiscount = allTimeDiscount.add(orderDiscount);
@@ -400,29 +481,34 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
     },
   });
 
-  const productProfits = Array.from(productMap.values()).map((p) => {
-    const netProfit = p.grossProfit.sub(p.discountGiven);
-    const marginPercent = p.totalRevenue.gt(0)
-      ? netProfit.div(p.totalRevenue).mul(100).toNumber()
-      : 0;
+  const formatProductProfits = (map: typeof productMap) => {
+    const list = Array.from(map.values()).map((p) => {
+      const netProfit = p.grossProfit.sub(p.discountGiven);
+      const marginPercent = p.totalRevenue.gt(0)
+        ? netProfit.div(p.totalRevenue).mul(100).toNumber()
+        : 0;
 
-    return {
-      productId: p.productId,
-      productName: p.productName,
-      categoryName: p.categoryName,
-      unit: p.unit,
-      unitsSold: Number(p.unitsSold.toFixed(2)),
-      totalRevenue: Number(p.totalRevenue.toFixed(2)),
-      totalCost: Number(p.totalCost.toFixed(2)),
-      grossProfit: Number(p.grossProfit.toFixed(2)),
-      discountGiven: Number(p.discountGiven.toFixed(2)),
-      netProfit: Number(netProfit.toFixed(2)),
-      marginPercent: Number(marginPercent.toFixed(1)),
-      uncostedRevenue: Number(p.uncostedRevenue.toFixed(2)),
-    };
-  });
+      return {
+        productId: p.productId,
+        productName: p.productName,
+        categoryName: p.categoryName,
+        unit: p.unit,
+        unitsSold: Number(p.unitsSold.toFixed(2)),
+        totalRevenue: Number(p.totalRevenue.toFixed(2)),
+        totalCost: Number(p.totalCost.toFixed(2)),
+        grossProfit: Number(p.grossProfit.toFixed(2)),
+        discountGiven: Number(p.discountGiven.toFixed(2)),
+        netProfit: Number(netProfit.toFixed(2)),
+        marginPercent: Number(marginPercent.toFixed(1)),
+        uncostedRevenue: Number(p.uncostedRevenue.toFixed(2)),
+      };
+    });
+    list.sort((a, b) => b.netProfit - a.netProfit);
+    return list;
+  };
 
-  productProfits.sort((a, b) => b.netProfit - a.netProfit);
+  const productProfits = formatProductProfits(productMap);
+  const customProductProfits = (customStart || customEnd) ? formatProductProfits(customProductMap) : null;
 
   return {
     dailyProfit: {
@@ -443,6 +529,19 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
       netProfit: Number(allTimeNet.toFixed(2)),
       ordersCount: allTimeOrdersCount,
     },
+    customRange: (customStart || customEnd)
+      ? {
+          from: options?.from || "",
+          to: options?.to || "",
+          grossProfit: Number(customGross.toFixed(2)),
+          discountGiven: Number(customDiscount.toFixed(2)),
+          netProfit: Number(customGross.sub(customDiscount).toFixed(2)),
+          totalRevenue: Number(customRevenue.toFixed(2)),
+          totalCost: Number(customCost.toFixed(2)),
+          ordersCount: customOrdersCount,
+          productProfits: customProductProfits || [],
+        }
+      : null,
     currentStockValuation: Number(totalStockValuation.toFixed(2)),
     activeBatchesCount: activeBatches.length,
     costingCoverage: {
@@ -450,7 +549,8 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
       uncostedUnits: Number(uncostedUnits.toFixed(3)),
       isComplete: uncostedRevenue.eq(0),
     },
-    productProfits,
+    productProfits: customProductProfits || productProfits,
+    allProductProfits: productProfits,
     recentBatches: recentBatches.map((b) => ({
       id: b.id,
       batchNumber: b.batchNumber,

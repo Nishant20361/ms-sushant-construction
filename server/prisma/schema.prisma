@@ -269,6 +269,10 @@ model SiteSetting {
   androidLatestBuild   Int     @default(0)
   androidApkUrl        String  @default("")
   androidUpdateMessage String  @default("")
+  khatabookPinHash     String?
+  khatabookRecoveryEmail String?
+  khatabookOtpHash     String?
+  khatabookOtpExpiresAt DateTime?
 }
 
 model AdminPasswordResetToken {

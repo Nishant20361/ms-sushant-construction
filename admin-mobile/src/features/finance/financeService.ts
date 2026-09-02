@@ -86,9 +86,14 @@ export const financeService = {
     });
     return Array.isArray(r.products) ? r.products.map(normalizeProduct) : [];
   },
-  profitAnalytics: async (signal?: AbortSignal) => {
-    return adminApiClient.request<import("./types").ProfitAnalyticsData>("/admin/khatabook/profit", {
-      signal,
-    });
+  profitAnalytics: async (filters?: { from?: string; to?: string }, signal?: AbortSignal) => {
+    const params = new URLSearchParams();
+    if (filters?.from) params.set("from", filters.from);
+    if (filters?.to) params.set("to", filters.to);
+    const qs = params.toString();
+    return adminApiClient.request<import("./types").ProfitAnalyticsData>(
+      qs ? `/admin/khatabook/profit?${qs}` : "/admin/khatabook/profit",
+      { signal }
+    );
   },
 };

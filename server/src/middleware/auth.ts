@@ -27,9 +27,8 @@ export async function requireAdmin(
       return next(new HttpError(401, "Account disabled or removed"));
     }
     if (admin.passwordChangedAt && payload.iat) {
-      const tokenIssuedAtMs = payload.iat * 1000;
-      const passwordChangedAtMs = admin.passwordChangedAt.getTime();
-      if (tokenIssuedAtMs < passwordChangedAtMs - 1000) {
+      const tokenIssuedAtMs = payload.sessionIssuedAtMs ?? payload.iat * 1000;
+      if (tokenIssuedAtMs <= admin.passwordChangedAt.getTime()) {
         return next(new HttpError(401, "Session expired due to password change"));
       }
     }
@@ -43,4 +42,3 @@ export async function requireAdmin(
     return next(new HttpError(401, "Invalid or expired session"));
   }
 }
-

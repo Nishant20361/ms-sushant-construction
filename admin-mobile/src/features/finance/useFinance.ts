@@ -50,10 +50,10 @@ export const useKhatabookStock = (enabled = true) =>
     enabled,
   });
 
-export const useKhatabookProfit = (enabled = true) =>
+export const useKhatabookProfit = (filters?: { from?: string; to?: string }, enabled = true) =>
   useQuery({
-    queryKey: adminQueryKeys.khatabookProfit(),
-    queryFn: ({ signal }) => financeService.profitAnalytics(signal),
+    queryKey: ["admin", "khatabook", "profit", filters?.from || "", filters?.to || ""],
+    queryFn: ({ signal }) => financeService.profitAnalytics(filters, signal),
     enabled,
   });
 

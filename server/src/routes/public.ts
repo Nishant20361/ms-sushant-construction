@@ -13,7 +13,7 @@ import { sendOrderNotificationEmail } from "../services/email.service.js";
 import { config } from "../config.js";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import { createAdminNotification, notifyStockTransitions } from "../services/push.service.js";
+import { notifyStockTransitions, notifyAllActiveAdmins } from "../services/push.service.js";
 import { quantityMatchesUnit } from "../utils/quantity.js";
 import { allocateInventoryFifo } from "../utils/inventoryFifo.js";
 
@@ -307,9 +307,17 @@ router.post(
         if (!sent) console.warn("[order] Notification email was not sent");
       }
 
-      if (admin) {
-        await createAdminNotification({adminId:admin.id,type:"NEW_ORDER",title:"New order received",message:`Order ${order.orderNumber} · ₹${Number(order.subtotal).toFixed(2)}`,orderId:order.id,orderNumber:order.orderNumber,customerName:order.customerName,metadata:{status:order.status},dedupeKey:`NEW_ORDER:${order.id}`});
-      }
+      await notifyAllActiveAdmins((adminId) => ({
+        adminId,
+        type: "NEW_ORDER",
+        title: `🔔 नया ऑर्डर प्राप्त हुआ! #${order.orderNumber}`,
+        message: `${order.customerName} · ₹${Number(order.subtotal).toLocaleString("en-IN")}`,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        metadata: { status: order.status },
+        dedupeKey: `NEW_ORDER:${order.id}:${adminId}`,
+      }));
     } catch (err: unknown) {
       console.error("[order] Admin notification error:", err);
     }

@@ -44,7 +44,7 @@ router.post(
 
     const isValid = await verifyKhatabookPin(pin.trim());
     if (!isValid) {
-      res.status(401).json({ error: "गलत पिन! कृपया पुनः प्रयास करें (Incorrect PIN)" });
+      res.status(400).json({ error: "गलत पिन! कृपया पुनः प्रयास करें (Incorrect PIN)", incorrectPin: true });
       return;
     }
 
@@ -98,7 +98,7 @@ router.post(
     }
 
     if (!authorized) {
-      res.status(401).json({ error: "वर्तमान पिन या एडमिन पासवर्ड गलत है (Incorrect current PIN or password)" });
+      res.status(400).json({ error: "वर्तमान पिन या एडमिन पासवर्ड गलत है (Incorrect current PIN or password)" });
       return;
     }
 

@@ -21,7 +21,8 @@ describe("React Native runtime regressions", () => {
 
   it("installs push response listeners only once", () => {
     const coordinator = source("./features/push/PushCoordinator.tsx");
-    expect(coordinator).toMatch(/addNotificationResponseReceivedListener[\s\S]*?\},\[\]\)/);
+    expect(coordinator.match(/addNotificationResponseReceivedListener/g) ?? []).toHaveLength(1);
+    expect(coordinator).toContain("}, []);");
   });
 
   it("does not decode Expo Router params a second time", () => {

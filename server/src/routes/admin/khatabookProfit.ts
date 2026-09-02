@@ -3,6 +3,7 @@ import { prisma } from "../../db.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { requireAdmin } from "../../middleware/auth.js";
 import { getProfitAnalytics } from "../../utils/inventoryFifo.js";
+import { parseProfitDateRange } from "../../utils/profitDateRange.js";
 
 const router = Router();
 
@@ -14,8 +15,9 @@ const router = Router();
 router.get(
   "/khatabook/profit",
   requireAdmin,
-  asyncHandler(async (_req, res) => {
-    const analytics = await getProfitAnalytics(prisma);
+  asyncHandler(async (req, res) => {
+    const range = parseProfitDateRange(req.query.from, req.query.to);
+    const analytics = await getProfitAnalytics(prisma, range);
     res.json(analytics);
   })
 );
