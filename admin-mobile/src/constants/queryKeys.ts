@@ -26,6 +26,7 @@ export const adminQueryKeys = {
   bill: (orderId: number) => [...adminQueryKeys.billing(), "order", orderId] as const,
   khatabookAuth: () => [...adminQueryKeys.dues(), "khatabookAuth"] as const,
   khatabookStock: () => [...adminQueryKeys.dues(), "khatabookStock"] as const,
+  khatabookProfit: () => [...adminQueryKeys.dues(), "khatabookProfit"] as const,
 } as const;
 
 // Business query hooks are intentionally deferred to their implementation phases.

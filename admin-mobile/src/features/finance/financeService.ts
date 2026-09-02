@@ -86,4 +86,9 @@ export const financeService = {
     });
     return Array.isArray(r.products) ? r.products.map(normalizeProduct) : [];
   },
+  profitAnalytics: async (signal?: AbortSignal) => {
+    return adminApiClient.request<import("./types").ProfitAnalyticsData>("/admin/khatabook/profit", {
+      signal,
+    });
+  },
 };

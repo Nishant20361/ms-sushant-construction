@@ -17,6 +17,7 @@ import {
   toPrismaDecimal,
 } from "../../utils/financials.js";
 import { normalizeIndianMobile } from "../../utils/validatePhone.js";
+import { allocateInventoryFifo, restoreInventoryFifo } from "../../utils/inventoryFifo.js";
 
 async function paymentNotification(
   adminId: number,
@@ -688,7 +689,7 @@ router.patch(
       });
 
       if (isCancelling) {
-        // Return stock for cancelled order items
+        // Return stock for cancelled order items and restore purchase batches
         for (const item of existing.items) {
           const qty = Number(item.quantity);
           if (qty > 0) {
@@ -696,10 +697,11 @@ router.patch(
               where: { id: item.productId },
               data: { stock: { increment: qty } },
             });
+            await restoreInventoryFifo(tx, item.id);
           }
         }
       } else if (isReactivating) {
-        // Re-decrement stock with availability check
+        // Re-decrement stock with availability check and re-allocate FIFO batches
         for (const item of existing.items) {
           const qty = Number(item.quantity);
           if (qty <= 0) continue;
@@ -714,6 +716,12 @@ router.patch(
           await tx.product.update({
             where: { id: item.productId },
             data: { stock: { decrement: qty } },
+          });
+          await allocateInventoryFifo(tx, {
+            orderItemId: item.id,
+            productId: item.productId,
+            quantity: qty,
+            sellingPricePerUnit: item.price,
           });
         }
       }

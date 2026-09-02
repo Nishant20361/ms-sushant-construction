@@ -98,11 +98,12 @@ model Product {
   stock       Float          @default(0)
   isActive    Boolean        @default(true)
   categoryId  Int
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  orderItems  OrderItem[]
-  category    Category       @relation(fields: [categoryId], references: [id])
-  images      ProductImage[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  orderItems      OrderItem[]
+  purchaseBatches ProductPurchaseBatch[]
+  category        Category               @relation(fields: [categoryId], references: [id])
+  images          ProductImage[]
 
   @@index([categoryId])
   @@index([isActive])
@@ -175,19 +176,60 @@ model Bill {
 }
 
 model OrderItem {
-  id          Int     @id @default(autoincrement())
-  orderId     Int
-  productId   Int
-  productName String
-  unit        String
-  price       Decimal @db.Decimal(12, 2)
-  quantity    Float
-  total       Decimal @db.Decimal(12, 2)
-  order       Order   @relation(fields: [orderId], references: [id])
-  product     Product @relation(fields: [productId], references: [id])
+  id              Int                       @id @default(autoincrement())
+  orderId         Int
+  productId       Int
+  productName     String
+  unit            String
+  price           Decimal                   @db.Decimal(12, 2)
+  quantity        Float
+  total           Decimal                   @db.Decimal(12, 2)
+  order           Order                     @relation(fields: [orderId], references: [id])
+  product         Product                   @relation(fields: [productId], references: [id])
+  costAllocations OrderItemCostAllocation[]
 
   @@index([orderId])
   @@index([productId])
+}
+
+model ProductPurchaseBatch {
+  id                Int                       @id @default(autoincrement())
+  productId         Int
+  batchNumber       String                    @unique @default(uuid())
+  supplierName      String?
+  invoiceNumber     String?
+  note              String?
+  initialQuantity   Float
+  remainingQuantity Float
+  costPricePerUnit  Decimal                   @db.Decimal(12, 2)
+  totalPurchaseCost Decimal                   @db.Decimal(12, 2)
+  purchaseDate      DateTime                  @default(now())
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  product           Product                   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  costAllocations   OrderItemCostAllocation[]
+
+  @@index([productId, remainingQuantity])
+  @@index([purchaseDate])
+}
+
+model OrderItemCostAllocation {
+  id                  Int                   @id @default(autoincrement())
+  orderItemId         Int
+  batchId             Int?
+  quantity            Float
+  costPricePerUnit    Decimal               @db.Decimal(12, 2)
+  sellingPricePerUnit Decimal               @db.Decimal(12, 2)
+  totalCost           Decimal               @db.Decimal(12, 2)
+  totalRevenue        Decimal               @db.Decimal(12, 2)
+  grossProfit         Decimal               @db.Decimal(12, 2)
+  createdAt           DateTime              @default(now())
+  orderItem           OrderItem             @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  purchaseBatch       ProductPurchaseBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([orderItemId])
+  @@index([batchId])
+  @@index([createdAt])
 }
 
 model SiteSetting {

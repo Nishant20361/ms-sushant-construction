@@ -50,6 +50,13 @@ export const useKhatabookStock = (enabled = true) =>
     enabled,
   });
 
+export const useKhatabookProfit = (enabled = true) =>
+  useQuery({
+    queryKey: adminQueryKeys.khatabookProfit(),
+    queryFn: ({ signal }) => financeService.profitAnalytics(signal),
+    enabled,
+  });
+
 export function useFinanceMutations() {
   const q = useQueryClient();
   const refresh = () =>

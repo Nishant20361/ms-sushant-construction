@@ -10,6 +10,7 @@ import { serializeProduct } from "../../utils/serializer.js";
 import { HttpError } from "../../utils/httpError.js";
 import { AuthenticatedRequest } from "../../types.js";
 import { notifyStockTransitions } from "../../services/push.service.js";
+import { createPurchaseBatch } from "../../utils/inventoryFifo.js";
 
 const stockAdjustmentSchema = z
   .object({
@@ -17,7 +18,10 @@ const stockAdjustmentSchema = z
     quantity: z.number().positive(),
     reason: z.string().max(200).optional(),
     purchaseRate: z.number().nonnegative().optional(),
+    totalPurchaseCost: z.number().nonnegative().optional(),
     supplier: z.string().max(200).optional(),
+    invoiceNumber: z.string().max(100).optional(),
+    purchaseDate: z.string().optional(),
     note: z.string().max(500).optional(),
   })
   .refine(
@@ -268,16 +272,35 @@ router.patch(
       throw new HttpError(400, "Stock cannot be negative.");
     }
 
-    const updated = await prisma.product.update({
-      where: { id },
-      data: { stock: nextStock },
-      include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
+    let batchRecord: any = null;
+    const updated = await prisma.$transaction(async (tx) => {
+      const p = await tx.product.update({
+        where: { id },
+        data: { stock: nextStock },
+        include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
+      });
+
+      if (body.action === "ADD" && (body.totalPurchaseCost !== undefined || body.purchaseRate !== undefined)) {
+        batchRecord = await createPurchaseBatch(tx, {
+          productId: id,
+          quantity: body.quantity,
+          totalPurchaseCost: body.totalPurchaseCost,
+          costPricePerUnit: body.purchaseRate,
+          supplierName: body.supplier,
+          invoiceNumber: body.invoiceNumber,
+          note: body.note,
+          purchaseDate: body.purchaseDate,
+        });
+      }
+      return p;
     });
 
     const extraParts = [];
     if (body.reason) extraParts.push(`Reason: ${body.reason}`);
     if (body.purchaseRate !== undefined) extraParts.push(`Rate: ₹${body.purchaseRate}`);
+    if (body.totalPurchaseCost !== undefined) extraParts.push(`Total Cost: ₹${body.totalPurchaseCost}`);
     if (body.supplier) extraParts.push(`Supplier: ${body.supplier}`);
+    if (body.invoiceNumber) extraParts.push(`Invoice: ${body.invoiceNumber}`);
     if (body.note) extraParts.push(`Note: ${body.note}`);
     const extraText = extraParts.length > 0 ? ` (${extraParts.join(" | ")})` : "";
 
@@ -293,7 +316,56 @@ router.patch(
       `STOCK_ADJUST:${updated.id}:${updated.updatedAt.toISOString()}`
     ).catch((e) => console.error("[push] Stock notification failed", e instanceof Error ? e.message : e));
 
-    res.json({ product: serializeProduct(updated) });
+    res.json({
+      product: serializeProduct(updated),
+      batch: batchRecord
+        ? {
+            id: batchRecord.id,
+            batchNumber: batchRecord.batchNumber,
+            costPricePerUnit: Number(batchRecord.costPricePerUnit),
+            totalPurchaseCost: Number(batchRecord.totalPurchaseCost),
+            initialQuantity: batchRecord.initialQuantity,
+            remainingQuantity: batchRecord.remainingQuantity,
+          }
+        : null,
+    });
+  })
+);
+
+// GET /api/admin/products/:id/batches
+// Lists all purchase batches (active and depleted) for a specific product.
+router.get(
+  "/products/:id/batches",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const id = parseIntegerParam(req.params.id, "product id");
+    const product = await prisma.product.findUnique({
+      where: { id },
+      select: { id: true, name: true, unit: true, stock: true },
+    });
+    if (!product) throw new HttpError(404, "Product not found");
+
+    const batches = await prisma.productPurchaseBatch.findMany({
+      where: { productId: id },
+      orderBy: { purchaseDate: "desc" },
+    });
+
+    res.json({
+      product,
+      batches: batches.map((b) => ({
+        id: b.id,
+        batchNumber: b.batchNumber,
+        supplierName: b.supplierName,
+        invoiceNumber: b.invoiceNumber,
+        note: b.note,
+        initialQuantity: b.initialQuantity,
+        remainingQuantity: b.remainingQuantity,
+        costPricePerUnit: Number(b.costPricePerUnit),
+        totalPurchaseCost: Number(b.totalPurchaseCost),
+        purchaseDate: b.purchaseDate.toISOString(),
+        createdAt: b.createdAt.toISOString(),
+      })),
+    });
   })
 );
 

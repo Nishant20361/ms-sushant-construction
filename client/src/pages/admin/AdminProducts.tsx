@@ -50,6 +50,10 @@ interface StockModalState {
   product: Product | null;
   action: "ADD" | "SET" | "DEDUCT";
   quantity: string;
+  totalPurchaseCost: string;
+  purchaseRate: string;
+  supplier: string;
+  invoiceNumber: string;
   reason: string;
 }
 
@@ -57,6 +61,10 @@ const EMPTY_STOCK_MODAL: StockModalState = {
   product: null,
   action: "ADD",
   quantity: "",
+  totalPurchaseCost: "",
+  purchaseRate: "",
+  supplier: "",
+  invoiceNumber: "",
   reason: "",
 };
 
@@ -142,10 +150,9 @@ export default function AdminProducts() {
 
   const openStockModal = (p: Product) => {
     setStockModal({
+      ...EMPTY_STOCK_MODAL,
       product: p,
       action: "ADD",
-      quantity: "",
-      reason: "",
     });
     setStockError(null);
   };
@@ -225,9 +232,16 @@ export default function AdminProducts() {
     setStockSaving(true);
     setStockError(null);
     try {
+      const totalCost = parseFloat(stockModal.totalPurchaseCost);
+      const rate = parseFloat(stockModal.purchaseRate);
+
       const result = await adminApi.adjustStock(stockModal.product.id, {
         action: stockModal.action,
         quantity: qty,
+        totalPurchaseCost: !Number.isNaN(totalCost) && totalCost >= 0 ? totalCost : undefined,
+        purchaseRate: !Number.isNaN(rate) && rate >= 0 ? rate : undefined,
+        supplier: stockModal.supplier || undefined,
+        invoiceNumber: stockModal.invoiceNumber || undefined,
         reason: stockModal.reason || undefined,
       });
 
@@ -702,7 +716,7 @@ export default function AdminProducts() {
             <div>
               <label className="label text-xs font-bold">
                 {stockModal.action === "ADD"
-                  ? "Quantity to Add *"
+                  ? "Quantity to Add (खरीदी गई मात्रा) *"
                   : stockModal.action === "SET"
                   ? "New Exact Total Stock *"
                   : "Quantity to Deduct *"}
@@ -714,7 +728,16 @@ export default function AdminProducts() {
                   min="0.001"
                   placeholder={`Enter ${stockModal.product.unit} quantity...`}
                   value={stockModal.quantity}
-                  onChange={(e) => setStockModal((s) => ({ ...s, quantity: e.target.value }))}
+                  onChange={(e) => {
+                    const qVal = e.target.value;
+                    const qNum = parseFloat(qVal);
+                    const costNum = parseFloat(stockModal.totalPurchaseCost);
+                    let autoRate = stockModal.purchaseRate;
+                    if (!Number.isNaN(qNum) && qNum > 0 && !Number.isNaN(costNum) && costNum >= 0) {
+                      autoRate = (costNum / qNum).toFixed(2);
+                    }
+                    setStockModal((s) => ({ ...s, quantity: qVal, purchaseRate: autoRate }));
+                  }}
                   className="input pr-16 text-sm font-black"
                   autoFocus
                 />
@@ -723,6 +746,97 @@ export default function AdminProducts() {
                 </span>
               </div>
             </div>
+
+            {/* Purchase Cost & Rate Calculation (When Adding Stock) */}
+            {stockModal.action === "ADD" && (
+              <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-3.5 space-y-3">
+                <p className="text-xs font-bold text-brand-900 flex items-center gap-1.5">
+                  <span>💰</span>
+                  <span>क्रय मूल्य व बैच लागत (Purchase Cost & FIFO Batch)</span>
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="label text-[11px] font-bold text-slate-700">
+                      कुल खरीद मूल्य (Total Purchase Amount ₹)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="e.g. 5000"
+                      value={stockModal.totalPurchaseCost}
+                      onChange={(e) => {
+                        const costVal = e.target.value;
+                        const costNum = parseFloat(costVal);
+                        const qNum = parseFloat(stockModal.quantity);
+                        let autoRate = "";
+                        if (!Number.isNaN(costNum) && !Number.isNaN(qNum) && qNum > 0) {
+                          autoRate = (costNum / qNum).toFixed(2);
+                        }
+                        setStockModal((s) => ({
+                          ...s,
+                          totalPurchaseCost: costVal,
+                          purchaseRate: autoRate,
+                        }));
+                      }}
+                      className="input text-xs font-bold bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label text-[11px] font-bold text-slate-700">
+                      प्रति यूनिट लागत (Rate / {stockModal.product?.unit} ₹)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="e.g. 100"
+                      value={stockModal.purchaseRate}
+                      onChange={(e) => {
+                        const rateVal = e.target.value;
+                        const rateNum = parseFloat(rateVal);
+                        const qNum = parseFloat(stockModal.quantity);
+                        let autoCost = "";
+                        if (!Number.isNaN(rateNum) && !Number.isNaN(qNum) && qNum > 0) {
+                          autoCost = (rateNum * qNum).toFixed(2);
+                        }
+                        setStockModal((s) => ({
+                          ...s,
+                          purchaseRate: rateVal,
+                          totalPurchaseCost: autoCost,
+                        }));
+                      }}
+                      className="input text-xs font-bold bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="label text-[11px] text-slate-600">सप्लायर का नाम (Supplier)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ACC Dealer / Plant"
+                      value={stockModal.supplier}
+                      onChange={(e) => setStockModal((s) => ({ ...s, supplier: e.target.value }))}
+                      className="input text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="label text-[11px] text-slate-600">बिल / चालान संख्या (Invoice #)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. INV-2026-089"
+                      value={stockModal.invoiceNumber}
+                      onChange={(e) => setStockModal((s) => ({ ...s, invoiceNumber: e.target.value }))}
+                      className="input text-xs bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Reason / Reference */}
             <div>

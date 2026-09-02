@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { adminApi } from "../../lib/api";
-import type { CustomerDetail, CustomerDue, PaymentMode, Product } from "../../types";
+import type { CustomerDetail, CustomerDue, PaymentMode, Product, ProfitAnalyticsData } from "../../types";
 import { formatINR, formatDate } from "../../lib/format";
 import { LoadingState, ErrorState } from "../../components/Loading";
 import { useToast } from "../../components/Toast";
@@ -27,6 +27,9 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
+  Layers,
+  Calendar,
+  BarChart3,
 } from "lucide-react";
 
 const UNLOCK_STORAGE_KEY = "khatabook_session_unlocked_v1";
@@ -70,8 +73,8 @@ export default function Khatabook() {
   const [resetSaving, setResetSaving] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
 
-  // Active Tab: "customers" (ग्राहक खाता) or "stock" (स्टॉक खाता)
-  const [activeTab, setActiveTab] = useState<"customers" | "stock">("customers");
+  // Active Tab: "customers" (ग्राहक खाता) | "profit" (मुनाफा खाता) | "stock" (स्टॉक खाता)
+  const [activeTab, setActiveTab] = useState<"customers" | "profit" | "stock">("customers");
 
   // Customer Khata State
   const [customers, setCustomers] = useState<CustomerDue[]>([]);
@@ -94,10 +97,26 @@ export default function Khatabook() {
   const [paySaving, setPaySaving] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
 
+  // Profit Khata State
+  const [profitData, setProfitData] = useState<ProfitAnalyticsData | null>(null);
+  const [profitLoading, setProfitLoading] = useState(false);
+  const [profitError, setProfitError] = useState<string | null>(null);
+
   // Stock Khata State
   const [products, setProducts] = useState<Product[]>([]);
   const [stockSearch, setStockSearch] = useState("");
   const [stockCategory, setStockCategory] = useState("ALL");
+
+  // Khatabook Add Stock Modal
+  const [stockAddProduct, setStockAddProduct] = useState<Product | null>(null);
+  const [stockAddQty, setStockAddQty] = useState("");
+  const [stockAddTotalCost, setStockAddTotalCost] = useState("");
+  const [stockAddRate, setStockAddRate] = useState("");
+  const [stockAddSupplier, setStockAddSupplier] = useState("");
+  const [stockAddInvoice, setStockAddInvoice] = useState("");
+  const [stockAddNote, setStockAddNote] = useState("");
+  const [stockAddSaving, setStockAddSaving] = useState(false);
+  const [stockAddError, setStockAddError] = useState<string | null>(null);
 
   // Load Auth Status
   const loadAuthStatus = useCallback(() => {
@@ -130,6 +149,18 @@ export default function Khatabook() {
       .finally(() => setLoading(false));
   }, [isUnlocked, search]);
 
+  // Load Profit Analytics (only when unlocked)
+  const loadProfit = useCallback(() => {
+    if (!isUnlocked) return;
+    setProfitLoading(true);
+    setProfitError(null);
+    adminApi
+      .getKhatabookProfit()
+      .then((data) => setProfitData(data))
+      .catch(() => setProfitError("मुनाफा डेटा लोड नहीं हो सका"))
+      .finally(() => setProfitLoading(false));
+  }, [isUnlocked]);
+
   // Load Products for Stock Khata (only when unlocked)
   const loadProducts = useCallback(() => {
     if (!isUnlocked) return;
@@ -143,8 +174,9 @@ export default function Khatabook() {
     if (isUnlocked) {
       loadCustomers();
       loadProducts();
+      loadProfit();
     }
-  }, [isUnlocked, loadCustomers, loadProducts]);
+  }, [isUnlocked, loadCustomers, loadProducts, loadProfit]);
 
   // Handle Verify PIN
   const handleVerifyPin = async (e?: React.FormEvent) => {
@@ -288,6 +320,10 @@ export default function Khatabook() {
     () => customers.filter((c) => c.totalDue > 0).length,
     [customers]
   );
+  const customersCleared = useMemo(
+    () => customers.filter((c) => c.totalDue <= 0).length,
+    [customers]
+  );
   const lowStockCount = useMemo(
     () => products.filter((p) => p.stock <= 10).length,
     [products]
@@ -327,6 +363,47 @@ export default function Khatabook() {
     });
     return Array.from(cats);
   }, [products]);
+
+  // Handle Add Stock & Purchase Batch directly from Khatabook
+  const handleAddStockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stockAddProduct) return;
+    const qty = parseFloat(stockAddQty);
+    if (Number.isNaN(qty) || qty <= 0) {
+      setStockAddError("कृपया मान्य मात्रा दर्ज करें (Enter valid quantity)");
+      return;
+    }
+    setStockAddSaving(true);
+    setStockAddError(null);
+    try {
+      const cost = parseFloat(stockAddTotalCost);
+      const rate = parseFloat(stockAddRate);
+      const res = await adminApi.adjustStock(stockAddProduct.id, {
+        action: "ADD",
+        quantity: qty,
+        totalPurchaseCost: !Number.isNaN(cost) && cost >= 0 ? cost : undefined,
+        purchaseRate: !Number.isNaN(rate) && rate >= 0 ? rate : undefined,
+        supplier: stockAddSupplier || undefined,
+        invoiceNumber: stockAddInvoice || undefined,
+        note: stockAddNote || undefined,
+      });
+
+      setProducts((prev) => prev.map((p) => (p.id === res.product.id ? res.product : p)));
+      success(`स्टॉक व खरीद दर्ज: ${res.product.name} (+${qty} ${res.product.unit})`);
+      setStockAddProduct(null);
+      setStockAddQty("");
+      setStockAddTotalCost("");
+      setStockAddRate("");
+      setStockAddSupplier("");
+      setStockAddInvoice("");
+      setStockAddNote("");
+      loadProfit();
+    } catch (err: any) {
+      setStockAddError(err?.message || "स्टॉक अपडेट करने में विफल");
+    } finally {
+      setStockAddSaving(false);
+    }
+  };
 
   // View Customer Ledger / Passbook
   const openPassbook = async (mobile: string) => {
@@ -791,10 +868,10 @@ export default function Khatabook() {
       </div>
 
       {/* Main Tab Navigation */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex flex-wrap border-b border-slate-200 gap-1 bg-white rounded-t-2xl px-2">
         <button
           onClick={() => setActiveTab("customers")}
-          className={`flex items-center gap-2 px-6 py-3.5 text-sm font-bold border-b-2 transition ${
+          className={`flex items-center gap-2 px-5 py-3.5 text-sm font-bold border-b-2 transition ${
             activeTab === "customers"
               ? "border-brand-600 text-brand-700 bg-brand-50/50"
               : "border-transparent text-slate-500 hover:text-slate-900"
@@ -808,15 +885,35 @@ export default function Khatabook() {
         </button>
 
         <button
+          onClick={() => {
+            setActiveTab("profit");
+            loadProfit();
+          }}
+          className={`flex items-center gap-2 px-5 py-3.5 text-sm font-bold border-b-2 transition ${
+            activeTab === "profit"
+              ? "border-emerald-600 text-emerald-700 bg-emerald-50/50"
+              : "border-transparent text-slate-500 hover:text-slate-900"
+          }`}
+        >
+          <TrendingUp className="h-4 w-4 text-emerald-600" />
+          <span>💰 मुनाफा व लाभ खाता (Profit & Loss)</span>
+          {profitData && (
+            <span className="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 font-bold">
+              {formatINR(profitData.dailyProfit.netProfit)} आज
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveTab("stock")}
-          className={`flex items-center gap-2 px-6 py-3.5 text-sm font-bold border-b-2 transition ${
+          className={`flex items-center gap-2 px-5 py-3.5 text-sm font-bold border-b-2 transition ${
             activeTab === "stock"
               ? "border-brand-600 text-brand-700 bg-brand-50/50"
               : "border-transparent text-slate-500 hover:text-slate-900"
           }`}
         >
           <Package className="h-4 w-4" />
-          <span>📦 गोदाम स्टॉक खाता (Warehouse Stock Khata)</span>
+          <span>📦 गोदाम स्टॉक खाता (Warehouse Stock)</span>
           <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800 font-bold">
             {products.length} Products
           </span>
@@ -850,14 +947,14 @@ export default function Khatabook() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500">फ़िल्टर:</span>
-              <div className="inline-flex rounded-xl bg-slate-100 p-1">
+              <span className="text-xs font-bold text-slate-500">फिल्टर:</span>
+              <div className="flex rounded-xl bg-slate-100 p-1">
                 <button
                   onClick={() => setFilterDueOnly("ALL")}
                   className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
                     filterDueOnly === "ALL"
                       ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-600 hover:text-slate-900"
+                      : "text-slate-600 hover:bg-slate-200"
                   }`}
                 >
                   सभी ({customers.length})
@@ -867,20 +964,20 @@ export default function Khatabook() {
                   className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
                     filterDueOnly === "DUE"
                       ? "bg-red-600 text-white shadow-sm"
-                      : "text-red-700 hover:text-red-900"
+                      : "text-red-700 hover:bg-red-50"
                   }`}
                 >
-                  बाकी वाले ({customersWithDue})
+                  केवल बकाया ({customersWithDue})
                 </button>
                 <button
                   onClick={() => setFilterDueOnly("CLEARED")}
                   className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
                     filterDueOnly === "CLEARED"
                       ? "bg-emerald-600 text-white shadow-sm"
-                      : "text-emerald-700 hover:text-emerald-900"
+                      : "text-emerald-700 hover:bg-emerald-50"
                   }`}
                 >
-                  क्लियर खाता ({customers.length - customersWithDue})
+                  चुक्ता ({customersCleared})
                 </button>
               </div>
             </div>
@@ -905,12 +1002,12 @@ export default function Khatabook() {
                 <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   <tr>
                     <th className="p-3.5">ग्राहक का नाम (Customer)</th>
-                    <th className="p-3.5">मोबाइल</th>
-                    <th className="p-3.5 text-right">कुल ख़रीद</th>
-                    <th className="p-3.5 text-right">कुल जमा</th>
-                    <th className="p-3.5 text-right">बाकी उधारी (Due)</th>
-                    <th className="p-3.5 text-center">स्थिति</th>
-                    <th className="p-3.5 text-center">त्वरित कार्य (Actions)</th>
+                    <th className="p-3.5">मोबाइल नंबर</th>
+                    <th className="p-3.5 text-center">कुल ऑर्डर्स</th>
+                    <th className="p-3.5 text-right">कुल खरीद (Total Purchase)</th>
+                    <th className="p-3.5 text-right">कुल जमा (Total Paid)</th>
+                    <th className="p-3.5 text-right font-black text-red-600">बकाया राशि (Due Balance)</th>
+                    <th className="p-3.5 text-center">कार्रवाई (Action)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -926,85 +1023,73 @@ export default function Khatabook() {
                     return (
                       <tr key={c.customerMobile} className="hover:bg-slate-50 transition">
                         <td className="p-3.5">
-                          <p className="font-bold text-slate-900 text-sm">{c.customerName}</p>
-                          <p className="text-[11px] text-slate-500 font-medium">
-                            {c.totalOrders} ऑर्डर्स
-                          </p>
+                          <button
+                            onClick={() => openPassbook(c.customerMobile)}
+                            className="font-bold text-slate-900 hover:text-brand-600 text-left flex items-center gap-1.5"
+                          >
+                            <span>{c.customerName}</span>
+                            <FileText className="h-3 w-3 text-slate-400" />
+                          </button>
                         </td>
-                        <td className="p-3.5 text-slate-600 font-semibold">
-                          {c.customerMobile}
+                        <td className="p-3.5 font-mono text-slate-600">{c.customerMobile}</td>
+                        <td className="p-3.5 text-center">
+                          <span className="badge bg-slate-100 text-slate-700 font-bold">
+                            {c.totalOrders}
+                          </span>
                         </td>
-                        <td className="p-3.5 text-right font-medium text-slate-800">
+                        <td className="p-3.5 text-right font-semibold text-slate-800">
                           {formatINR(c.totalPurchase)}
                         </td>
-                        <td className="p-3.5 text-right font-bold text-emerald-700">
+                        <td className="p-3.5 text-right font-semibold text-emerald-700">
                           {formatINR(c.totalPaid)}
                         </td>
                         <td className="p-3.5 text-right">
                           <span
-                            className={`text-base font-black ${
-                              hasDue ? "text-red-600" : "text-emerald-700"
+                            className={`font-black text-base ${
+                              hasDue ? "text-red-600" : "text-emerald-600"
                             }`}
                           >
                             {formatINR(c.totalDue)}
                           </span>
-                        </td>
-                        <td className="p-3.5 text-center">
-                          {hasDue ? (
-                            <span className="badge bg-red-100 text-red-800 font-bold px-2.5 py-1">
-                              बाकी (DUE)
-                            </span>
-                          ) : (
-                            <span className="badge bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1">
-                              साफ खाता (PAID)
+                          {!hasDue && (
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                              चुक्ता (Cleared)
                             </span>
                           )}
                         </td>
-                        <td className="p-3.5">
+                        <td className="p-3.5 text-center">
                           <div className="flex items-center justify-center gap-1.5">
-                            {/* Payment button */}
                             {hasDue && (
                               <button
                                 onClick={() => openPaymentModal(c)}
-                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm"
                                 title="पैसा जमा करें"
                               >
                                 <Wallet className="h-3.5 w-3.5" />
-                                <span>+ जमा करें</span>
+                                <span>जमा</span>
                               </button>
                             )}
 
-                            {/* WhatsApp reminder */}
                             {hasDue && (
                               <a
                                 href={whatsappUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 rounded-lg bg-green-500 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-green-600 active:scale-95 transition"
-                                title="WhatsApp पर तकादा भेजें"
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition border border-emerald-200"
+                                title="WhatsApp उधारी तकादा भेजें"
                               >
                                 <MessageSquare className="h-3.5 w-3.5" />
-                                <span>WhatsApp</span>
+                                <span className="hidden sm:inline">तकादा</span>
                               </a>
                             )}
 
-                            {/* Passbook button */}
                             <button
                               onClick={() => openPassbook(c.customerMobile)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition"
+                              className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 transition"
                               title="पासबुक देखें"
                             >
-                              <FileText className="h-3.5 w-3.5 text-slate-500" />
-                              <span>पासबुक</span>
-                            </button>
-
-                            {/* PDF Statement */}
-                            <button
-                              onClick={() => handleDownloadPdf(c.customerMobile)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-50 active:scale-95 transition"
-                              title="PDF डाउनलोड करें"
-                            >
-                              <Download className="h-3.5 w-3.5" />
+                              <FileText className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">खाता</span>
                             </button>
                           </div>
                         </td>
@@ -1018,7 +1103,261 @@ export default function Khatabook() {
         </div>
       )}
 
-      {/* TAB 2: STOCK KHATA */}
+      {/* TAB 2: PROFIT & LOSS KHATA (मुनाफा व लाभ खाता) */}
+      {activeTab === "profit" && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          {profitLoading ? (
+            <div className="card p-12 text-center">
+              <LoadingState label="मुनाफा व लागत हिसाब लोड हो रहा है..." />
+            </div>
+          ) : profitError ? (
+            <div className="card p-8">
+              <ErrorState message={profitError} onRetry={loadProfit} />
+            </div>
+          ) : !profitData ? (
+            <div className="card p-12 text-center">डेटा उपलब्ध नहीं है।</div>
+          ) : (
+            <>
+              {/* 4 Main Profit KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Daily Profit Card */}
+                <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/30 p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                      आज का शुद्ध मुनाफा (Today Net Profit)
+                    </span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-200">
+                      <TrendingUp className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-3xl font-black text-emerald-700 tracking-tight">
+                    {formatINR(profitData.dailyProfit.netProfit)}
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-emerald-100 text-[11px] text-emerald-900 flex justify-between font-semibold">
+                    <span>ग्रॉस: {formatINR(profitData.dailyProfit.grossProfit)}</span>
+                    <span>छूट: -{formatINR(profitData.dailyProfit.discountGiven)}</span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500 font-medium">
+                    {profitData.dailyProfit.ordersCount} ऑर्डर्स से शुद्ध लाभ
+                  </p>
+                </div>
+
+                {/* Monthly Profit Card */}
+                <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50/80 via-white to-blue-50/30 p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-blue-800">
+                      इस महीने का मुनाफा (This Month Profit)
+                    </span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200">
+                      <Calendar className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-3xl font-black text-blue-700 tracking-tight">
+                    {formatINR(profitData.monthlyProfit.netProfit)}
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-blue-100 text-[11px] text-blue-900 flex justify-between font-semibold">
+                    <span>ग्रॉस: {formatINR(profitData.monthlyProfit.grossProfit)}</span>
+                    <span>छूट: -{formatINR(profitData.monthlyProfit.discountGiven)}</span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500 font-medium">
+                    {profitData.monthlyProfit.ordersCount} ऑर्डर्स इस महीने
+                  </p>
+                </div>
+
+                {/* All-time Profit Card */}
+                <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/80 via-white to-purple-50/30 p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-purple-800">
+                      कुल अब तक का मुनाफा (All-Time Profit)
+                    </span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white shadow-md shadow-purple-200">
+                      <BarChart3 className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-3xl font-black text-purple-700 tracking-tight">
+                    {formatINR(profitData.allTimeProfit.netProfit)}
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-purple-100 text-[11px] text-purple-900 flex justify-between font-semibold">
+                    <span>ग्रॉस: {formatINR(profitData.allTimeProfit.grossProfit)}</span>
+                    <span>छूट: -{formatINR(profitData.allTimeProfit.discountGiven)}</span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500 font-medium">
+                    कुल {profitData.allTimeProfit.ordersCount} ऑर्डर्स का संचयी लाभ
+                  </p>
+                </div>
+
+                {/* Stock Capital Valuation Card */}
+                <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50/80 via-white to-amber-50/30 p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                      गोदाम में फंसा पैसा (Stock Value)
+                    </span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-600 text-white shadow-md shadow-amber-200">
+                      <Layers className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-3xl font-black text-amber-700 tracking-tight">
+                    {formatINR(profitData.currentStockValuation)}
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-amber-100 text-[11px] text-amber-900 font-semibold">
+                    <span>सक्रिय खरीद बैच: {profitData.activeBatchesCount} Batches</span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500 font-medium">
+                    बचे हुए स्टॉक का कुल खरीद क्रय मूल्य
+                  </p>
+                </div>
+              </div>
+
+              {/* Product-wise Profit Margins Table */}
+              <div className="card p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <span>📊</span>
+                      <span>सामग्री-वाइज मुनाफा व मार्जिन तालिका (Product-wise Profit & Margins)</span>
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      FIFO के अनुसार प्रत्येक सामग्री की बिक्री पर हुआ शुद्ध लाभ व मार्जिन प्रतिशत
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs sm:text-sm">
+                    <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      <tr>
+                        <th className="p-3">सामग्री (Product Name)</th>
+                        <th className="p-3">कैटेगरी</th>
+                        <th className="p-3 text-center">कुल बिक्री मात्रा (Sold Qty)</th>
+                        <th className="p-3 text-right">कुल बिक्री (Revenue ₹)</th>
+                        <th className="p-3 text-right">कुल लागत (Cost / COGS ₹)</th>
+                        <th className="p-3 text-right text-emerald-700 font-black">कुल मुनाफा (Net Profit ₹)</th>
+                        <th className="p-3 text-center">मार्जिन % (Profit Margin)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {profitData.productProfits.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-slate-500 font-medium">
+                            अभी तक कोई बिक्री दर्ज नहीं हुई है।
+                          </td>
+                        </tr>
+                      ) : (
+                        profitData.productProfits.map((p) => (
+                          <tr key={p.productId} className="hover:bg-slate-50 transition">
+                            <td className="p-3 font-bold text-slate-900">{p.productName}</td>
+                            <td className="p-3 text-slate-600">{p.categoryName}</td>
+                            <td className="p-3 text-center font-bold text-slate-800">
+                              {p.unitsSold} {p.unit}
+                            </td>
+                            <td className="p-3 text-right font-semibold text-slate-900">
+                              {formatINR(p.totalRevenue)}
+                            </td>
+                            <td className="p-3 text-right font-semibold text-slate-500">
+                              {formatINR(p.totalCost)}
+                            </td>
+                            <td className="p-3 text-right font-black text-base text-emerald-700">
+                              {formatINR(p.netProfit)}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span
+                                className={`badge font-black ${
+                                  p.marginPercent >= 20
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : p.marginPercent >= 10
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-amber-100 text-amber-800"
+                                }`}
+                              >
+                                {p.marginPercent}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Recent Purchase Batches Table */}
+              <div className="card p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <span>🚚</span>
+                      <span>हालिया खरीद बैच इतिहास (Recent Purchase Batches)</span>
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      गोदाम में जोड़े गए स्टॉक का क्रय मूल्य, सप्लायर व बचा हुआ स्टॉक
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs sm:text-sm">
+                    <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      <tr>
+                        <th className="p-3">खरीद तिथि (Date)</th>
+                        <th className="p-3">सामग्री (Product)</th>
+                        <th className="p-3">सप्लायर / बिल #</th>
+                        <th className="p-3 text-center">खरीदी मात्रा (Initial Qty)</th>
+                        <th className="p-3 text-center">बचा स्टॉक (Remaining)</th>
+                        <th className="p-3 text-right">क्रय दर (Purchase Rate ₹)</th>
+                        <th className="p-3 text-right font-bold">कुल खरीद लागत (Total Cost ₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {profitData.recentBatches.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-slate-500 font-medium">
+                            कोई खरीद बैच उपलब्ध नहीं है।
+                          </td>
+                        </tr>
+                      ) : (
+                        profitData.recentBatches.map((b) => (
+                          <tr key={b.id} className="hover:bg-slate-50 transition">
+                            <td className="p-3 text-slate-600">{formatDate(b.purchaseDate)}</td>
+                            <td className="p-3 font-bold text-slate-900">{b.productName}</td>
+                            <td className="p-3 text-slate-600">
+                              <span>{b.supplierName || "—"}</span>
+                              {b.invoiceNumber && (
+                                <span className="block text-[11px] text-slate-400 font-mono">
+                                  #{b.invoiceNumber}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center font-semibold text-slate-800">
+                              {b.initialQuantity} {b.unit}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span
+                                className={`font-bold ${
+                                  b.remainingQuantity > 0 ? "text-emerald-700" : "text-slate-400"
+                                }`}
+                              >
+                                {b.remainingQuantity} {b.unit}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right font-mono font-bold text-slate-900">
+                              {formatINR(b.costPricePerUnit)}/{b.unit}
+                            </td>
+                            <td className="p-3 text-right font-black text-slate-900">
+                              {formatINR(b.totalPurchaseCost)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: STOCK KHATA */}
       {activeTab === "stock" && (
         <div className="space-y-4">
           <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
@@ -1062,7 +1401,7 @@ export default function Khatabook() {
                   <th className="p-3.5">स्टॉक स्थिति</th>
                   <th className="p-3.5 text-right">बिक्री दर (Selling Price)</th>
                   <th className="p-3.5 text-right">MRP</th>
-                  <th className="p-3.5 text-center">स्टॉक मैनेजमेंट</th>
+                  <th className="p-3.5 text-center">स्टॉक व खरीद प्रबंधन</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1101,19 +1440,204 @@ export default function Khatabook() {
                         {formatINR(p.mrp)}
                       </td>
                       <td className="p-3.5 text-center">
-                        <Link
-                          to="/admin/products"
-                          className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-1 text-xs font-bold text-white hover:bg-brand-700 transition"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStockAddProduct(p);
+                            setStockAddQty("");
+                            setStockAddTotalCost("");
+                            setStockAddRate("");
+                            setStockAddSupplier("");
+                            setStockAddInvoice("");
+                            setStockAddNote("");
+                            setStockAddError(null);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-700 transition shadow-sm"
                         >
                           <PlusCircle className="h-3.5 w-3.5" />
-                          <span>+ स्टॉक जोड़ें</span>
-                        </Link>
+                          <span>+ स्टॉक व खरीद जोड़ें</span>
+                        </button>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* KHATABOOK ADD STOCK & PURCHASE COST MODAL */}
+      {stockAddProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="card w-full max-w-md p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-brand-600">
+                  नया स्टॉक व खरीद लागत दर्ज करें
+                </span>
+                <h3 className="text-base font-black text-slate-900">{stockAddProduct.name}</h3>
+                <p className="text-xs text-slate-500">
+                  वर्तमान स्टॉक: <strong className="text-slate-900">{stockAddProduct.stock} {stockAddProduct.unit}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setStockAddProduct(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddStockSubmit} className="space-y-3.5">
+              <div>
+                <label className="label text-xs font-bold text-slate-800">
+                  खरीदी गई मात्रा (Quantity to Add) *
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0.001"
+                    required
+                    placeholder={`जैसे: 50 ${stockAddProduct.unit}`}
+                    value={stockAddQty}
+                    onChange={(e) => {
+                      const qVal = e.target.value;
+                      const qNum = parseFloat(qVal);
+                      const costNum = parseFloat(stockAddTotalCost);
+                      let autoRate = stockAddRate;
+                      if (!Number.isNaN(qNum) && qNum > 0 && !Number.isNaN(costNum) && costNum >= 0) {
+                        autoRate = (costNum / qNum).toFixed(2);
+                      }
+                      setStockAddQty(qVal);
+                      setStockAddRate(autoRate);
+                    }}
+                    className="input pr-16 font-bold"
+                    autoFocus
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 uppercase">
+                    {stockAddProduct.unit}
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3.5 space-y-3">
+                <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                  <span>💰</span>
+                  <span>क्रय मूल्य व बैच लागत (Purchase Cost & FIFO Batch)</span>
+                </p>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="label text-[11px] font-bold text-slate-700">
+                      कुल खरीद मूल्य (Total Amount ₹)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="उदा. 5000"
+                      value={stockAddTotalCost}
+                      onChange={(e) => {
+                        const costVal = e.target.value;
+                        const costNum = parseFloat(costVal);
+                        const qNum = parseFloat(stockAddQty);
+                        let autoRate = "";
+                        if (!Number.isNaN(costNum) && !Number.isNaN(qNum) && qNum > 0) {
+                          autoRate = (costNum / qNum).toFixed(2);
+                        }
+                        setStockAddTotalCost(costVal);
+                        setStockAddRate(autoRate);
+                      }}
+                      className="input text-xs font-bold bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label text-[11px] font-bold text-slate-700">
+                      प्रति {stockAddProduct.unit} लागत (Rate ₹)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="उदा. 100"
+                      value={stockAddRate}
+                      onChange={(e) => {
+                        const rateVal = e.target.value;
+                        const rateNum = parseFloat(rateVal);
+                        const qNum = parseFloat(stockAddQty);
+                        let autoCost = "";
+                        if (!Number.isNaN(rateNum) && !Number.isNaN(qNum) && qNum > 0) {
+                          autoCost = (rateNum * qNum).toFixed(2);
+                        }
+                        setStockAddRate(rateVal);
+                        setStockAddTotalCost(autoCost);
+                      }}
+                      className="input text-xs font-bold bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="label text-[11px] text-slate-600">सप्लायर का नाम</label>
+                    <input
+                      type="text"
+                      placeholder="उदा. ACC प्लांट"
+                      value={stockAddSupplier}
+                      onChange={(e) => setStockAddSupplier(e.target.value)}
+                      className="input text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="label text-[11px] text-slate-600">बिल / चालान #</label>
+                    <input
+                      type="text"
+                      placeholder="उदा. INV-089"
+                      value={stockAddInvoice}
+                      onChange={(e) => setStockAddInvoice(e.target.value)}
+                      className="input text-xs bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="label text-xs">नोट (Optional Note)</label>
+                <input
+                  type="text"
+                  placeholder="खरीद विवरण या रिमार्क..."
+                  value={stockAddNote}
+                  onChange={(e) => setStockAddNote(e.target.value)}
+                  className="input text-xs"
+                />
+              </div>
+
+              {stockAddError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs font-semibold text-red-700">
+                  {stockAddError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setStockAddProduct(null)}
+                  className="btn-secondary text-xs rounded-xl"
+                >
+                  रद्द करें
+                </button>
+                <button
+                  type="submit"
+                  disabled={stockAddSaving}
+                  className="btn-primary text-xs rounded-xl"
+                >
+                  {stockAddSaving ? "सेव हो रहा है..." : "स्टॉक व खरीद सुरक्षित करें"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

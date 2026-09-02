@@ -83,3 +83,58 @@ export interface ResetPinPayload {
   otp: string;
   newPin: string;
 }
+
+export interface ProductPurchaseBatch {
+  id: number;
+  batchNumber: string;
+  productId: number;
+  productName?: string;
+  unit?: string;
+  supplierName: string | null;
+  invoiceNumber: string | null;
+  note: string | null;
+  initialQuantity: number;
+  remainingQuantity: number;
+  costPricePerUnit: number;
+  totalPurchaseCost: number;
+  purchaseDate: string;
+  createdAt: string;
+}
+
+export interface ProductProfitItem {
+  productId: number;
+  productName: string;
+  categoryName: string;
+  unit: string;
+  unitsSold: number;
+  totalRevenue: number;
+  totalCost: number;
+  grossProfit: number;
+  netProfit: number;
+  marginPercent: number;
+}
+
+export interface ProfitAnalyticsData {
+  dailyProfit: {
+    grossProfit: number;
+    discountGiven: number;
+    netProfit: number;
+    ordersCount: number;
+  };
+  monthlyProfit: {
+    grossProfit: number;
+    discountGiven: number;
+    netProfit: number;
+    ordersCount: number;
+  };
+  allTimeProfit: {
+    grossProfit: number;
+    discountGiven: number;
+    netProfit: number;
+    ordersCount: number;
+  };
+  currentStockValuation: number;
+  activeBatchesCount: number;
+  productProfits: ProductProfitItem[];
+  recentBatches: ProductPurchaseBatch[];
+}

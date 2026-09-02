@@ -15,6 +15,7 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { createAdminNotification, notifyStockTransitions } from "../services/push.service.js";
 import { quantityMatchesUnit } from "../utils/quantity.js";
+import { allocateInventoryFifo } from "../utils/inventoryFifo.js";
 
 const router = Router();
 
@@ -226,7 +227,7 @@ router.post(
 
         subtotal = roundCurrency(subtotal);
 
-        return tx.order.create({
+        const created = await tx.order.create({
           data: {
             orderNumber: generateOrderNumber(),
             customerName: body.customerName,
@@ -240,6 +241,18 @@ router.post(
           },
           include: { items: true, bill: true, payments: true },
         });
+
+        // Allocate inventory batches (FIFO)
+        for (const item of created.items) {
+          await allocateInventoryFifo(tx, {
+            orderItemId: item.id,
+            productId: item.productId,
+            quantity: item.quantity,
+            sellingPricePerUnit: item.price,
+          });
+        }
+
+        return created;
       },
       {
         maxWait: 10000,

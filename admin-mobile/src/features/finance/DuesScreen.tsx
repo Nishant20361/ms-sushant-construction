@@ -42,6 +42,7 @@ import {
   useDueSnapshot,
   useFinanceMutations,
   useKhatabookAuthStatus,
+  useKhatabookProfit,
   useKhatabookStock,
 } from "./useFinance";
 
@@ -82,8 +83,8 @@ export function DuesScreen() {
   const [resetSaving, setResetSaving] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
 
-  // Tabs: "customers" (ग्राहक खाता) or "stock" (स्टॉक खाता)
-  const [activeTab, setActiveTab] = useState<"customers" | "stock">("customers");
+  // Tabs: "customers" (ग्राहक खाता) | "profit" (मुनाफा खाता) | "stock" (स्टॉक खाता)
+  const [activeTab, setActiveTab] = useState<"customers" | "profit" | "stock">("customers");
 
   // Search & Filter State
   const [search, setSearch] = useState("");
@@ -122,13 +123,15 @@ export function DuesScreen() {
   // Data Queries (Active only when unlocked)
   const duesQ = useDueSnapshot({ search: "", dateRange: "", paymentStatus: "", from: "", to: "" }, isUnlocked);
   const stockQ = useKhatabookStock(isUnlocked);
+  const profitQ = useKhatabookProfit(isUnlocked);
 
-  // Automatically refresh Khatabook ledger and stock upon screen focus
+  // Automatically refresh Khatabook ledger, stock and profit upon screen focus
   useFocusEffect(
     useCallback(() => {
       if (isUnlocked) {
         void duesQ.refetch();
         void stockQ.refetch();
+        void profitQ.refetch();
       }
     }, [isUnlocked])
   );
@@ -799,6 +802,37 @@ export function DuesScreen() {
 
         <Pressable
           accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === "profit" }}
+          onPress={() => {
+            setActiveTab("profit");
+            void profitQ.refetch();
+          }}
+          style={[
+            s.segmentedItem,
+            activeTab === "profit" && s.segmentedItemActive,
+          ]}
+        >
+          <Ionicons
+            name="trending-up-outline"
+            size={16}
+            color={activeTab === "profit" ? "#ffffff" : t.colors.textSecondary}
+          />
+          <AppText
+            numberOfLines={1}
+            style={[
+              s.segmentedLabel,
+              {
+                color: activeTab === "profit" ? "#ffffff" : t.colors.textSecondary,
+                fontWeight: activeTab === "profit" ? "800" : "600",
+              },
+            ]}
+          >
+            मुनाफा खाता
+          </AppText>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="tab"
           accessibilityState={{ selected: activeTab === "stock" }}
           onPress={() => setActiveTab("stock")}
           style={[
@@ -1002,7 +1036,214 @@ export function DuesScreen() {
       )}
 
       {/* ========================================== */}
-      {/* TAB 2: STOCK KHATA (गोदाम स्टॉक)          */}
+      {/* TAB 2: PROFIT & LOSS KHATA (मुनाफा खाता)   */}
+      {/* ========================================== */}
+      {activeTab === "profit" && (
+        <View style={{ gap: 14 }}>
+          {profitQ.isLoading ? (
+            <LoadingState label="मुनाफा व लागत हिसाब लोड हो रहा है..." />
+          ) : profitQ.isError ? (
+            <ErrorState description="मुनाफा लोड करने में समस्या आई" onRetry={() => void profitQ.refetch()} />
+          ) : !profitQ.data ? (
+            <EmptyState title="डेटा उपलब्ध नहीं है" description="मुनाफा हिसाब अभी उपलब्ध नहीं है" />
+          ) : (
+            <>
+              {/* 4 Hero KPI Cards */}
+              <View style={s.kpiGrid}>
+                {/* Today Profit */}
+                <Card style={[s.kpiCard, { borderColor: "#10b981", backgroundColor: "#f0fdf4" }]}>
+                  <View style={s.kpiTopRow}>
+                    <AppText role="caption" style={{ color: "#166534", fontWeight: "800" }}>
+                      आज का मुनाफा (Today)
+                    </AppText>
+                    <View style={[s.kpiIconBox, { backgroundColor: "#10b981" }]}>
+                      <Ionicons name="trending-up" size={16} color="#ffffff" />
+                    </View>
+                  </View>
+                  <AppText style={{ color: "#15803d", fontSize: 22, fontWeight: "900", marginTop: 4 }}>
+                    {formatINR(profitQ.data.dailyProfit.netProfit)}
+                  </AppText>
+                  <AppText style={{ color: "#166534", fontSize: 10, marginTop: 2, fontWeight: "600" }}>
+                    {profitQ.data.dailyProfit.ordersCount} ऑर्डर्स · ग्रॉस: {formatINR(profitQ.data.dailyProfit.grossProfit)}
+                  </AppText>
+                </Card>
+
+                {/* Month Profit */}
+                <Card style={[s.kpiCard, { borderColor: "#3b82f6", backgroundColor: "#eff6ff" }]}>
+                  <View style={s.kpiTopRow}>
+                    <AppText role="caption" style={{ color: "#1e40af", fontWeight: "800" }}>
+                      इस महीने (This Month)
+                    </AppText>
+                    <View style={[s.kpiIconBox, { backgroundColor: "#3b82f6" }]}>
+                      <Ionicons name="calendar-outline" size={16} color="#ffffff" />
+                    </View>
+                  </View>
+                  <AppText style={{ color: "#1d4ed8", fontSize: 22, fontWeight: "900", marginTop: 4 }}>
+                    {formatINR(profitQ.data.monthlyProfit.netProfit)}
+                  </AppText>
+                  <AppText style={{ color: "#1e40af", fontSize: 10, marginTop: 2, fontWeight: "600" }}>
+                    {profitQ.data.monthlyProfit.ordersCount} ऑर्डर्स इस महीने
+                  </AppText>
+                </Card>
+
+                {/* All-time Profit */}
+                <Card style={[s.kpiCard, { borderColor: "#8b5cf6", backgroundColor: "#f5f3ff" }]}>
+                  <View style={s.kpiTopRow}>
+                    <AppText role="caption" style={{ color: "#5b21b6", fontWeight: "800" }}>
+                      कुल मुनाफा (All-Time)
+                    </AppText>
+                    <View style={[s.kpiIconBox, { backgroundColor: "#8b5cf6" }]}>
+                      <Ionicons name="bar-chart-outline" size={16} color="#ffffff" />
+                    </View>
+                  </View>
+                  <AppText style={{ color: "#6d28d9", fontSize: 22, fontWeight: "900", marginTop: 4 }}>
+                    {formatINR(profitQ.data.allTimeProfit.netProfit)}
+                  </AppText>
+                  <AppText style={{ color: "#5b21b6", fontSize: 10, marginTop: 2, fontWeight: "600" }}>
+                    कुल {profitQ.data.allTimeProfit.ordersCount} ऑर्डर्स का संचयी लाभ
+                  </AppText>
+                </Card>
+
+                {/* Stock Capital Value */}
+                <Card style={[s.kpiCard, { borderColor: "#f59e0b", backgroundColor: "#fffbeb" }]}>
+                  <View style={s.kpiTopRow}>
+                    <AppText role="caption" style={{ color: "#92400e", fontWeight: "800" }}>
+                      गोदाम में फंसा पैसा
+                    </AppText>
+                    <View style={[s.kpiIconBox, { backgroundColor: "#f59e0b" }]}>
+                      <Ionicons name="layers-outline" size={16} color="#ffffff" />
+                    </View>
+                  </View>
+                  <AppText style={{ color: "#b45309", fontSize: 22, fontWeight: "900", marginTop: 4 }}>
+                    {formatINR(profitQ.data.currentStockValuation)}
+                  </AppText>
+                  <AppText style={{ color: "#92400e", fontSize: 10, marginTop: 2, fontWeight: "600" }}>
+                    {profitQ.data.activeBatchesCount} सक्रिय खरीद बैच का कुल मूल्य
+                  </AppText>
+                </Card>
+              </View>
+
+              {/* Product-wise Profit Margins */}
+              <View style={{ gap: 8 }}>
+                <View style={s.rowBetween}>
+                  <AppText style={{ fontSize: 15, fontWeight: "800", color: t.colors.text }}>
+                    📊 सामग्री अनुसार मुनाफा व मार्जिन
+                  </AppText>
+                  <AppText role="caption" style={{ color: t.colors.textMuted }}>
+                    {profitQ.data.productProfits.length} सामग्री
+                  </AppText>
+                </View>
+
+                {profitQ.data.productProfits.length === 0 ? (
+                  <Card style={{ padding: 20, alignItems: "center" }}>
+                    <AppText style={{ color: t.colors.textMuted, fontSize: 12 }}>अभी तक कोई बिक्री दर्ज नहीं हुई है।</AppText>
+                  </Card>
+                ) : (
+                  profitQ.data.productProfits.map((item) => (
+                    <Card key={item.productId} style={{ gap: 6, padding: 12 }}>
+                      <View style={s.rowBetween}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <AppText style={{ fontSize: 14, fontWeight: "800", color: t.colors.text }}>
+                            {item.productName}
+                          </AppText>
+                          <AppText role="caption" style={{ color: t.colors.textMuted }}>
+                            {item.categoryName} · बिक्री: {item.unitsSold} {item.unit}
+                          </AppText>
+                        </View>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <View
+                            style={{
+                              paddingHorizontal: 8,
+                              paddingVertical: 2,
+                              borderRadius: 6,
+                              backgroundColor: item.marginPercent >= 20 ? "#dcfce7" : item.marginPercent >= 10 ? "#dbeafe" : "#fef3c7",
+                            }}
+                          >
+                            <AppText
+                              style={{
+                                fontSize: 11,
+                                fontWeight: "800",
+                                color: item.marginPercent >= 20 ? "#166534" : item.marginPercent >= 10 ? "#1e40af" : "#92400e",
+                              }}
+                            >
+                              {item.marginPercent}% मार्जिन
+                            </AppText>
+                          </View>
+                          <AppText style={{ fontSize: 15, fontWeight: "900", color: "#166534", marginTop: 2 }}>
+                            +{formatINR(item.netProfit)}
+                          </AppText>
+                        </View>
+                      </View>
+
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 6, borderTopWidth: 1, borderTopColor: t.colors.border }}>
+                        <AppText style={{ fontSize: 11, color: t.colors.textSecondary }}>
+                          बिक्री राजस्व: <AppText style={{ fontWeight: "700" }}>{formatINR(item.totalRevenue)}</AppText>
+                        </AppText>
+                        <AppText style={{ fontSize: 11, color: t.colors.textSecondary }}>
+                          क्रय लागत: <AppText style={{ fontWeight: "700", color: t.colors.textMuted }}>{formatINR(item.totalCost)}</AppText>
+                        </AppText>
+                      </View>
+                    </Card>
+                  ))
+                )}
+              </View>
+
+              {/* Recent Purchase Batches */}
+              <View style={{ gap: 8, marginTop: 6 }}>
+                <View style={s.rowBetween}>
+                  <AppText style={{ fontSize: 15, fontWeight: "800", color: t.colors.text }}>
+                    🚚 हालिया खरीद बैच (Recent Batches)
+                  </AppText>
+                  <AppText role="caption" style={{ color: t.colors.textMuted }}>
+                    {profitQ.data.recentBatches.length} बैच
+                  </AppText>
+                </View>
+
+                {profitQ.data.recentBatches.length === 0 ? (
+                  <Card style={{ padding: 20, alignItems: "center" }}>
+                    <AppText style={{ color: t.colors.textMuted, fontSize: 12 }}>कोई खरीद बैच उपलब्ध नहीं है।</AppText>
+                  </Card>
+                ) : (
+                  profitQ.data.recentBatches.map((b) => (
+                    <Card key={b.id} style={{ gap: 6, padding: 12, backgroundColor: "#f8fafc" }}>
+                      <View style={s.rowBetween}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <AppText style={{ fontSize: 13, fontWeight: "800", color: t.colors.text }}>
+                            {b.productName}
+                          </AppText>
+                          <AppText role="caption" style={{ color: t.colors.textMuted }}>
+                            {b.supplierName ? `${b.supplierName}` : "सप्लायर: सामान्य"}{b.invoiceNumber ? ` · बिल #${b.invoiceNumber}` : ""}
+                          </AppText>
+                        </View>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <AppText style={{ fontSize: 13, fontWeight: "800", color: t.colors.text }}>
+                            {formatINR(b.totalPurchaseCost)}
+                          </AppText>
+                          <AppText role="caption" style={{ color: "#166534", fontWeight: "700" }}>
+                            {formatINR(b.costPricePerUnit)}/{b.unit} दर
+                          </AppText>
+                        </View>
+                      </View>
+
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 4 }}>
+                        <AppText style={{ fontSize: 11, color: t.colors.textMuted }}>
+                          खरीदी मात्रा: {b.initialQuantity} {b.unit}
+                        </AppText>
+                        <AppText style={{ fontSize: 11, color: b.remainingQuantity > 0 ? "#166534" : t.colors.textMuted, fontWeight: "700" }}>
+                          बचा स्टॉक: {b.remainingQuantity} {b.unit}
+                        </AppText>
+                      </View>
+                    </Card>
+                  ))
+                )}
+              </View>
+            </>
+          )}
+        </View>
+      )}
+
+      {/* ========================================== */}
+      {/* TAB 3: STOCK KHATA (गोदाम स्टॉक)          */}
       {/* ========================================== */}
       {activeTab === "stock" && (
         <View style={{ gap: 12 }}>
@@ -1644,16 +1885,20 @@ function AddStockModal({
   const t = useTheme();
   const productMut = useProductMutations();
   const [qty, setQty] = useState("");
+  const [totalCost, setTotalCost] = useState("");
   const [purchaseRate, setPurchaseRate] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
       setQty("");
+      setTotalCost("");
       setPurchaseRate("");
       setSupplier("");
+      setInvoiceNumber("");
       setNote("");
       setError(null);
     }
@@ -1672,13 +1917,18 @@ function AddStockModal({
     }
     setError(null);
     try {
+      const parsedCost = parseFloat(totalCost);
+      const parsedRate = parseFloat(purchaseRate);
+
       await productMut.adjustStock.mutateAsync({
         id: product.id,
         payload: {
           action: "ADD",
           quantity: numQty,
-          purchaseRate: purchaseRate ? parseFloat(purchaseRate) : undefined,
+          totalPurchaseCost: !Number.isNaN(parsedCost) && parsedCost >= 0 ? parsedCost : undefined,
+          purchaseRate: !Number.isNaN(parsedRate) && parsedRate >= 0 ? parsedRate : undefined,
           supplier: supplier.trim() || undefined,
+          invoiceNumber: invoiceNumber.trim() || undefined,
           note: note.trim() || undefined,
         },
       });
@@ -1689,7 +1939,7 @@ function AddStockModal({
   };
 
   return (
-    <ModalShell visible={visible} onClose={onClose} title="स्टॉक जोड़ें (Add Stock)">
+    <ModalShell visible={visible} onClose={onClose} title="नया स्टॉक व खरीद जोड़ें">
       <View style={{ gap: 12 }}>
         {/* Product preview */}
         <View style={{ padding: 12, borderRadius: 12, backgroundColor: t.colors.surfaceMuted, gap: 4 }}>
@@ -1707,11 +1957,18 @@ function AddStockModal({
 
         {/* Input */}
         <Input
-          label={`नया स्टॉक कितना आया? (${product.unit}) *`}
-          placeholder="उदा: 200"
+          label={`खरीदी गई मात्रा (Quantity in ${product.unit}) *`}
+          placeholder="उदा: 50"
           keyboardType="decimal-pad"
           value={qty}
-          onChangeText={setQty}
+          onChangeText={(v) => {
+            setQty(v);
+            const q = parseFloat(v);
+            const c = parseFloat(totalCost);
+            if (!Number.isNaN(q) && q > 0 && !Number.isNaN(c) && c >= 0) {
+              setPurchaseRate((c / q).toFixed(2));
+            }
+          }}
           autoFocus
         />
 
@@ -1729,24 +1986,64 @@ function AddStockModal({
           </View>
         )}
 
-        {/* Optional fields */}
-        <Input
-          label="खरीद दर (Purchase Rate ₹) - वैकल्पिक"
-          placeholder="0.00"
-          keyboardType="decimal-pad"
-          value={purchaseRate}
-          onChangeText={setPurchaseRate}
-        />
+        {/* Purchase Cost & Rate Section */}
+        <View style={{ padding: 12, borderRadius: 12, backgroundColor: "#f0fdf4", borderWidth: 1, borderColor: "#bbf7d0", gap: 10 }}>
+          <AppText style={{ fontSize: 12, fontWeight: "800", color: "#166534" }}>
+            💰 खरीद लागत व FIFO बैच (Purchase Cost)
+          </AppText>
+
+          <Input
+            label="कुल खरीद मूल्य (Total Purchase Cost ₹) - उदा: 5000"
+            placeholder="0.00"
+            keyboardType="decimal-pad"
+            value={totalCost}
+            onChangeText={(v) => {
+              setTotalCost(v);
+              const c = parseFloat(v);
+              const q = parseFloat(qty);
+              if (!Number.isNaN(c) && !Number.isNaN(q) && q > 0) {
+                setPurchaseRate((c / q).toFixed(2));
+              }
+            }}
+          />
+
+          <Input
+            label={`प्रति ${product.unit} खरीद दर (Rate ₹) - उदा: 100`}
+            placeholder="0.00"
+            keyboardType="decimal-pad"
+            value={purchaseRate}
+            onChangeText={(v) => {
+              setPurchaseRate(v);
+              const r = parseFloat(v);
+              const q = parseFloat(qty);
+              if (!Number.isNaN(r) && !Number.isNaN(q) && q > 0) {
+                setTotalCost((r * q).toFixed(2));
+              }
+            }}
+          />
+
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Input
+                label="सप्लायर का नाम"
+                placeholder="उदा: ACC Plant"
+                value={supplier}
+                onChangeText={setSupplier}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Input
+                label="बिल / चालान #"
+                placeholder="उदा: INV-089"
+                value={invoiceNumber}
+                onChangeText={setInvoiceNumber}
+              />
+            </View>
+          </View>
+        </View>
 
         <Input
-          label="सप्लायर / कंपनी का नाम - वैकल्पिक"
-          placeholder="उदा: ACC Cement Dealer"
-          value={supplier}
-          onChangeText={setSupplier}
-        />
-
-        <Input
-          label="अतिरिक्त नोट - वैकल्पिक"
+          label="अतिरिक्त नोट / रिमार्क"
           placeholder="गाड़ी नंबर, चालान नंबर या टिप्पणी"
           value={note}
           onChangeText={setNote}
@@ -1761,11 +2058,11 @@ function AddStockModal({
         <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
           <Button title="रद्द करें (Cancel)" variant="outline" onPress={onClose} style={{ flex: 1 }} />
           <Button
-            title="✓ स्टॉक जोड़ें"
+            title="✓ स्टॉक व खरीद सुरक्षित करें"
             loading={productMut.adjustStock.isPending}
             disabled={productMut.adjustStock.isPending || numQty <= 0}
             onPress={handleSave}
-            style={{ flex: 1 }}
+            style={{ flex: 2 }}
           />
         </View>
       </View>

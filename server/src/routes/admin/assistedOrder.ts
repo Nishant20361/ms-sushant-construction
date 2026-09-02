@@ -10,6 +10,7 @@ import { normalizeIndianMobile } from "../../utils/validatePhone.js";
 import { generateOrderNumber } from "../../utils/orderNumber.js";
 import { quantityMatchesUnit } from "../../utils/quantity.js";
 import { serializeOrder } from "../../utils/serializer.js";
+import { allocateInventoryFifo } from "../../utils/inventoryFifo.js";
 import { createAdminNotification, notifyStockTransitions } from "../../services/push.service.js";
 import { AuthenticatedRequest } from "../../types.js";
 import { createHash } from "node:crypto";
@@ -210,6 +211,16 @@ router.post(
             },
             include: { items: true },
           });
+
+          // Allocate inventory batches (FIFO) to track exact costs and profits
+          for (const item of createdOrder.items) {
+            await allocateInventoryFifo(tx, {
+              orderItemId: item.id,
+              productId: item.productId,
+              quantity: item.quantity,
+              sellingPricePerUnit: item.price,
+            });
+          }
 
           // Create the Bill record
           const createdBill = await tx.bill.create({

@@ -82,7 +82,9 @@ export const productService = {
       quantity: number;
       reason?: string;
       purchaseRate?: number;
+      totalPurchaseCost?: number;
       supplier?: string;
+      invoiceNumber?: string;
       note?: string;
     }
   ) =>

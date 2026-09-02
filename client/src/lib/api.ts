@@ -260,8 +260,18 @@ export const adminApi = {
   },
   adjustStock(
     id: number,
-    data: { action: "ADD" | "SET" | "DEDUCT"; quantity: number; reason?: string }
-  ): Promise<{ product: Product }> {
+    data: {
+      action: "ADD" | "SET" | "DEDUCT";
+      quantity: number;
+      reason?: string;
+      purchaseRate?: number;
+      totalPurchaseCost?: number;
+      supplier?: string;
+      invoiceNumber?: string;
+      purchaseDate?: string;
+      note?: string;
+    }
+  ): Promise<{ product: Product; batch?: any }> {
     return request(`/admin/products/${id}/stock`, { method: "PATCH", body: JSON.stringify(data) }, { csrf: true });
   },
   getCategories(): Promise<{ categories: Category[] }> {
@@ -594,6 +604,12 @@ const q = new URLSearchParams();
   },
   getAnalyticsProducts(): Promise<{ products: { id: number; name: string; unit: string; category: { name: string } | null }[] }> {
     return request("/admin/analytics/products");
+  },
+  getKhatabookProfit(): Promise<import("../types").ProfitAnalyticsData> {
+    return request("/admin/khatabook/profit");
+  },
+  getProductBatches(id: number): Promise<{ product: import("../types").Product; batches: import("../types").ProductPurchaseBatch[] }> {
+    return request(`/admin/products/${id}/batches`);
   },
 };
 
