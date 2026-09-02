@@ -21,6 +21,7 @@ import {
   PlusCircle,
   ShieldAlert,
   ArrowUpRight,
+  Download,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -84,6 +85,13 @@ export default function Dashboard() {
               <PlusCircle className="h-4 w-4" />
               <span>+ ग्राहक के लिए ऑर्डर (Place Order)</span>
             </Link>
+            <a
+              href="https://github.com/Nishant20361/ms-sushant-construction/releases/download/sushant-control-v1.0.0/Sushant-Control-v1.0.0.apk"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-600/30 hover:from-blue-500 hover:to-indigo-500 transition active:scale-95 border border-blue-400/30"
+            >
+              <Download className="h-4 w-4" />
+              <span>Download Sushant Control App</span>
+            </a>
             <button
               onClick={load}
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition active:scale-95 shadow-sm"

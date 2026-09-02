@@ -35,6 +35,28 @@ async function toBillData(order: any, bill: any): Promise<BillData> {
     payments: order.payments,
   });
 
+  // Check if there are linked payments allocated to previous dues from this order
+  const linkedPayments = await prisma.orderPayment.findMany({
+    where: {
+      notes: { contains: `from order #${order.orderNumber}` },
+    },
+  });
+
+  const linkedPreviousDuesPaid = roundCurrency(
+    linkedPayments.reduce((sum, p) => sum + Number(p.amount), 0)
+  );
+
+  const directExcess = Math.max(0, roundCurrency(fin.paidTotal - fin.finalAmount));
+  const previousDuesPaid = roundCurrency(linkedPreviousDuesPaid + directExcess);
+  const totalPaid = roundCurrency(fin.paidTotal + linkedPreviousDuesPaid);
+
+  let cashPaid = fin.cashTotal;
+  let onlinePaid = fin.onlineTotal;
+  for (const lp of linkedPayments) {
+    if (lp.paymentMode === "CASH") cashPaid = roundCurrency(cashPaid + Number(lp.amount));
+    else if (lp.paymentMode === "ONLINE") onlinePaid = roundCurrency(onlinePaid + Number(lp.amount));
+  }
+
   return {
     companyName: settings?.companyName || "M/S Sushant Construction",
     tagline: settings?.tagline || "Your trusted partner",
@@ -55,11 +77,12 @@ async function toBillData(order: any, bill: any): Promise<BillData> {
     discount: fin.discount,
     finalAmount: fin.finalAmount,
     // Payment details
-    cashPaid: fin.cashTotal,
-    onlinePaid: fin.onlineTotal,
-    totalPaid: fin.paidTotal,
+    cashPaid,
+    onlinePaid,
+    totalPaid,
     due: fin.due,
     paymentStatus: fin.paymentStatus,
+    previousDuesPaid,
     // Business invoice details from settings
     businessName: biz.businessName || "",
     businessAddress: biz.businessAddress || "",

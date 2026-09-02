@@ -89,6 +89,8 @@ export function serializeOrder(o: any) {
     paidTotal: fin.paidTotal,
     due: fin.due,
     paymentStatus: fin.paymentStatus,
+    previousDuesPaid: o.previousDuesPaid !== undefined ? toNumber(o.previousDuesPaid) : undefined,
+    totalPaidNow: o.totalPaidNow !== undefined ? toNumber(o.totalPaidNow) : undefined,
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
   };

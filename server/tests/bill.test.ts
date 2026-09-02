@@ -26,4 +26,23 @@ describe("compact invoice HTML", () => {
     expect(html).toContain('<div class="row due">');
     expect(html).toContain('<p class="discount">');
   });
+
+  it("displays previous dues applied row when excess or previous due was paid", () => {
+    const billWithPrevDue: BillData = {
+      ...bill,
+      finalAmount: 25,
+      totalPaid: 85,
+      cashPaid: 85,
+      previousDuesPaid: 60,
+      due: 0,
+      paymentStatus: "PAID",
+    };
+
+    const html = buildBillHtml(billWithPrevDue);
+    expect(html).toContain("Applied to Previous Dues (पुरानी बकाया चुकता)");
+    expect(html).toContain("₹60");
+    expect(html).toContain("Applied to This Order Bill (इस बिल में जमा)");
+    expect(html).toContain("₹25");
+    expect(html).toContain("₹85");
+  });
 });

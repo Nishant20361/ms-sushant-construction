@@ -352,16 +352,17 @@ export function PlaceOrderScreen() {
       .join("\n");
 
     const finalAmount = createdOrder.finalAmount || (createdOrder as any).bill?.finalAmount || createdOrder.subtotal || finalBill;
-    const totalPaid = createdOrder.paidTotal || (createdOrder.payments || []).reduce((s, p) => s + Number(p.amount), 0) || paid;
-    const thisBillPaid = Math.min(totalPaid, finalAmount);
-    const excessPaid = Math.max(0, Math.round((totalPaid - finalAmount) * 100) / 100);
+    const prevDuePaid = (createdOrder as any).previousDuesPaid || Math.max(0, Math.round(((createdOrder as any).totalPaidNow || paid) - finalAmount) * 100) / 100;
+    const totalPaid = (createdOrder as any).totalPaidNow || ((createdOrder.paidTotal || 0) + prevDuePaid) || paid;
+    const thisBillPaid = Math.max(0, Math.min(totalPaid - prevDuePaid, finalAmount));
+    const excessPaid = prevDuePaid > 0 ? prevDuePaid : Math.max(0, Math.round((totalPaid - finalAmount) * 100) / 100);
     const due = createdOrder.due !== undefined ? createdOrder.due : Math.max(0, finalAmount - thisBillPaid);
     const discount = (createdOrder as any).bill?.discount || discountAmount || 0;
 
     const paymentSection = excessPaid > 0
-      ? `✅ *Total Amount Paid:* ${formatINR(totalPaid)} (${paymentMode})\n` +
-        `   ↳ *Applied to this Bill:* ${formatINR(thisBillPaid)} (Fully Paid)\n` +
-        `   ↳ *Applied to Previous Dues (पुरानी बकाया):* ${formatINR(excessPaid)}\n`
+      ? `✅ *Total Amount Paid (कुल जमा):* ${formatINR(totalPaid)} (${paymentMode})\n` +
+        `   ↳ *Applied to this Bill (इस बिल में जमा):* ${formatINR(thisBillPaid > 0 ? thisBillPaid : finalAmount)} (Fully Paid)\n` +
+        `   ↳ *Applied to Previous Dues (पुरानी बकाया चुकता):* ${formatINR(excessPaid)}\n`
       : `✅ *Paid Amount:* ${formatINR(totalPaid)} (${paymentMode})\n` +
         (due > 0 ? `⚠️ *Remaining Due on this Bill:* ${formatINR(due)}\n` : "");
 
@@ -1299,15 +1300,17 @@ function generateReceiptHtml(order: Order, settings?: Settings | null): string {
     .filter((p: any) => p.paymentMode === "ONLINE")
     .reduce((s: number, p: any) => s + Number(p.amount), 0);
 
-  const paid = order.paidTotal || (cashPaid + onlinePaid) || 0;
+  const prevDuePaid = (order as any).previousDuesPaid || Math.max(0, Math.round(((order as any).totalPaidNow || (cashPaid + onlinePaid) || order.paidTotal || 0) - finalAmount) * 100) / 100;
+  const paid = (order as any).totalPaidNow || ((order.paidTotal || (cashPaid + onlinePaid) || 0) + prevDuePaid);
+
   if (cashPaid === 0 && onlinePaid === 0 && paid > 0) {
     if (order.cashTotal > 0) cashPaid = order.cashTotal;
     else if (order.onlineTotal > 0) onlinePaid = order.onlineTotal;
     else cashPaid = paid;
   }
 
-  const thisBillPaid = Math.min(paid, finalAmount);
-  const excessPaid = Math.max(0, Math.round((paid - finalAmount) * 100) / 100);
+  const thisBillPaid = Math.max(0, Math.min(paid - prevDuePaid, finalAmount));
+  const excessPaid = prevDuePaid > 0 ? prevDuePaid : Math.max(0, Math.round((paid - finalAmount) * 100) / 100);
   const due = order.due !== undefined ? order.due : Math.max(0, finalAmount - thisBillPaid);
 
   const paymentStatus =

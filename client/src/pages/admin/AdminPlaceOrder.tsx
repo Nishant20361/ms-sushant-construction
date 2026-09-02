@@ -271,14 +271,26 @@ export default function AdminPlaceOrder() {
   // WhatsApp bill text generator
   const getWhatsAppUrl = (order: Order) => {
     const cleanMobile = order.customerMobile.replace(/\D/g, "").slice(-10);
+    const prevDuePaid = order.previousDuesPaid || Math.max(0, Math.round(((order.totalPaidNow || Number(paidAmount) || order.paidTotal) - order.finalAmount) * 100) / 100);
+    const totalPaidNow = order.totalPaidNow || (order.paidTotal + prevDuePaid);
+
+    let paymentText = `💵 *जमा राशि (Paid Amount):* ${formatINR(totalPaidNow)}`;
+    if (prevDuePaid > 0) {
+      paymentText += `\n   ↳ *इस बिल में जमा:* ${formatINR(order.paidTotal)} (PAID)\n   ↳ *पुरानी बकाया चुकता (Previous Dues Paid):* ${formatINR(prevDuePaid)}`;
+    }
+    if (order.due > 0) {
+      paymentText += `\n⚠️ *बाकी उधारी (Remaining Due):* ${formatINR(order.due)}`;
+    } else {
+      paymentText += `\n✅ *खाता स्टेटस:* पूर्ण भुगतान (PAID)`;
+    }
+
     const msg = `नमस्ते ${order.customerName} जी,
 
 M/S Sushant Construction से खरीदारी के लिए धन्यवाद!
 
 🧾 *ऑर्डर नंबर:* #${order.orderNumber}
-💰 *कुल बिल:* ${formatINR(order.finalAmount)}
-💵 *जमा राशि:* ${formatINR(order.paidTotal)}
-${order.due > 0 ? `⚠️ *बाकी उधारी:* ${formatINR(order.due)}` : "✅ *खाता स्टेटस:* पूर्ण भुगतान (PAID)"}
+💰 *कुल बिल (This Bill):* ${formatINR(order.finalAmount)}
+${paymentText}
 
 धन्यवाद!
 *M/S Sushant Construction*`;
@@ -292,6 +304,9 @@ ${order.due > 0 ? `⚠️ *बाकी उधारी:* ${formatINR(order.due)
 
   // Success view after order is confirmed
   if (createdOrder) {
+    const prevDuePaid = createdOrder.previousDuesPaid || Math.max(0, Math.round(((createdOrder.totalPaidNow || Number(paidAmount) || createdOrder.paidTotal) - createdOrder.finalAmount) * 100) / 100);
+    const totalPaidNow = createdOrder.totalPaidNow || (createdOrder.paidTotal + prevDuePaid);
+
     return (
       <div className="mx-auto max-w-2xl space-y-6 py-8">
         <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-xl">
@@ -344,9 +359,21 @@ ${order.due > 0 ? `⚠️ *बाकी उधारी:* ${formatINR(order.due)
                 <span className="text-emerald-700">{formatINR(createdOrder.finalAmount)}</span>
               </div>
               <div className="flex justify-between text-emerald-700 font-semibold">
-                <span>जमा की गई राशि (Paid Now)</span>
-                <span>{formatINR(createdOrder.paidTotal)}</span>
+                <span>कुल जमा की गई राशि (Total Paid)</span>
+                <span>{formatINR(totalPaidNow)}</span>
               </div>
+              {prevDuePaid > 0 && (
+                <div className="rounded-lg bg-emerald-50 p-2.5 text-xs text-emerald-800 space-y-1 border border-emerald-200">
+                  <div className="flex justify-between">
+                    <span>↳ इस बिल में जमा (Applied to This Bill):</span>
+                    <span className="font-semibold">{formatINR(createdOrder.paidTotal)} (PAID)</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>↳ पुरानी बकाया चुकता (Previous Dues Paid):</span>
+                    <span className="font-bold">{formatINR(prevDuePaid)}</span>
+                  </div>
+                </div>
+              )}
               <div className="flex justify-between text-red-600 font-bold">
                 <span>बाकी उधारी (Remaining Due)</span>
                 <span>{formatINR(createdOrder.due)}</span>

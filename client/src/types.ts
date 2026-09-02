@@ -156,6 +156,8 @@ export interface Order {
   paidTotal: number;
   due: number;
   paymentStatus: PaymentStatus;
+  previousDuesPaid?: number;
+  totalPaidNow?: number;
   createdAt: string;
   updatedAt: string;
 }

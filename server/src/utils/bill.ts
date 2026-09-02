@@ -38,6 +38,7 @@ export interface BillData {
   totalPaid: number;
   due: number;
   paymentStatus: "PAID" | "PARTIALLY_PAID" | "DUE";
+  previousDuesPaid?: number;
   // Business invoice details
   businessName: string;
   businessAddress: string;
@@ -157,18 +158,22 @@ export function buildBillText(bill: BillData): string {
   }
   lines.push(`Final Amount (Total): ${fmtINR(bill.finalAmount)}`);
   lines.push("");
+  const prevDuePaid = (bill.previousDuesPaid !== undefined && bill.previousDuesPaid > 0)
+    ? bill.previousDuesPaid
+    : Math.max(0, Math.round((bill.totalPaid - bill.finalAmount) * 100) / 100);
+  const thisBillPaid = Math.max(0, Math.min(bill.totalPaid - (bill.previousDuesPaid || 0), bill.finalAmount));
+
   lines.push("Payment Details:");
-  lines.push(`  Total Paid: ${fmtINR(bill.totalPaid)}`);
+  lines.push(`  Total Paid Amount: ${fmtINR(bill.totalPaid)}`);
+  if (prevDuePaid > 0) {
+    lines.push(`  ↳ Applied to This Order Bill (इस बिल में जमा): ${fmtINR(thisBillPaid > 0 ? thisBillPaid : bill.finalAmount)} (PAID)`);
+    lines.push(`  ↳ Applied to Previous Dues (पुरानी बकाया चुकता): ${fmtINR(prevDuePaid)}`);
+  }
   if (bill.cashPaid > 0) {
     lines.push(`  Cash Received: ${fmtINR(bill.cashPaid)}`);
   }
   if (bill.onlinePaid > 0) {
     lines.push(`  Online Received: ${fmtINR(bill.onlinePaid)}`);
-  }
-  if (bill.totalPaid > bill.finalAmount) {
-    const excess = Math.round((bill.totalPaid - bill.finalAmount) * 100) / 100;
-    lines.push(`  ↳ Applied to this Bill: ${fmtINR(bill.finalAmount)} (PAID)`);
-    lines.push(`  ↳ Applied to Previous Dues (पुरानी बकाया): ${fmtINR(excess)}`);
   }
   lines.push(`  Payment Status: ${paymentStatusLabel(bill.paymentStatus)}`);
   if (bill.due > 0) {
@@ -232,6 +237,11 @@ export function buildBillHtml(bill: BillData): string {
       : bill.paymentStatus === "DUE"
       ? `<span class="pstatus due">DUE</span>`
       : `<span class="pstatus partial">PARTIALLY PAID</span>`;
+
+  const htmlPrevDuePaid = (bill.previousDuesPaid !== undefined && bill.previousDuesPaid > 0)
+    ? bill.previousDuesPaid
+    : Math.max(0, Math.round((bill.totalPaid - bill.finalAmount) * 100) / 100);
+  const htmlThisBillPaid = Math.max(0, Math.min(bill.totalPaid - (bill.previousDuesPaid || 0), bill.finalAmount));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -361,13 +371,25 @@ export function buildBillHtml(bill: BillData): string {
     <div class="payment-box">
       <div class="head">Payment Details</div>
       <div class="row">
-        <span class="label">Total Order Bill</span>
+        <span class="label">Total Order Bill (इस आर्डर का बिल)</span>
         <span class="val">${fmtINR(bill.finalAmount)}</span>
       </div>
       <div class="row">
-        <span class="label">Total Paid Amount</span>
+        <span class="label">Total Paid Amount (कुल जमा राशि)</span>
         <span class="val" style="color: #15803d; font-weight: 700;">${fmtINR(bill.totalPaid)}</span>
       </div>
+      ${
+        htmlPrevDuePaid > 0
+          ? `<div class="row">
+              <span class="label">↳ Applied to This Order Bill (इस बिल में जमा)</span>
+              <span class="val" style="font-weight: 700;">${fmtINR(htmlThisBillPaid > 0 ? htmlThisBillPaid : bill.finalAmount)} (PAID)</span>
+             </div>
+             <div class="row" style="background: #f0fdf4;">
+              <span class="label" style="color: #15803d; font-weight: 600;">↳ Applied to Previous Dues (पुरानी बकाया चुकता)</span>
+              <span class="val" style="color: #15803d; font-weight: 700;">${fmtINR(htmlPrevDuePaid)}</span>
+             </div>`
+          : ""
+      }
       ${
         bill.cashPaid > 0
           ? `<div class="row"><span class="label">Cash Received</span><span class="val">${fmtINR(bill.cashPaid)}</span></div>`
@@ -376,18 +398,6 @@ export function buildBillHtml(bill: BillData): string {
       ${
         bill.onlinePaid > 0
           ? `<div class="row"><span class="label">Online Received</span><span class="val">${fmtINR(bill.onlinePaid)}</span></div>`
-          : ""
-      }
-      ${
-        bill.totalPaid > bill.finalAmount
-          ? `<div class="row" style="background: #f0fdf4;">
-              <span class="label" style="color: #15803d; font-weight: 600;">↳ Applied to Previous Dues (पुरानी बकाया चुकता)</span>
-              <span class="val" style="color: #15803d; font-weight: 700;">${fmtINR(Math.round((bill.totalPaid - bill.finalAmount) * 100) / 100)}</span>
-             </div>
-             <div class="row">
-              <span class="label">↳ Applied to This Order Bill</span>
-              <span class="val" style="font-weight: 700;">${fmtINR(bill.finalAmount)} (PAID)</span>
-             </div>`
           : ""
       }
       <div class="row">
