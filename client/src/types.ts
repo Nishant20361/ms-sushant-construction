@@ -654,8 +654,10 @@ export interface ProductProfitItem {
   totalRevenue: number;
   totalCost: number;
   grossProfit: number;
+  discountGiven: number;
   netProfit: number;
   marginPercent: number;
+  uncostedRevenue: number;
 }
 
 export interface ProfitAnalyticsData {
@@ -679,6 +681,7 @@ export interface ProfitAnalyticsData {
   };
   currentStockValuation: number;
   activeBatchesCount: number;
+  costingCoverage: { uncostedRevenue: number; uncostedUnits: number; isComplete: boolean };
   productProfits: ProductProfitItem[];
   recentBatches: ProductPurchaseBatch[];
 }

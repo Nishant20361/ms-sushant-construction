@@ -985,6 +985,9 @@ router.patch(
           }
         }
 
+        // Return every old cost slice before replacing items. Deleting order
+        // items alone would cascade allocations without restoring batches.
+        for (const oldItem of order.items) await restoreInventoryFifo(tx, oldItem.id);
         await tx.orderItem.deleteMany({ where: { orderId: id } });
         await tx.order.update({
           where: { id },
@@ -993,6 +996,16 @@ router.patch(
             items: { create: createItems },
           },
         });
+
+        const replacementItems = await tx.orderItem.findMany({ where: { orderId: id } });
+        for (const item of replacementItems) {
+          await allocateInventoryFifo(tx, {
+            orderItemId: item.id,
+            productId: item.productId,
+            quantity: Number(item.quantity),
+            sellingPricePerUnit: item.price,
+          });
+        }
 
         if (order.bill) {
           await tx.bill.update({

@@ -373,16 +373,20 @@ export default function Khatabook() {
       setStockAddError("कृपया मान्य मात्रा दर्ज करें (Enter valid quantity)");
       return;
     }
+    const parsedCost = parseFloat(stockAddTotalCost);
+    const parsedRate = parseFloat(stockAddRate);
+    if (Number.isNaN(parsedCost) && Number.isNaN(parsedRate)) {
+      setStockAddError("खरीद की कुल लागत या प्रति यूनिट दर दर्ज करना जरूरी है");
+      return;
+    }
     setStockAddSaving(true);
     setStockAddError(null);
     try {
-      const cost = parseFloat(stockAddTotalCost);
-      const rate = parseFloat(stockAddRate);
       const res = await adminApi.adjustStock(stockAddProduct.id, {
         action: "ADD",
         quantity: qty,
-        totalPurchaseCost: !Number.isNaN(cost) && cost >= 0 ? cost : undefined,
-        purchaseRate: !Number.isNaN(rate) && rate >= 0 ? rate : undefined,
+        totalPurchaseCost: !Number.isNaN(parsedCost) && parsedCost >= 0 ? parsedCost : undefined,
+        purchaseRate: !Number.isNaN(parsedRate) && parsedRate >= 0 ? parsedRate : undefined,
         supplier: stockAddSupplier || undefined,
         invoiceNumber: stockAddInvoice || undefined,
         note: stockAddNote || undefined,
@@ -1118,6 +1122,12 @@ export default function Khatabook() {
             <div className="card p-12 text-center">डेटा उपलब्ध नहीं है।</div>
           ) : (
             <>
+              {!profitData.costingCoverage.isComplete && (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                  <p className="font-bold">⚠ कुछ पुराने स्टॉक की खरीद लागत उपलब्ध नहीं है</p>
+                  <p className="mt-1 text-xs">{formatINR(profitData.costingCoverage.uncostedRevenue)} बिक्री को मुनाफे में शामिल नहीं किया गया। सही रिपोर्ट के लिए नया स्टॉक खरीद लागत के साथ जोड़ें।</p>
+                </div>
+              )}
               {/* 4 Main Profit KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Daily Profit Card */}
@@ -1258,6 +1268,8 @@ export default function Khatabook() {
                             </td>
                             <td className="p-3 text-right font-black text-base text-emerald-700">
                               {formatINR(p.netProfit)}
+                              {p.discountGiven > 0 && <span className="block text-[10px] font-medium text-slate-500">छूट -{formatINR(p.discountGiven)}</span>}
+                              {p.uncostedRevenue > 0 && <span className="block text-[10px] font-medium text-amber-700">लागत अज्ञात: {formatINR(p.uncostedRevenue)}</span>}
                             </td>
                             <td className="p-3 text-center">
                               <span

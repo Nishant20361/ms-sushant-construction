@@ -1048,6 +1048,12 @@ export function DuesScreen() {
             <EmptyState title="डेटा उपलब्ध नहीं है" description="मुनाफा हिसाब अभी उपलब्ध नहीं है" />
           ) : (
             <>
+              {!profitQ.data.costingCoverage.isComplete && (
+                <Card style={{ gap: 4, borderColor: "#f59e0b", backgroundColor: "#fffbeb" }}>
+                  <AppText style={{ color: "#92400e", fontWeight: "900" }}>⚠ कुछ पुराने स्टॉक की खरीद लागत उपलब्ध नहीं है</AppText>
+                  <AppText role="caption" style={{ color: "#92400e" }}>{formatINR(profitQ.data.costingCoverage.uncostedRevenue)} बिक्री को मुनाफे में शामिल नहीं किया गया।</AppText>
+                </Card>
+              )}
               {/* 4 Hero KPI Cards */}
               <View style={s.kpiGrid}>
                 {/* Today Profit */}
@@ -1172,6 +1178,8 @@ export function DuesScreen() {
                           <AppText style={{ fontSize: 15, fontWeight: "900", color: "#166534", marginTop: 2 }}>
                             +{formatINR(item.netProfit)}
                           </AppText>
+                          {item.discountGiven > 0 ? <AppText role="caption" style={{ color: t.colors.textMuted }}>छूट -{formatINR(item.discountGiven)}</AppText> : null}
+                          {item.uncostedRevenue > 0 ? <AppText role="caption" style={{ color: "#92400e" }}>लागत अज्ञात {formatINR(item.uncostedRevenue)}</AppText> : null}
                         </View>
                       </View>
 
@@ -1915,11 +1923,14 @@ function AddStockModal({
       setError("कृपया 0 से अधिक मात्रा दर्ज करें");
       return;
     }
+    const parsedCost = parseFloat(totalCost);
+    const parsedRate = parseFloat(purchaseRate);
+    if (Number.isNaN(parsedCost) && Number.isNaN(parsedRate)) {
+      setError("खरीद की कुल लागत या प्रति यूनिट दर दर्ज करना जरूरी है");
+      return;
+    }
     setError(null);
     try {
-      const parsedCost = parseFloat(totalCost);
-      const parsedRate = parseFloat(purchaseRate);
-
       await productMut.adjustStock.mutateAsync({
         id: product.id,
         payload: {

@@ -352,19 +352,31 @@ export function PlaceOrderScreen() {
       .join("\n");
 
     const finalAmount = createdOrder.finalAmount || (createdOrder as any).bill?.finalAmount || createdOrder.subtotal || finalBill;
+    const prevDue = (createdOrder as any).previousDue ?? lookupResult?.previousDue ?? oldDue ?? 0;
     const prevDuePaid = (createdOrder as any).previousDuesPaid || Math.max(0, Math.round(((createdOrder as any).totalPaidNow || paid) - finalAmount) * 100) / 100;
     const totalPaid = (createdOrder as any).totalPaidNow || ((createdOrder.paidTotal || 0) + prevDuePaid) || paid;
     const thisBillPaid = Math.max(0, Math.min(totalPaid - prevDuePaid, finalAmount));
     const excessPaid = prevDuePaid > 0 ? prevDuePaid : Math.max(0, Math.round((totalPaid - finalAmount) * 100) / 100);
     const due = createdOrder.due !== undefined ? createdOrder.due : Math.max(0, finalAmount - thisBillPaid);
     const discount = (createdOrder as any).bill?.discount || discountAmount || 0;
+    const remainingPrevDue = Math.max(0, Math.round((prevDue - excessPaid) * 100) / 100);
+    const totalNetDue = (createdOrder as any).totalCustomerDue ?? Math.round((due + remainingPrevDue) * 100) / 100;
 
-    const paymentSection = excessPaid > 0
-      ? `✅ *Total Amount Paid (कुल जमा):* ${formatINR(totalPaid)} (${paymentMode})\n` +
-        `   ↳ *Applied to this Bill (इस बिल में जमा):* ${formatINR(thisBillPaid > 0 ? thisBillPaid : finalAmount)} (Fully Paid)\n` +
-        `   ↳ *Applied to Previous Dues (पुरानी बकाया चुकता):* ${formatINR(excessPaid)}\n`
-      : `✅ *Paid Amount:* ${formatINR(totalPaid)} (${paymentMode})\n` +
-        (due > 0 ? `⚠️ *Remaining Due on this Bill:* ${formatINR(due)}\n` : "");
+    let paymentSection = "";
+    if (prevDue > 0) {
+      paymentSection += `📋 *Previous Due (पिछला बकाया):* ${formatINR(prevDue)}\n`;
+    }
+    if (excessPaid > 0) {
+      paymentSection += `✅ *Total Paid Now (जमा राशि):* ${formatINR(totalPaid)} (${paymentMode})\n` +
+        `   ↳ *Applied to this Bill (इस बिल में जमा):* ${formatINR(thisBillPaid > 0 ? thisBillPaid : finalAmount)} (Paid)\n` +
+        `   ↳ *Cleared Previous Dues (पुरानी बकाया चुकता):* ${formatINR(excessPaid)}\n`;
+    } else {
+      paymentSection += `✅ *Paid Now (जमा राशि):* ${formatINR(totalPaid)} (${paymentMode})\n`;
+      if (due > 0) {
+        paymentSection += `⚠️ *Remaining Due on this Bill:* ${formatINR(due)}\n`;
+      }
+    }
+    paymentSection += `💰 *Total Net Due (अब कुल बकाया):* ${formatINR(totalNetDue)}\n`;
 
     const text = `*M/S SUSHANT CONSTRUCTION*\n` +
       `*Order & Invoice Receipt*\n\n` +
@@ -376,7 +388,7 @@ export function PlaceOrderScreen() {
       `🛒 *Items:*\n${itemsSummary}\n\n` +
       `💵 *Subtotal:* ${formatINR(createdOrder.subtotal || subtotal)}\n` +
       (discount > 0 ? `🎁 *Discount:* -${formatINR(discount)}\n` : "") +
-      `💰 *Total Final Bill:* ${formatINR(finalAmount)}\n` +
+      `💰 *Total Order Bill:* ${formatINR(finalAmount)}\n\n` +
       paymentSection + "\n" +
       `_Thank you for choosing M/S Sushant Construction._`;
 
@@ -1158,7 +1170,7 @@ export function PlaceOrderScreen() {
               </View>
             </View>
 
-            <View style={{ width: "100%", gap: 6, marginTop: 12 }}>
+            <View style={{ width: "100%", gap: 7, marginTop: 12 }}>
               <View style={s.rowBetween}>
                 <AppText style={{ color: t.colors.textMuted }}>Customer Name:</AppText>
                 <AppText role="bodyStrong">{createdOrder.customerName}</AppText>
@@ -1175,45 +1187,91 @@ export function PlaceOrderScreen() {
                   </AppText>
                 </View>
               ) : null}
-              <Divider />
-              <View style={s.rowBetween}>
-                <AppText style={{ color: t.colors.textMuted }}>Total Order Bill:</AppText>
-                <AppText role="bodyStrong" style={{ color: t.colors.brand }}>
-                  {formatINR(createdOrder.finalAmount || (createdOrder as any).bill?.finalAmount || createdOrder.subtotal)}
-                </AppText>
-              </View>
-              <View style={s.rowBetween}>
-                <AppText style={{ color: t.colors.textMuted }}>Amount Paid Now:</AppText>
-                <AppText role="bodyStrong" style={{ color: "#16a34a" }}>
-                  {formatINR(
-                    createdOrder.paidTotal ||
-                    (createdOrder.payments || []).reduce((s, p) => s + Number(p.amount), 0) || paid
-                  )}
-                </AppText>
-              </View>
 
+              <Divider />
+
+              {/* Financial Breakdown */}
               {(() => {
+                const prevDue = (createdOrder as any).previousDue ?? lookupResult?.previousDue ?? oldDue ?? 0;
                 const finalAmt = createdOrder.finalAmount || (createdOrder as any).bill?.finalAmount || createdOrder.subtotal || finalBill;
-                const paidAmt = createdOrder.paidTotal || (createdOrder.payments || []).reduce((s, p) => s + Number(p.amount), 0) || paid;
+                const paidAmt = (createdOrder as any).totalPaidNow ?? (
+                  createdOrder.paidTotal ||
+                  (createdOrder.payments || []).reduce((s, p) => s + Number(p.amount), 0) || paid
+                );
                 const excess = Math.max(0, Math.round((paidAmt - finalAmt) * 100) / 100);
                 const appliedThis = Math.min(paidAmt, finalAmt);
-                if (excess <= 0) return null;
+                const prevDueCleared = (createdOrder as any).previousDuesPaid ?? Math.min(prevDue, excess);
+                const thisOrderDue = Math.max(0, Math.round((finalAmt - appliedThis) * 100) / 100);
+                const remainingPrevDue = Math.max(0, Math.round((prevDue - prevDueCleared) * 100) / 100);
+                const totalOutstanding = (createdOrder as any).totalCustomerDue ?? Math.round((thisOrderDue + remainingPrevDue) * 100) / 100;
+
                 return (
-                  <View style={{ backgroundColor: "rgba(22, 163, 74, 0.1)", padding: 8, borderRadius: 8, gap: 4, marginVertical: 4 }}>
+                  <View style={{ gap: 6 }}>
+                    {/* Previous Due */}
                     <View style={s.rowBetween}>
-                      <AppText style={{ color: "#16a34a", fontSize: 12, fontWeight: "600" }}>
-                        ↳ Applied to this Order:
-                      </AppText>
-                      <AppText style={{ color: "#16a34a", fontSize: 12, fontWeight: "700" }}>
-                        {formatINR(appliedThis)} (Paid)
+                      <AppText style={{ color: t.colors.textMuted }}>Previous Due (पिछला बकाया):</AppText>
+                      <AppText role="bodyStrong" style={{ color: prevDue > 0 ? "#e11d48" : t.colors.text }}>
+                        {formatINR(prevDue)}
                       </AppText>
                     </View>
+
+                    {/* Current Order Bill */}
                     <View style={s.rowBetween}>
-                      <AppText style={{ color: "#16a34a", fontSize: 12, fontWeight: "600" }}>
-                        ↳ Cleared Previous Dues (पुरानी बकाया):
+                      <AppText style={{ color: t.colors.textMuted }}>Total Order Bill (इस बिल की राशि):</AppText>
+                      <AppText role="bodyStrong" style={{ color: t.colors.brand }}>
+                        {formatINR(finalAmt)}
                       </AppText>
-                      <AppText style={{ color: "#16a34a", fontSize: 12, fontWeight: "700" }}>
-                        {formatINR(excess)}
+                    </View>
+
+                    {/* Amount Paid Now */}
+                    <View style={s.rowBetween}>
+                      <AppText style={{ color: t.colors.textMuted }}>Amount Paid Now (अभी जमा किया):</AppText>
+                      <AppText role="bodyStrong" style={{ color: "#16a34a" }}>
+                        {formatINR(paidAmt)}
+                      </AppText>
+                    </View>
+
+                    {/* Excess allocation breakdown */}
+                    {prevDueCleared > 0 ? (
+                      <View style={{ backgroundColor: "rgba(22, 163, 74, 0.08)", padding: 8, borderRadius: 10, gap: 4, marginVertical: 2, borderWidth: 1, borderColor: "rgba(22, 163, 74, 0.2)" }}>
+                        <View style={s.rowBetween}>
+                          <AppText style={{ color: "#16a34a", fontSize: 11.5, fontWeight: "600" }}>
+                            ↳ Applied to this Order:
+                          </AppText>
+                          <AppText style={{ color: "#16a34a", fontSize: 12, fontWeight: "700" }}>
+                            {formatINR(appliedThis)} (Paid)
+                          </AppText>
+                        </View>
+                        <View style={s.rowBetween}>
+                          <AppText style={{ color: "#16a34a", fontSize: 11.5, fontWeight: "600" }}>
+                            ↳ Cleared Previous Dues (पुरानी बकाया चुकता):
+                          </AppText>
+                          <AppText style={{ color: "#16a34a", fontSize: 12, fontWeight: "800" }}>
+                            -{formatINR(prevDueCleared)}
+                          </AppText>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {/* Remaining Due on this bill */}
+                    {thisOrderDue > 0 ? (
+                      <View style={s.rowBetween}>
+                        <AppText style={{ color: t.colors.textMuted }}>Remaining Due on this Bill:</AppText>
+                        <AppText role="bodyStrong" style={{ color: "#e11d48" }}>
+                          {formatINR(thisOrderDue)}
+                        </AppText>
+                      </View>
+                    ) : null}
+
+                    <Divider />
+
+                    {/* Total Net Outstanding Due */}
+                    <View style={[s.rowBetween, { backgroundColor: totalOutstanding > 0 ? "rgba(225, 29, 72, 0.06)" : "rgba(22, 163, 74, 0.06)", padding: 10, borderRadius: 10 }]}>
+                      <AppText style={{ color: totalOutstanding > 0 ? "#e11d48" : "#16a34a", fontWeight: "800", fontSize: 13 }}>
+                        Total Net Due (अब कुल बकाया):
+                      </AppText>
+                      <AppText style={{ color: totalOutstanding > 0 ? "#e11d48" : "#16a34a", fontWeight: "900", fontSize: 15 }}>
+                        {formatINR(totalOutstanding)}
                       </AppText>
                     </View>
                   </View>

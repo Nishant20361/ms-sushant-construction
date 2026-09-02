@@ -10,7 +10,7 @@ import { serializeProduct } from "../../utils/serializer.js";
 import { HttpError } from "../../utils/httpError.js";
 import { AuthenticatedRequest } from "../../types.js";
 import { notifyStockTransitions } from "../../services/push.service.js";
-import { createPurchaseBatch } from "../../utils/inventoryFifo.js";
+import { consumePurchaseBatchesFifo, createPurchaseBatch } from "../../utils/inventoryFifo.js";
 
 const stockAdjustmentSchema = z
   .object({
@@ -32,6 +32,10 @@ const stockAdjustmentSchema = z
       return true;
     },
     { message: "Reason is required for manual stock reduction (DEDUCT).", path: ["reason"] }
+  )
+  .refine(
+    (data) => data.action !== "ADD" || data.totalPurchaseCost !== undefined || data.purchaseRate !== undefined,
+    { message: "Purchase cost or purchase rate is required when adding stock.", path: ["totalPurchaseCost"] }
   );
 
 /**
@@ -165,7 +169,10 @@ router.put(
 
     const price = normalizeCurrency(body.price);
     const mrp = normalizeCurrency(body.mrp);
-    const stock = normalizeStock(body.stock);
+    const requestedStock = normalizeStock(body.stock);
+    if (requestedStock !== normalizeStock(Number(existing.stock))) {
+      throw new HttpError(400, "Use Stock Khata to change quantity so purchase cost and FIFO valuation stay accurate.");
+    }
 
     const product = await prisma.$transaction(async (tx) => {
       await tx.product.update({
@@ -176,7 +183,7 @@ router.put(
           unit: body.unit,
           price,
           mrp,
-          stock,
+          stock: existing.stock,
           isActive: body.isActive,
           categoryId: body.categoryId,
         },
@@ -245,45 +252,32 @@ router.patch(
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const id = parseIntegerParam(req.params.id, "product id");
     const body = stockAdjustmentSchema.parse(req.body);
-    const existing = await prisma.product.findUnique({
-      where: { id },
-      include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
-    });
-    if (!existing) throw new HttpError(404, "Product not found");
-
-    const previousStock = Number(existing.stock);
-    let nextStock = previousStock;
-
-    if (body.action === "ADD") {
-      nextStock = roundTo(previousStock + body.quantity, 3);
-    } else if (body.action === "SET") {
-      nextStock = roundTo(body.quantity, 3);
-    } else if (body.action === "DEDUCT") {
-      if (previousStock < body.quantity) {
-        throw new HttpError(
-          400,
-          `Cannot deduct ${body.quantity} ${existing.unit}. Current stock is only ${previousStock} ${existing.unit}.`
-        );
-      }
-      nextStock = roundTo(previousStock - body.quantity, 3);
-    }
-
-    if (nextStock < 0) {
-      throw new HttpError(400, "Stock cannot be negative.");
-    }
-
+    let previousStock = 0;
+    let nextStock = 0;
     let batchRecord: any = null;
     const updated = await prisma.$transaction(async (tx) => {
+      const [locked] = await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+      if (!locked) throw new HttpError(404, "Product not found");
+      const existing = await tx.product.findUniqueOrThrow({ where: { id } });
+      previousStock = Number(existing.stock);
+      nextStock = body.action === "ADD" ? roundTo(previousStock + body.quantity, 3) : body.action === "SET" ? roundTo(body.quantity, 3) : roundTo(previousStock - body.quantity, 3);
+      if (nextStock < 0) throw new HttpError(400, `Cannot deduct ${body.quantity} ${existing.unit}. Current stock is only ${previousStock} ${existing.unit}.`);
+      const decrease = Math.max(0, roundTo(previousStock - nextStock, 3));
+      const increase = Math.max(0, roundTo(nextStock - previousStock, 3));
+      if (increase > 0 && body.totalPurchaseCost === undefined && body.purchaseRate === undefined) {
+        throw new HttpError(400, "Purchase cost or purchase rate is required when stock increases.");
+      }
+      if (decrease > 0) await consumePurchaseBatchesFifo(tx, id, decrease);
       const p = await tx.product.update({
         where: { id },
         data: { stock: nextStock },
         include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
       });
 
-      if (body.action === "ADD" && (body.totalPurchaseCost !== undefined || body.purchaseRate !== undefined)) {
+      if (increase > 0) {
         batchRecord = await createPurchaseBatch(tx, {
           productId: id,
-          quantity: body.quantity,
+          quantity: increase,
           totalPurchaseCost: body.totalPurchaseCost,
           costPricePerUnit: body.purchaseRate,
           supplierName: body.supplier,

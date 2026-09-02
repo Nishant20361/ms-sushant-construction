@@ -349,36 +349,62 @@ ${paymentText}
             </div>
 
             {/* Financial Summary */}
-            <div className="space-y-2 border-t border-slate-200 pt-4 text-sm">
-              <div className="flex justify-between text-slate-600">
-                <span>सामग्रियों का योग (Subtotal)</span>
-                <span>{formatINR(createdOrder.subtotal)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-slate-900 text-base pt-2 border-t border-slate-200">
-                <span>फाइनल बिल (Final Total)</span>
-                <span className="text-emerald-700">{formatINR(createdOrder.finalAmount)}</span>
-              </div>
-              <div className="flex justify-between text-emerald-700 font-semibold">
-                <span>कुल जमा की गई राशि (Total Paid)</span>
-                <span>{formatINR(totalPaidNow)}</span>
-              </div>
-              {prevDuePaid > 0 && (
-                <div className="rounded-lg bg-emerald-50 p-2.5 text-xs text-emerald-800 space-y-1 border border-emerald-200">
-                  <div className="flex justify-between">
-                    <span>↳ इस बिल में जमा (Applied to This Bill):</span>
-                    <span className="font-semibold">{formatINR(createdOrder.paidTotal)} (PAID)</span>
+            {(() => {
+              const prevDue = (createdOrder as any).previousDue ?? lookupResult?.previousDue ?? 0;
+              const finalAmt = createdOrder.finalAmount;
+              const paidAmt = (createdOrder as any).totalPaidNow ?? totalPaidNow;
+              const prevDueCleared = (createdOrder as any).previousDuesPaid ?? prevDuePaid;
+              const thisOrderDue = createdOrder.due;
+              const remainingPrevDue = Math.max(0, Math.round((prevDue - prevDueCleared) * 100) / 100);
+              const totalOutstanding = (createdOrder as any).totalCustomerDue ?? Math.round((thisOrderDue + remainingPrevDue) * 100) / 100;
+
+              return (
+                <div className="space-y-2 border-t border-slate-200 pt-4 text-sm">
+                  {prevDue > 0 && (
+                    <div className="flex justify-between font-semibold text-rose-600">
+                      <span>Previous Due (पिछला बकाया):</span>
+                      <span>{formatINR(prevDue)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-slate-600">
+                    <span>सामग्रियों का योग (Subtotal):</span>
+                    <span>{formatINR(createdOrder.subtotal)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>↳ पुरानी बकाया चुकता (Previous Dues Paid):</span>
-                    <span className="font-bold">{formatINR(prevDuePaid)}</span>
+                  <div className="flex justify-between font-bold text-slate-900 text-base pt-1 border-t border-slate-100">
+                    <span>इस ऑर्डर का बिल (This Bill):</span>
+                    <span className="text-emerald-700">{formatINR(finalAmt)}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-700 font-bold">
+                    <span>कुल जमा राशि (Paid Now):</span>
+                    <span>{formatINR(paidAmt)}</span>
+                  </div>
+                  {prevDueCleared > 0 && (
+                    <div className="rounded-lg bg-emerald-50 p-2.5 text-xs text-emerald-800 space-y-1 border border-emerald-200">
+                      <div className="flex justify-between">
+                        <span>↳ इस बिल में जमा (Applied to This Bill):</span>
+                        <span className="font-semibold">{formatINR(createdOrder.paidTotal)} (PAID)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>↳ पुरानी बकाया चुकता (Previous Dues Paid):</span>
+                        <span className="font-bold">-{formatINR(prevDueCleared)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {thisOrderDue > 0 && (
+                    <div className="flex justify-between text-red-600 font-semibold text-xs">
+                      <span>इस बिल पर बकाया (Remaining Due on this Bill):</span>
+                      <span>{formatINR(thisOrderDue)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center rounded-xl bg-slate-900 text-white p-3 font-bold mt-2">
+                    <span className="text-xs uppercase tracking-wider text-slate-300">Total Net Due (अब कुल बकाया):</span>
+                    <span className={`text-lg font-black ${totalOutstanding > 0 ? "text-amber-400" : "text-emerald-400"}`}>
+                      {formatINR(totalOutstanding)}
+                    </span>
                   </div>
                 </div>
-              )}
-              <div className="flex justify-between text-red-600 font-bold">
-                <span>बाकी उधारी (Remaining Due)</span>
-                <span>{formatINR(createdOrder.due)}</span>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Action Buttons */}
             <div className="space-y-3 pt-4 border-t border-slate-200">

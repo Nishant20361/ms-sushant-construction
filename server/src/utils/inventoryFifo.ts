@@ -53,6 +53,7 @@ export async function createPurchaseBatch(
   }
 
   const pDate = input.purchaseDate ? new Date(input.purchaseDate) : new Date();
+  if (Number.isNaN(pDate.getTime())) throw new Error("Purchase date is invalid.");
 
   return tx.productPurchaseBatch.create({
     data: {
@@ -81,6 +82,10 @@ export async function allocateInventoryFifo(
   if (neededQty <= 0) return [];
 
   const sellingPriceDec = new Decimal(String(input.sellingPricePerUnit));
+
+  // All inventory mutations for a product serialize on this row. This keeps
+  // two simultaneous checkouts from consuming the same FIFO quantities.
+  await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} FOR UPDATE`;
 
   // Find all batches with remaining stock ordered by oldest purchase date first (FIFO)
   const batches = await tx.productPurchaseBatch.findMany({
@@ -137,9 +142,11 @@ export async function allocateInventoryFifo(
   // If there is still quantity remaining (e.g. legacy stock before batch system was introduced)
   if (remainingToAllocate > 0) {
     const fallbackUnitCost = new Decimal(0);
-    const totalCostDec = fallbackUnitCost.mul(remainingToAllocate).toDecimalPlaces(2);
+    const totalCostDec = new Decimal(0);
     const totalRevenueDec = sellingPriceDec.mul(remainingToAllocate).toDecimalPlaces(2);
-    const grossProfitDec = totalRevenueDec.sub(totalCostDec);
+    // Unknown cost must never be reported as 100% profit. batchId=null marks
+    // legacy/untracked inventory and analytics reports it separately.
+    const grossProfitDec = new Decimal(0);
 
     const alloc = await tx.orderItemCostAllocation.create({
       data: {
@@ -157,6 +164,24 @@ export async function allocateInventoryFifo(
   }
 
   return createdAllocations;
+}
+
+/** Consumes known-cost batches for a manual stock reduction, without a sale. */
+export async function consumePurchaseBatchesFifo(tx: DbTransaction, productId: number, quantity: number) {
+  let remaining = Number(quantity);
+  if (!Number.isFinite(remaining) || remaining <= 0) return { uncostedQuantity: 0 };
+  await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${productId} FOR UPDATE`;
+  const batches = await tx.productPurchaseBatch.findMany({
+    where: { productId, remainingQuantity: { gt: 0 } },
+    orderBy: [{ purchaseDate: "asc" }, { id: "asc" }],
+  });
+  for (const batch of batches) {
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, Number(batch.remainingQuantity));
+    await tx.productPurchaseBatch.update({ where: { id: batch.id }, data: { remainingQuantity: { decrement: take } } });
+    remaining = Number((remaining - take).toFixed(4));
+  }
+  return { uncostedQuantity: Math.max(0, remaining) };
 }
 
 /**
@@ -195,14 +220,12 @@ export async function restoreInventoryFifo(
  */
 export async function getProfitAnalytics(prisma: PrismaClient) {
   const now = new Date();
-
-  // Start of today (IST / local boundary)
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-  // Start of this month
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const IST_OFFSET_MS = 330 * 60 * 1000;
+  const istNow = new Date(now.getTime() + IST_OFFSET_MS);
+  const todayStart = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()) - IST_OFFSET_MS);
+  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+  const monthStart = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - IST_OFFSET_MS);
+  const monthEnd = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth() + 1, 1) - IST_OFFSET_MS - 1);
 
   // 1. Fetch non-cancelled orders with their items, cost allocations, and bills
   const orders = await prisma.order.findMany({
@@ -235,6 +258,8 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
   let allTimeGross = new Decimal(0);
   let allTimeDiscount = new Decimal(0);
   let allTimeOrdersCount = 0;
+  let uncostedRevenue = new Decimal(0);
+  let uncostedUnits = 0;
 
   // Product-wise aggregation
   const productMap = new Map<
@@ -248,6 +273,8 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
       totalRevenue: Decimal;
       totalCost: Decimal;
       grossProfit: Decimal;
+      discountGiven: Decimal;
+      uncostedRevenue: Decimal;
     }
   >();
 
@@ -267,15 +294,23 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
 
       if (item.costAllocations && item.costAllocations.length > 0) {
         for (const alloc of item.costAllocations) {
-          itemGross = itemGross.add(new Decimal(alloc.grossProfit));
-          itemCost = itemCost.add(new Decimal(alloc.totalCost));
-          itemRevenue = itemRevenue.add(new Decimal(alloc.totalRevenue));
+          const allocationRevenue = new Decimal(alloc.totalRevenue);
+          itemRevenue = itemRevenue.add(allocationRevenue);
+          if (alloc.batchId === null) {
+            uncostedRevenue = uncostedRevenue.add(allocationRevenue);
+            uncostedUnits += Number(alloc.quantity);
+          } else {
+            itemGross = itemGross.add(new Decimal(alloc.grossProfit));
+            itemCost = itemCost.add(new Decimal(alloc.totalCost));
+          }
         }
       } else {
-        // Fallback for historic orders without allocations
+        // Historic order cost is unknown: report revenue, never fake profit.
         itemRevenue = new Decimal(item.total);
         itemCost = new Decimal(0);
-        itemGross = itemRevenue.sub(itemCost);
+        itemGross = new Decimal(0);
+        uncostedRevenue = uncostedRevenue.add(itemRevenue);
+        uncostedUnits += Number(item.quantity);
       }
 
       orderGross = orderGross.add(itemGross);
@@ -292,6 +327,8 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
           totalRevenue: new Decimal(0),
           totalCost: new Decimal(0),
           grossProfit: new Decimal(0),
+          discountGiven: new Decimal(0),
+          uncostedRevenue: new Decimal(0),
         });
       }
 
@@ -300,6 +337,22 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
       pEntry.totalRevenue = pEntry.totalRevenue.add(itemRevenue);
       pEntry.totalCost = pEntry.totalCost.add(itemCost);
       pEntry.grossProfit = pEntry.grossProfit.add(itemGross);
+      if (item.costAllocations?.some((allocation) => allocation.batchId === null) || !item.costAllocations?.length) {
+        pEntry.uncostedRevenue = pEntry.uncostedRevenue.add(
+          item.costAllocations?.length
+            ? item.costAllocations.filter((allocation) => allocation.batchId === null).reduce((sum, allocation) => sum.add(new Decimal(allocation.totalRevenue)), new Decimal(0))
+            : new Decimal(item.total)
+        );
+      }
+    }
+
+    // Allocate order discount proportionally across products for true product net profit.
+    const orderRevenue = o.items.reduce((sum, item) => sum.add(new Decimal(item.total)), new Decimal(0));
+    if (orderDiscount.gt(0) && orderRevenue.gt(0)) {
+      for (const item of o.items) {
+        const share = orderDiscount.mul(new Decimal(item.total)).div(orderRevenue);
+        productMap.get(item.productId)!.discountGiven = productMap.get(item.productId)!.discountGiven.add(share);
+      }
     }
 
     // Accumulate
@@ -347,7 +400,7 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
   });
 
   const productProfits = Array.from(productMap.values()).map((p) => {
-    const netProfit = p.grossProfit;
+    const netProfit = p.grossProfit.sub(p.discountGiven);
     const marginPercent = p.totalRevenue.gt(0)
       ? netProfit.div(p.totalRevenue).mul(100).toNumber()
       : 0;
@@ -361,8 +414,10 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
       totalRevenue: Number(p.totalRevenue.toFixed(2)),
       totalCost: Number(p.totalCost.toFixed(2)),
       grossProfit: Number(p.grossProfit.toFixed(2)),
+      discountGiven: Number(p.discountGiven.toFixed(2)),
       netProfit: Number(netProfit.toFixed(2)),
       marginPercent: Number(marginPercent.toFixed(1)),
+      uncostedRevenue: Number(p.uncostedRevenue.toFixed(2)),
     };
   });
 
@@ -389,6 +444,11 @@ export async function getProfitAnalytics(prisma: PrismaClient) {
     },
     currentStockValuation: Number(totalStockValuation.toFixed(2)),
     activeBatchesCount: activeBatches.length,
+    costingCoverage: {
+      uncostedRevenue: Number(uncostedRevenue.toFixed(2)),
+      uncostedUnits: Number(uncostedUnits.toFixed(3)),
+      isComplete: uncostedRevenue.eq(0),
+    },
     productProfits,
     recentBatches: recentBatches.map((b) => ({
       id: b.id,

@@ -249,73 +249,114 @@ router.post(
               createdPayments = [payment];
             }
 
+            // Calculate previous due before this new order
+            const last10 = mobile.slice(-10);
+            const variants = [mobile, last10, `+91${last10}`, `91${last10}`, `0${last10}`];
+            const historicalOrders = await tx.order.findMany({
+              where: {
+                OR: [
+                  { customerMobile: { in: variants } },
+                  { customerMobile: { endsWith: last10 } },
+                ],
+                id: { not: createdOrder.id },
+                status: { not: "CANCELLED" },
+              },
+              include: { bill: true, payments: true },
+              orderBy: { createdAt: "asc" },
+            });
+
+            const previousDue = roundCurrency(
+              historicalOrders.reduce((sum, o) => {
+                const fin = computeOrderFinancials(o);
+                return sum + fin.due;
+              }, 0)
+            );
+
+            let previousDuesPaid = 0;
             // Auto-clear old customer dues with any excess payment
             const excess = roundCurrency(paidAmount - thisOrderPaymentAmount);
-            if (excess > 0) {
-              const last10 = mobile.slice(-10);
-              const variants = [mobile, last10, `+91${last10}`, `91${last10}`, `0${last10}`];
-              
-              const candidateOld = await tx.order.findMany({
-                where: {
-                  OR: [
-                    { customerMobile: { in: variants } },
-                    { customerMobile: { endsWith: last10 } },
-                  ],
-                  id: { not: createdOrder.id },
-                  status: { not: "CANCELLED" },
-                },
-                select: { id: true },
-                orderBy: { id: "asc" },
+            if (excess > 0 && historicalOrders.length > 0) {
+              const oldIds = historicalOrders.map((o) => o.id);
+              // Concurrency lock on older orders
+              await tx.$queryRaw`
+                SELECT id FROM "Order" 
+                WHERE id IN (${Prisma.join(oldIds)}) 
+                ORDER BY id ASC 
+                FOR UPDATE
+              `;
+
+              const oldDueList = historicalOrders.map((o) => {
+                const fin = computeOrderFinancials(o);
+                return {
+                  id: o.id,
+                  finalAmount: fin.finalAmount,
+                  paidTotal: fin.paidTotal,
+                  due: fin.due,
+                };
               });
 
-              if (candidateOld.length > 0) {
-                const oldIds = candidateOld.map((o) => o.id);
-                // Concurrency lock on older orders
-                await tx.$queryRaw`
-                  SELECT id FROM "Order" 
-                  WHERE id IN (${Prisma.join(oldIds)}) 
-                  ORDER BY id ASC 
-                  FOR UPDATE
-                `;
-
-                const oldOrders = await tx.order.findMany({
-                  where: { id: { in: oldIds } },
-                  include: { bill: true, payments: true },
-                  orderBy: { createdAt: "asc" },
+              const { allocations } = allocateCustomerPaymentFIFO(oldDueList, excess);
+              for (const alloc of allocations) {
+                if (alloc.allocatedAmount <= 0) continue;
+                previousDuesPaid = roundCurrency(previousDuesPaid + alloc.allocatedAmount);
+                await tx.orderPayment.create({
+                  data: {
+                    orderId: alloc.orderId,
+                    amount: toPrismaDecimal(alloc.allocatedAmount),
+                    paymentMode: body.paymentMode,
+                    paymentDate: new Date(),
+                    notes: `Auto-cleared previous due from order #${createdOrder.orderNumber}`,
+                  },
                 });
-
-                const oldDueList = oldOrders.map((o) => {
-                  const fin = computeOrderFinancials(o);
-                  return {
-                    id: o.id,
-                    finalAmount: fin.finalAmount,
-                    paidTotal: fin.paidTotal,
-                    due: fin.due,
-                  };
-                });
-
-                const { allocations } = allocateCustomerPaymentFIFO(oldDueList, excess);
-                for (const alloc of allocations) {
-                  if (alloc.allocatedAmount <= 0) continue;
-                  await tx.orderPayment.create({
-                    data: {
-                      orderId: alloc.orderId,
-                      amount: toPrismaDecimal(alloc.allocatedAmount),
-                      paymentMode: body.paymentMode,
-                      paymentDate: new Date(),
-                      notes: `Auto-cleared previous due from order #${createdOrder.orderNumber}`,
-                    },
-                  });
-                }
               }
             }
-          }
 
-          return {
-            ...createdOrder,
-            bill: createdBill,
-            payments: createdPayments,
-          };
+            const thisOrderDue = roundCurrency(Math.max(0, finalAmount - thisOrderPaymentAmount));
+            const remainingOldDue = roundCurrency(Math.max(0, previousDue - previousDuesPaid));
+            const totalCustomerDue = roundCurrency(thisOrderDue + remainingOldDue);
+
+            return {
+              ...createdOrder,
+              bill: createdBill,
+              payments: createdPayments,
+              previousDue,
+              previousDuesPaid,
+              totalPaidNow: paidAmount,
+              totalCustomerDue,
+            };
+          } else {
+            // No payment made at order time
+            const last10 = mobile.slice(-10);
+            const variants = [mobile, last10, `+91${last10}`, `91${last10}`, `0${last10}`];
+            const historicalOrders = await tx.order.findMany({
+              where: {
+                OR: [
+                  { customerMobile: { in: variants } },
+                  { customerMobile: { endsWith: last10 } },
+                ],
+                id: { not: createdOrder.id },
+                status: { not: "CANCELLED" },
+              },
+              include: { bill: true, payments: true },
+            });
+
+            const previousDue = roundCurrency(
+              historicalOrders.reduce((sum, o) => {
+                const fin = computeOrderFinancials(o);
+                return sum + fin.due;
+              }, 0)
+            );
+
+            return {
+              ...createdOrder,
+              bill: createdBill,
+              payments: [],
+              previousDue,
+              previousDuesPaid: 0,
+              totalPaidNow: 0,
+              totalCustomerDue: roundCurrency(finalAmount + previousDue),
+            };
+          }
         },
         {
           maxWait: 10000,

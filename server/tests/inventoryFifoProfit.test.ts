@@ -238,4 +238,44 @@ describe("FIFO Purchase Batch & Khatabook Profit Engine", () => {
     expect(batchesRes.body.batches[0].costPricePerUnit).toBe(350);
     expect(batchesRes.body.batches[0].supplierName).toBe("Tata Steel Authorised Dealer");
   });
+
+  it("restores and reallocates FIFO cost when order items are edited", async () => {
+    const product = await prisma.product.create({
+      data: { name: "Edit-safe FIFO Product", unit: "piece", price: 100, mrp: 120, stock: 0, categoryId: testCatId },
+    });
+    await agent.patch(`/api/admin/products/${product.id}/stock`).set("X-CSRF-Token", adminToken).send({
+      action: "ADD", quantity: 20, totalPurchaseCost: 1000,
+    });
+    const created = await agent.post("/api/admin/orders/assisted").set("X-CSRF-Token", adminToken).send({
+      customerName: "FIFO Edit Customer", customerMobile: "9876543212", items: [{ productId: product.id, quantity: 10 }], paidAmount: 0,
+    });
+    expect(created.status).toBe(201);
+
+    const edited = await agent.patch(`/api/admin/orders/${created.body.order.id}/edit`).set("X-CSRF-Token", adminToken).send({
+      items: [{ productId: product.id, quantity: 15 }],
+    });
+    expect(edited.status).toBe(200);
+    const batch = await prisma.productPurchaseBatch.findFirstOrThrow({ where: { productId: product.id } });
+    expect(batch.remainingQuantity).toBe(5);
+    const item = await prisma.orderItem.findFirstOrThrow({ where: { orderId: created.body.order.id } });
+    const allocations = await prisma.orderItemCostAllocation.findMany({ where: { orderItemId: item.id } });
+    expect(allocations.reduce((sum, allocation) => sum + allocation.quantity, 0)).toBe(15);
+    expect(allocations.reduce((sum, allocation) => sum + Number(allocation.totalCost), 0)).toBe(750);
+  });
+
+  it("reports legacy stock as uncosted instead of treating revenue as profit", async () => {
+    const product = await prisma.product.create({
+      data: { name: "Legacy Uncosted Product", unit: "piece", price: 100, mrp: 120, stock: 5, categoryId: testCatId },
+    });
+    const created = await agent.post("/api/admin/orders/assisted").set("X-CSRF-Token", adminToken).send({
+      customerName: "Legacy Cost Customer", customerMobile: "9876543213", items: [{ productId: product.id, quantity: 2 }], paidAmount: 0,
+    });
+    expect(created.status).toBe(201);
+    const response = await agent.get("/api/admin/khatabook/profit").set("X-CSRF-Token", adminToken);
+    expect(response.status).toBe(200);
+    const row = response.body.productProfits.find((entry: any) => entry.productId === product.id);
+    expect(row.netProfit).toBe(0);
+    expect(row.uncostedRevenue).toBe(200);
+    expect(response.body.costingCoverage.isComplete).toBe(false);
+  });
 });
