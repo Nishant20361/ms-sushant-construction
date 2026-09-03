@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Image } from "expo-image";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { QuantityControl } from "@/components/QuantityControl";
@@ -131,11 +131,6 @@ export default function CartScreen() {
               </Text>
             </View>
 
-            <Link href="/checkout" asChild>
-              <Pressable style={({ pressed }) => [styles.checkout, pressed && styles.pressed]}>
-                <Text style={styles.checkoutText}>Proceed to Checkout →</Text>
-              </Pressable>
-            </Link>
             <Link href="/(tabs)/products" asChild>
               <Pressable style={({ pressed }) => [styles.continueButton, pressed && styles.pressed]}>
                 <Text style={styles.continueText}>+ Add More Materials</Text>
@@ -144,6 +139,21 @@ export default function CartScreen() {
           </View>
         }
       />
+
+      <View style={styles.checkoutBar}>
+        <View style={styles.checkoutBarTotal}>
+          <Text style={styles.checkoutBarLabel}>Cart Total</Text>
+          <Text style={styles.checkoutBarAmount}>{formatINR(subtotal)}</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Proceed to checkout"
+          onPress={() => router.push("/checkout")}
+          style={({ pressed }) => [styles.checkout, pressed && styles.pressed]}
+        >
+          <Text style={styles.checkoutText}>Proceed to Checkout →</Text>
+        </Pressable>
+      </View>
 
       <Modal visible={confirmClear} transparent animationType="fade" onRequestClose={() => setConfirmClear(false)}>
         <View style={styles.modalBackdrop}>
@@ -178,7 +188,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 110,
+    paddingBottom: 130,
   },
   header: {
     marginBottom: 16,
@@ -347,8 +357,8 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   checkout: {
+    flex: 1,
     minHeight: 50,
-    marginTop: 16,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 14,
@@ -359,6 +369,33 @@ const styles = StyleSheet.create({
   checkoutText: {
     color: "white",
     fontSize: 15,
+    fontWeight: "900",
+  },
+  checkoutBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    backgroundColor: theme.colors.surface,
+    ...theme.shadow,
+    elevation: 10,
+  },
+  checkoutBarTotal: {
+    minWidth: 82,
+  },
+  checkoutBarLabel: {
+    color: theme.colors.muted,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  checkoutBarAmount: {
+    marginTop: 2,
+    color: theme.colors.primaryDark,
+    fontSize: 18,
     fontWeight: "900",
   },
   continueButton: {
