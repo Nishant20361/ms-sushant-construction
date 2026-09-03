@@ -34,7 +34,7 @@ import { useTheme } from "@/theme";
 import { formatDateTime, formatINR } from "@/utils/formatters";
 import { statementPdf, statementPdfFilename } from "@/features/insights/pdfReports";
 import type { Product } from "@/features/products/types";
-import { useProductMutations, useProductStockHistory } from "@/features/products/useProducts";
+import { useProductMutations } from "@/features/products/useProducts";
 import { financeService } from "./financeService";
 import type { CustomerDetail, DueCustomer, PaymentMode } from "./types";
 import {
@@ -97,7 +97,6 @@ export function DuesScreen() {
   // Stock Action Modals State
   const [selectedAddProduct, setSelectedAddProduct] = useState<Product | null>(null);
   const [selectedRemoveProduct, setSelectedRemoveProduct] = useState<Product | null>(null);
-  const [selectedHistoryProduct, setSelectedHistoryProduct] = useState<Product | null>(null);
 
   // Customer Ledger / Passbook Modal State
   const [selectedMobile, setSelectedMobile] = useState<string | null>(null);
@@ -1611,7 +1610,7 @@ export function DuesScreen() {
                       </Pressable>
 
                       <Pressable
-                        onPress={() => setSelectedHistoryProduct(p)}
+                        onPress={() => router.push(`/(admin)/stock-history/${p.id}` as never)}
                         style={[
                           s.btnSmall,
                           {
@@ -1623,8 +1622,8 @@ export function DuesScreen() {
                         ]}
                       >
                         <Ionicons name="time-outline" size={15} color={t.colors.text} />
-                        <AppText style={{ color: t.colors.text, fontSize: 11, fontWeight: "600" }}>
-                          इतिहास
+                        <AppText style={{ color: t.colors.text, fontSize: 11, fontWeight: "700" }}>
+                          इतिहास (History)
                         </AppText>
                       </Pressable>
                     </View>
@@ -2091,23 +2090,6 @@ export function DuesScreen() {
           stockQ.refetch();
         }}
       />
-
-      {/* ========================================== */}
-      {/* STOCK HISTORY MODAL                        */}
-      {/* ========================================== */}
-      <ModalShell
-        visible={!!selectedHistoryProduct}
-        onClose={() => setSelectedHistoryProduct(null)}
-        title="स्टॉक इतिहास (Stock History)"
-        scrollable={false}
-      >
-        {selectedHistoryProduct && (
-          <StockHistoryModalContent
-            product={selectedHistoryProduct}
-            onClose={() => setSelectedHistoryProduct(null)}
-          />
-        )}
-      </ModalShell>
     </Screen>
   );
 }
@@ -2480,251 +2462,6 @@ function RemoveStockModal({
         </View>
       </View>
     </ModalShell>
-  );
-}
-
-function StockHistoryModalContent({
-  product,
-  onClose,
-}: {
-  product: Product;
-  onClose: () => void;
-}) {
-  const t = useTheme();
-  const [filter, setFilter] = useState<"ALL" | "ADD" | "REMOVE" | "ORDER">("ALL");
-  const historyQ = useProductStockHistory(product.id);
-
-  const items = (historyQ.data as any)?.history ?? [];
-  const filteredItems = useMemo(() => {
-    if (filter === "ALL") return items;
-    return items.filter((item: any) => item.type === filter);
-  }, [items, filter]);
-
-  return (
-    <View style={{ gap: 12, flexShrink: 1 }}>
-      {/* Product info banner */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: 12,
-          borderRadius: 14,
-          backgroundColor: t.colors.surfaceMuted,
-          borderWidth: 1,
-          borderColor: t.colors.border,
-        }}
-      >
-        <View style={{ flex: 1, paddingRight: 8 }}>
-          <AppText role="bodyStrong" numberOfLines={1} style={{ fontSize: 16 }}>
-            {product.name}
-          </AppText>
-          <AppText role="caption" style={{ color: t.colors.textSecondary, marginTop: 2 }}>
-            📂 {product.category?.name || "General"} · इकाई: {product.unit}
-          </AppText>
-        </View>
-        <View style={{ alignItems: "flex-end", backgroundColor: t.colors.surfaceElevated, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 }}>
-          <AppText role="caption" style={{ color: t.colors.textMuted, fontSize: 11 }}>वर्तमान स्टॉक</AppText>
-          <AppText style={{ fontWeight: "900", fontSize: 16, color: product.stock <= 0 ? "#dc2626" : product.stock <= 10 ? "#d97706" : "#16a34a" }}>
-            {product.stock} {product.unit}
-          </AppText>
-        </View>
-      </View>
-
-      {/* Filter chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, paddingHorizontal: 2, paddingVertical: 2 }}
-      >
-        <FilterChip
-          label={`सभी (${items.length})`}
-          selected={filter === "ALL"}
-          onPress={() => setFilter("ALL")}
-        />
-        <FilterChip
-          label="🟢 + आया (Stock In)"
-          selected={filter === "ADD"}
-          onPress={() => setFilter("ADD")}
-        />
-        <FilterChip
-          label="🔴 - घटाया (Stock Out)"
-          selected={filter === "REMOVE"}
-          onPress={() => setFilter("REMOVE")}
-        />
-        <FilterChip
-          label="🔵 🛒 बिक्री (Orders)"
-          selected={filter === "ORDER"}
-          onPress={() => setFilter("ORDER")}
-        />
-      </ScrollView>
-
-      {/* Timeline items with smooth scroll */}
-      {historyQ.isPending ? (
-        <LoadingState label="स्टॉक इतिहास लोड हो रहा है…" />
-      ) : historyQ.isError ? (
-        <ErrorState description={historyQ.error?.message ?? "Failed to load stock history"} onRetry={() => historyQ.refetch()} />
-      ) : filteredItems.length === 0 ? (
-        <EmptyState title="कोई गतिविधि नहीं मिली" description="इस श्रेणी में अभी तक कोई स्टॉक मूवमेंट दर्ज नहीं है।" />
-      ) : (
-        <FlatList
-          data={filteredItems}
-          keyExtractor={(item: any, index) => String(item.id ?? index)}
-          showsVerticalScrollIndicator={true}
-          bounces={true}
-          keyboardShouldPersistTaps="handled"
-          overScrollMode="always"
-          decelerationRate="normal"
-          scrollEventThrottle={8}
-          removeClippedSubviews={true}
-          initialNumToRender={5}
-          maxToRenderPerBatch={6}
-          updateCellsBatchingPeriod={16}
-          windowSize={7}
-          style={{ flexGrow: 0, maxHeight: 420 }}
-          contentContainerStyle={{ gap: 10, paddingBottom: 8 }}
-          renderItem={({ item, index: idx }: { item: any; index: number }) => {
-            const isAdd = item.type === "ADD";
-            const isRemove = item.type === "REMOVE";
-            const isOrder = item.type === "ORDER";
-
-            const cardBg = isAdd ? "#f0fdf4" : isOrder ? "#f0f9ff" : "#fef2f2";
-            const cardBorder = isAdd ? "#86efac" : isOrder ? "#93c5fd" : "#fca5a5";
-            const iconName = isAdd ? "arrow-down-circle" : isOrder ? "cart" : "arrow-up-circle";
-            const iconColor = isAdd ? "#16a34a" : isOrder ? "#0284c7" : "#dc2626";
-            const typeTitle = isAdd
-              ? "🟢 + स्टॉक आया (Stock Added)"
-              : isOrder
-              ? "🔵 🛒 ग्राहक को बेचा (Customer Order)"
-              : "🔴 - स्टॉक घटाया (Stock Removed)";
-
-            return (
-              <View
-                key={item.id || idx}
-                style={{
-                  borderWidth: 1.5,
-                  borderColor: cardBorder,
-                  borderRadius: 14,
-                  padding: 12,
-                  backgroundColor: cardBg,
-                  gap: 8,
-                }}
-              >
-                {/* Header Row */}
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, paddingRight: 6 }}>
-                    <Ionicons name={iconName as any} size={18} color={iconColor} />
-                    <AppText style={{ fontWeight: "800", fontSize: 13, color: iconColor }} numberOfLines={1}>
-                      {typeTitle}
-                    </AppText>
-                  </View>
-                  <View style={{ backgroundColor: "#ffffff", paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: cardBorder }}>
-                    <AppText style={{ fontWeight: "900", fontSize: 14, color: iconColor }}>
-                      {isAdd ? "+" : "-"}{item.quantity} {product.unit}
-                    </AppText>
-                  </View>
-                </View>
-
-                {/* Customer Order Details */}
-                {isOrder && (
-                  <View style={{ backgroundColor: "#ffffff", padding: 10, borderRadius: 10, borderWidth: 1, borderColor: "#bfdbfe", gap: 4 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <AppText style={{ color: "#0369a1", fontSize: 13, fontWeight: "800" }}>
-                        👤 {item.customerName || "Customer"}
-                      </AppText>
-                      {item.orderNumber && (
-                        <View style={{ backgroundColor: "#e0f2fe", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                          <AppText style={{ color: "#0369a1", fontSize: 11, fontWeight: "700" }}>
-                            #{item.orderNumber}
-                          </AppText>
-                        </View>
-                      )}
-                    </View>
-                    {item.customerMobile && (
-                      <AppText role="caption" style={{ color: "#475569", fontWeight: "600" }}>
-                        📞 मोबाइल: {item.customerMobile}
-                      </AppText>
-                    )}
-                  </View>
-                )}
-
-                {/* Stock Transition Box */}
-                {item.oldStock !== undefined && item.newStock !== undefined && (
-                  <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.7)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, gap: 8 }}>
-                    <AppText style={{ fontSize: 12, color: t.colors.textSecondary, fontWeight: "600" }}>
-                      स्टॉक:
-                    </AppText>
-                    <AppText style={{ fontSize: 12, fontWeight: "800", color: t.colors.text }}>
-                      {item.oldStock} {product.unit}
-                    </AppText>
-                    <AppText style={{ fontSize: 12, fontWeight: "900", color: iconColor }}>
-                      ➔
-                    </AppText>
-                    <AppText style={{ fontSize: 12, fontWeight: "900", color: iconColor }}>
-                      {item.newStock} {product.unit}
-                    </AppText>
-                  </View>
-                )}
-
-                {/* Reason / Details */}
-                {item.reason && !isOrder && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <AppText style={{ fontSize: 12, color: "#1e293b", fontWeight: "600" }}>
-                      📌 कारण: <AppText style={{ fontWeight: "700" }}>{item.reason}</AppText>
-                    </AppText>
-                  </View>
-                )}
-
-                {item.supplier && (
-                  <AppText role="caption" style={{ color: "#334155", fontWeight: "600" }}>
-                    🏢 सप्लायर: <AppText style={{ fontWeight: "700" }}>{item.supplier}</AppText>
-                  </AppText>
-                )}
-
-                {item.purchaseRate && (
-                  <AppText role="caption" style={{ color: "#15803d", fontWeight: "700" }}>
-                    💰 खरीद दर: {formatINR(item.purchaseRate)} / {product.unit}
-                  </AppText>
-                )}
-
-                {item.note && !isOrder && (
-                  <AppText role="caption" style={{ color: "#475569", fontStyle: "italic" }}>
-                    📝 नोट: {item.note}
-                  </AppText>
-                )}
-
-                {/* Footer Time & Admin */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: 2,
-                    paddingTop: 6,
-                    borderTopWidth: 1,
-                    borderTopColor: "rgba(0,0,0,0.06)",
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Ionicons name="time-outline" size={13} color="#64748b" />
-                    <AppText style={{ color: "#334155", fontSize: 11, fontWeight: "700" }}>
-                      {formatDateTime(item.createdAt)}
-                    </AppText>
-                  </View>
-                  {item.adminUsername && (
-                    <AppText role="caption" style={{ color: "#64748b", fontSize: 10, fontWeight: "600" }}>
-                      दर्जकर्ता: {item.adminUsername}
-                    </AppText>
-                  )}
-                </View>
-              </View>
-            );
-          }}
-        />
-      )}
-
-      <Button title="बंद करें (Close)" variant="outline" onPress={onClose} />
-    </View>
   );
 }
 
