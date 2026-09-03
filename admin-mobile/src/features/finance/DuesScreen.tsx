@@ -2501,7 +2501,7 @@ function StockHistoryModalContent({
   }, [items, filter]);
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: 12, flexShrink: 1 }}>
       {/* Product info banner */}
       <View
         style={{
@@ -2567,15 +2567,23 @@ function StockHistoryModalContent({
       ) : filteredItems.length === 0 ? (
         <EmptyState title="कोई गतिविधि नहीं मिली" description="इस श्रेणी में अभी तक कोई स्टॉक मूवमेंट दर्ज नहीं है।" />
       ) : (
-        <ScrollView
-          nestedScrollEnabled={true}
+        <FlatList
+          data={filteredItems}
+          keyExtractor={(item: any, index) => String(item.id ?? index)}
           showsVerticalScrollIndicator={true}
           bounces={true}
           keyboardShouldPersistTaps="handled"
-          style={{ maxHeight: 420 }}
+          overScrollMode="always"
+          decelerationRate="normal"
+          scrollEventThrottle={8}
+          removeClippedSubviews={true}
+          initialNumToRender={5}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={16}
+          windowSize={7}
+          style={{ flexGrow: 0, maxHeight: 420 }}
           contentContainerStyle={{ gap: 10, paddingBottom: 8 }}
-        >
-          {filteredItems.map((item: any, idx: number) => {
+          renderItem={({ item, index: idx }: { item: any; index: number }) => {
             const isAdd = item.type === "ADD";
             const isRemove = item.type === "REMOVE";
             const isOrder = item.type === "ORDER";
@@ -2711,8 +2719,8 @@ function StockHistoryModalContent({
                 </View>
               </View>
             );
-          })}
-        </ScrollView>
+          }}
+        />
       )}
 
       <Button title="बंद करें (Close)" variant="outline" onPress={onClose} />
