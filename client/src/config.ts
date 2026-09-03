@@ -13,7 +13,7 @@ export function isDirectAndroidApkUrl(value: string | undefined): boolean {
   }
 }
 
-const PUBLIC_ANDROID_APK_URL = "https://github.com/Nishant20361/ms-sushant-construction-releases/releases/download/customer-app-v1.0.3/MS-Sushant-Construction-v1.0.3.apk";
+const PUBLIC_ANDROID_APK_URL = "https://github.com/Nishant20361/ms-sushant-construction-releases/releases/download/customer-app-v1.0.4/MS-Sushant-Construction-v1.0.4.apk";
 // Keep the public customer download deterministic. A stale Vercel build-time
 // variable previously overrode this URL with an invalid/private legacy APK.
 export const ANDROID_APP_URL = PUBLIC_ANDROID_APK_URL;
