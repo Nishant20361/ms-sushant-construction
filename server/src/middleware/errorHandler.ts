@@ -14,6 +14,18 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  // If response headers were already sent, delegate to Express's default error handler
+  // to avoid triggering ERR_HTTP_HEADERS_SENT crashes.
+  if (res.headersSent) {
+    return _next(err);
+  }
+
+  // CORS rejection
+  if (err instanceof Error && err.message === "Not allowed by CORS") {
+    res.status(403).json({ success: false, error: "Not allowed by CORS" });
+    return;
+  }
+
   // Zod validation errors
   if (err instanceof ZodError) {
     res.status(400).json({

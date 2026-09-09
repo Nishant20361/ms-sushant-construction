@@ -14,10 +14,15 @@ const router = Router();
 const NOTIFICATION_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 
 async function removeExpiredNotifications(adminId: number): Promise<void> {
-  const expiresBefore = new Date(Date.now() - NOTIFICATION_RETENTION_MS);
-  await prisma.notification.deleteMany({
-    where: { adminId, createdAt: { lt: expiresBefore } },
-  });
+  try {
+    const expiresBefore = new Date(Date.now() - NOTIFICATION_RETENTION_MS);
+    await prisma.notification.deleteMany({
+      where: { adminId, createdAt: { lt: expiresBefore } },
+    });
+  } catch (err) {
+    // Non-critical background cleanup failure should never fail notification endpoints
+    console.warn("[notifications] Expired alert cleanup warning:", err);
+  }
 }
 
 function adminIdFrom(req: AuthenticatedRequest): number {

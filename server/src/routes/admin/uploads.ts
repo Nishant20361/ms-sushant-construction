@@ -35,65 +35,63 @@ router.post(
     let optimizedPath = originalPath;
 
     try {
-      // Strictly verify and re-encode with Sharp (limits decompression bomb risks)
-      const image = sharp(originalPath, { failOn: "error" });
-      const meta = await image.metadata();
+      try {
+        // Strictly verify and re-encode with Sharp (limits decompression bomb risks)
+        const image = sharp(originalPath, { failOn: "error" });
+        const meta = await image.metadata();
 
-      if (!meta.format || !["jpeg", "png", "webp", "jpg"].includes(meta.format)) {
-        removeFile(originalPath);
-        throw new HttpError(400, "Invalid image format. Only JPEG, PNG, and WebP are allowed.");
+        if (!meta.format || !["jpeg", "png", "webp", "jpg"].includes(meta.format)) {
+          throw new HttpError(400, "Invalid image format. Only JPEG, PNG, and WebP are allowed.");
+        }
+
+        if ((meta.width && meta.width > 5000) || (meta.height && meta.height > 5000)) {
+          throw new HttpError(400, "Image dimensions exceed the maximum allowed size (5000x5000px).");
+        }
+
+        await image
+          .rotate()
+          .resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true })
+          .webp({ quality: 82 })
+          .toFile(webpPath);
+        optimizedPath = webpPath;
+      } catch (e) {
+        if (e instanceof HttpError) throw e;
+        throw new HttpError(400, "Corrupted or invalid image file.");
       }
 
-      if ((meta.width && meta.width > 5000) || (meta.height && meta.height > 5000)) {
-        removeFile(originalPath);
-        throw new HttpError(400, "Image dimensions exceed the maximum allowed size (5000x5000px).");
+      let url: string;
+
+      if (isCloudinaryConfigured()) {
+        // Upload the optimized image to Cloudinary and return its secure URL.
+        const result = await cloudinary.uploader.upload(optimizedPath, {
+          folder: "ms-sushant-construction/products",
+          use_filename: true,
+          unique_filename: true,
+          overwrite: false,
+          resource_type: "image",
+        });
+        url = result.secure_url || result.url;
+      } else {
+        // Fallback: serve from local disk (same behaviour as before).
+        const finalFilename = `${baseName}.webp`;
+        const finalPath = path.join(UPLOAD_DIR, "products", finalFilename);
+        fs.mkdirSync(path.dirname(finalPath), { recursive: true });
+        fs.copyFileSync(optimizedPath, finalPath);
+        url = `/uploads/products/${finalFilename}`;
       }
 
-      await image
-        .rotate()
-        .resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 82 })
-        .toFile(webpPath);
-      optimizedPath = webpPath;
-    } catch (e) {
+      await writeAudit(req, {
+        action: "UPLOAD",
+        entity: "Upload",
+        details: url,
+      });
+
+      res.status(201).json({ url });
+    } finally {
+      // Clean up temp files (original + optimized) under all circumstances (success or error)
       removeFile(originalPath);
       removeFile(webpPath);
-      if (e instanceof HttpError) throw e;
-      throw new HttpError(400, "Corrupted or invalid image file.");
     }
-
-    let url: string;
-
-    if (isCloudinaryConfigured()) {
-      // Upload the optimized image to Cloudinary and return its secure URL.
-      const result = await cloudinary.uploader.upload(optimizedPath, {
-        folder: "ms-sushant-construction/products",
-        use_filename: true,
-        unique_filename: true,
-        overwrite: false,
-        resource_type: "image",
-      });
-      url = result.secure_url || result.url;
-    } else {
-      // Fallback: serve from local disk (same behaviour as before).
-      const finalFilename = `${baseName}.webp`;
-      const finalPath = path.join(UPLOAD_DIR, "products", finalFilename);
-      fs.mkdirSync(path.dirname(finalPath), { recursive: true });
-      fs.copyFileSync(optimizedPath, finalPath);
-      url = `/uploads/products/${finalFilename}`;
-    }
-
-    // Clean up temp files (original + optimized) after a successful upload.
-    removeFile(originalPath);
-    if (optimizedPath !== originalPath) removeFile(optimizedPath);
-
-    await writeAudit(req, {
-      action: "UPLOAD",
-      entity: "Upload",
-      details: url,
-    });
-
-    res.status(201).json({ url });
   })
 );
 

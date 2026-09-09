@@ -33,34 +33,34 @@ export function stockTransition(
 }
 
 async function dispatchPush(event: NotificationEvent, notificationId: number) {
-  const devices = await prisma.adminPushDevice.findMany({
-    where: { adminId: event.adminId, isActive: true },
-    select: { id: true, expoPushToken: true },
-  });
-
-  if (!devices.length) return;
-
-  const messages = devices.map((d) => ({
-    to: d.expoPushToken,
-    sound: "default",
-    priority: "high",
-    channelId:
-      event.type === "NEW_ORDER"
-        ? "orders"
-        : event.type === "PAYMENT_RECEIVED"
-        ? "payments"
-        : "inventory",
-    title: event.title,
-    body: event.message,
-    data: {
-      notificationId,
-      type: event.type,
-      orderId: event.orderId,
-      productId: event.productId,
-    },
-  }));
-
   try {
+    const devices = await prisma.adminPushDevice.findMany({
+      where: { adminId: event.adminId, isActive: true },
+      select: { id: true, expoPushToken: true },
+    });
+
+    if (!devices.length) return;
+
+    const messages = devices.map((d) => ({
+      to: d.expoPushToken,
+      sound: "default",
+      priority: "high",
+      channelId:
+        event.type === "NEW_ORDER"
+          ? "orders"
+          : event.type === "PAYMENT_RECEIVED"
+          ? "payments"
+          : "inventory",
+      title: event.title,
+      body: event.message,
+      data: {
+        notificationId,
+        type: event.type,
+        orderId: event.orderId,
+        productId: event.productId,
+      },
+    }));
+
     const response = await fetch(EXPO_ENDPOINT, {
       method: "POST",
       headers: {
@@ -108,7 +108,9 @@ export async function createAdminNotification(event: NotificationEvent) {
       },
     });
 
-    void dispatchPush(event, notification.id);
+    void dispatchPush(event, notification.id).catch((err) => {
+      console.error("[push] Background push dispatch failed:", err);
+    });
     return notification;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -121,14 +123,20 @@ export async function createAdminNotification(event: NotificationEvent) {
 export async function notifyAllActiveAdmins(
   eventCreator: (adminId: number) => NotificationEvent
 ) {
-  const admins = await prisma.admin.findMany({
-    where: { isActive: true },
-    select: { id: true },
-  });
+  try {
+    const admins = await prisma.admin.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
 
-  for (const admin of admins) {
-    const event = eventCreator(admin.id);
-    await createAdminNotification(event);
+    for (const admin of admins) {
+      const event = eventCreator(admin.id);
+      await createAdminNotification(event).catch((e) => {
+        console.error("[push] Error creating notification for admin:", admin.id, e);
+      });
+    }
+  } catch (err) {
+    console.error("[push] Failed to notify active admins:", err);
   }
 }
 
@@ -136,25 +144,31 @@ export async function notifyStockTransitions(
   changes: Array<{ productId: number; name: string; previous: number; next: number }>,
   operationKey: string
 ) {
-  const admins = await prisma.admin.findMany({
-    where: { isActive: true },
-    select: { id: true, profile: { select: { lowStockThreshold: true } } },
-  });
+  try {
+    const admins = await prisma.admin.findMany({
+      where: { isActive: true },
+      select: { id: true, profile: { select: { lowStockThreshold: true } } },
+    });
 
-  for (const admin of admins) {
-    const threshold = admin.profile?.lowStockThreshold ?? 10;
-    for (const change of changes) {
-      const type = stockTransition(change.previous, change.next, threshold);
-      if (!type) continue;
-      await createAdminNotification({
-        adminId: admin.id,
-        type,
-        productId: change.productId,
-        title: type === "OUT_OF_STOCK" ? "आउट ऑफ स्टॉक (Out of Stock)" : "कम स्टॉक चेतावनी (Low Stock Alert)",
-        message: `${change.name}: केवल ${change.next} शेष हैं`,
-        metadata: { stock: change.next, threshold },
-        dedupeKey: `${type}:${change.productId}:${operationKey}:${admin.id}`,
-      });
+    for (const admin of admins) {
+      const threshold = admin.profile?.lowStockThreshold ?? 10;
+      for (const change of changes) {
+        const type = stockTransition(change.previous, change.next, threshold);
+        if (!type) continue;
+        await createAdminNotification({
+          adminId: admin.id,
+          type,
+          productId: change.productId,
+          title: type === "OUT_OF_STOCK" ? "आउट ऑफ स्टॉक (Out of Stock)" : "कम स्टॉक चेतावनी (Low Stock Alert)",
+          message: `${change.name}: केवल ${change.next} शेष हैं`,
+          metadata: { stock: change.next, threshold },
+          dedupeKey: `${type}:${change.productId}:${operationKey}:${admin.id}`,
+        }).catch((e) => {
+          console.error("[push] Error creating stock transition alert:", e);
+        });
+      }
     }
+  } catch (err) {
+    console.error("[push] Failed to notify stock transitions:", err);
   }
 }
