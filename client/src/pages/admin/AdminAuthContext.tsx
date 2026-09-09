@@ -6,12 +6,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { adminApi, ApiRequestError, type AdminAuthUser } from "../../lib/api";
+import { adminApi, ApiRequestError, type AdminAuthUser, type LoginResponse } from "../../lib/api";
 
 interface AdminAuthContextValue {
   user: AdminAuthUser | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<LoginResponse>;
+  verify2FA: (tempToken: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -37,6 +38,12 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (username: string, password: string) => {
     const res = await adminApi.login(username, password);
+    if (res.admin) setUser(res.admin);
+    return res;
+  }, []);
+
+  const verify2FA = useCallback(async (tempToken: string, otp: string) => {
+    const res = await adminApi.verify2FA(tempToken, otp);
     setUser(res.admin);
   }, []);
 
@@ -49,7 +56,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AdminAuthContext.Provider value={{ user, loading, login, logout }}>
+    <AdminAuthContext.Provider value={{ user, loading, login, verify2FA, logout }}>
       {children}
     </AdminAuthContext.Provider>
   );

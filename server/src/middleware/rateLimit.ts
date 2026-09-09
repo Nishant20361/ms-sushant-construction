@@ -19,13 +19,13 @@ export const generalLimiter = rateLimit({
 
 const isTest = process.env.NODE_ENV === "test";
 
-/** Strict limiter for the login endpoint. */
+/** Strict limiter for the login endpoint against network floods. */
 export const loginLimiter = rateLimit({
   windowMs: 15 * minute,
-  limit: isTest ? 1000 : 10,
+  limit: isTest ? 1000 : 50,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many login attempts. Please try again after 15 minutes." },
+  message: { error: "Too many login attempts from this IP. Please try again after 15 minutes." },
 });
 
 /** Strict limiter for order/checkout creation. */

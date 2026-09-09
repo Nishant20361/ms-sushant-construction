@@ -32,13 +32,37 @@ export async function requireAdmin(
         return next(new HttpError(401, "Session expired due to password change"));
       }
     }
+    if (payload.sessionId) {
+      const session = await prisma.adminSession.findUnique({
+        where: { id: payload.sessionId },
+      });
+      if (!session || session.expiresAt < new Date()) {
+        return next(
+          new HttpError(
+            401,
+            "Logged out: Maximum active device limit (6 phones) was reached or session expired."
+          )
+        );
+      }
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      if (session.lastActiveAt < fiveMinutesAgo) {
+        prisma.adminSession
+          .update({
+            where: { id: session.id },
+            data: { lastActiveAt: new Date() },
+          })
+          .catch(() => {});
+      }
+    }
     req.admin = {
       sub: String(admin.id),
       username: admin.username,
       role: admin.role,
+      sessionId: payload.sessionId,
     };
     return next();
-  } catch {
+  } catch (err) {
+    if (err instanceof HttpError) return next(err);
     return next(new HttpError(401, "Invalid or expired session"));
   }
 }

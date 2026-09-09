@@ -3,8 +3,18 @@ export type AuthOperation = "login" | "forgot" | "reset";
 export function authErrorMessage(error: unknown, operation: AuthOperation): string {
   if (!(error instanceof AdminAppError)) return "Something went wrong. Please try again.";
   if (error.kind === "network" || error.kind === "timeout") return "You're offline. Check your connection and try again.";
-  if (error.kind === "rate_limited") return operation === "login" ? "Too many sign-in attempts. Please try again later." : "Too many requests. Please try again later.";
-  if (error.kind === "unauthorized") return "Invalid username or password.";
+  if (error.kind === "rate_limited") {
+    if (error.message && (error.message.includes("locked") || error.message.includes("Account") || error.message.includes("Too many"))) {
+      return error.message;
+    }
+    return operation === "login" ? "Too many sign-in attempts. Please try again later." : "Too many requests. Please try again later.";
+  }
+  if (error.kind === "unauthorized") {
+    if (error.message && (error.message.includes("remaining") || error.message.includes("Logged out") || error.message.includes("limit"))) {
+      return error.message;
+    }
+    return "Invalid username or password.";
+  }
   if (error.kind === "server") return "The server is unavailable. Please try again later.";
   if (operation === "reset" && error.kind === "validation") return "The reset link is invalid or expired, or the password does not meet requirements.";
   if (operation === "forgot" && error.kind === "validation") return "Enter a valid email address.";

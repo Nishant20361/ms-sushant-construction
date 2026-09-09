@@ -650,3 +650,64 @@ export async function testSmtpConnection(targetEmail?: string): Promise<SmtpTest
     };
   }
 }
+
+export async function sendAdmin2faOtpEmail(
+  to: string,
+  otp: string,
+  expiresInMinutes: number = 10
+): Promise<boolean> {
+  const from = config.smtp.from || config.smtp.user || "";
+
+  const plainText = `
+Your Admin Login Verification Code - M/S SUSHANT CONSTRUCTION
+=============================================================
+Verification Code (OTP): ${otp}
+
+Enter this 6-digit code in the Admin App to complete your login.
+This code is valid for ${expiresInMinutes} minutes.
+
+If you or your authorized staff did not attempt to sign in, someone may be trying to access your admin account. Change your password immediately.
+
+M/S Sushant Construction Security Team
+`;
+
+  const htmlContent = `
+<div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #ffffff;">
+  <div style="background: #1e293b; color: #ffffff; padding: 20px; text-align: center;">
+    <h2 style="margin: 0; font-size: 20px;">M/S SUSHANT CONSTRUCTION</h2>
+    <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 14px;">Admin Two-Factor Authentication (2FA)</p>
+  </div>
+  <div style="padding: 24px;">
+    <p style="font-size: 14px; color: #334155; margin-top: 0;">An admin sign-in was attempted. Use the one-time verification code below to authorize this device:</p>
+    <div style="text-align: center; margin: 28px 0;">
+      <span style="display: inline-block; background-color: #f1f5f9; color: #0f172a; font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 14px 28px; border-radius: 8px; border: 1px solid #cbd5e1;">${otp}</span>
+    </div>
+    <p style="font-size: 13px; color: #64748b; text-align: center;">This code is valid for <strong>${expiresInMinutes} minutes</strong>.</p>
+    <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; margin-top: 20px; border-radius: 4px;">
+      <p style="font-size: 12px; color: #b91c1c; margin: 0;"><strong>Security Warning:</strong> Never share this code with anyone. If you or your staff did not request this code, your password may be compromised.</p>
+    </div>
+  </div>
+  <div style="background: #f8fafc; padding: 16px; text-align: center; color: #64748b; font-size: 12px; border-top: 1px solid #e2e8f0;">
+    M/S Sushant Construction Security Notification
+  </div>
+</div>
+`;
+
+  if (!to) {
+    const err = "No recipient address provided for 2FA email";
+    console.warn(`[EMAIL] ${err}`);
+    logEmailFlow("ADMIN_2FA_OTP", to, false, err);
+    return false;
+  }
+
+  return sendMailWithFallback(
+    {
+      from,
+      to,
+      subject: `Your Admin Verification Code: ${otp} - M/S SUSHANT CONSTRUCTION`,
+      text: plainText,
+      html: htmlContent,
+    },
+    "ADMIN_2FA_OTP"
+  );
+}

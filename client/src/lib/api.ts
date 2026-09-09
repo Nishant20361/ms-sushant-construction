@@ -77,10 +77,27 @@ async function getCsrfToken(): Promise<string> {
 export class ApiRequestError extends Error {
   status: number;
   details?: { path: string; message: string }[];
-  constructor(message: string, status: number, details?: { path: string; message: string }[]) {
+  retryAfter?: number;
+  lockedUntil?: string;
+  require2FA?: boolean;
+  tempToken?: string;
+  maskedEmail?: string;
+  constructor(
+    message: string,
+    status: number,
+    details?: { path: string; message: string }[],
+    extra?: { retryAfter?: number; lockedUntil?: string; require2FA?: boolean; tempToken?: string; maskedEmail?: string }
+  ) {
     super(message);
     this.status = status;
     this.details = details;
+    if (extra) {
+      this.retryAfter = extra.retryAfter;
+      this.lockedUntil = extra.lockedUntil;
+      this.require2FA = extra.require2FA;
+      this.tempToken = extra.tempToken;
+      this.maskedEmail = extra.maskedEmail;
+    }
   }
 }
 
@@ -105,16 +122,23 @@ async function request<T>(
     credentials: "include",
   });
   if (!res.ok) {
-    let data: ApiError | null = null;
+    let data: (ApiError & { retryAfter?: number; lockedUntil?: string; require2FA?: boolean; tempToken?: string; maskedEmail?: string }) | null = null;
     try {
-      data = (await res.json()) as ApiError;
+      data = (await res.json()) as any;
     } catch {
       data = null;
     }
     throw new ApiRequestError(
       data?.error ?? `Request failed with status ${res.status}`,
       res.status,
-      data?.details
+      data?.details,
+      {
+        retryAfter: data?.retryAfter,
+        lockedUntil: data?.lockedUntil,
+        require2FA: data?.require2FA,
+        tempToken: data?.tempToken,
+        maskedEmail: data?.maskedEmail,
+      }
     );
   }
   if (res.status === 204) return undefined as T;
@@ -205,11 +229,33 @@ export interface AdminAuthUser {
   role: string;
 }
 
+export interface LoginResponse {
+  admin?: AdminAuthUser;
+  require2FA?: boolean;
+  tempToken?: string;
+  maskedEmail?: string;
+  message?: string;
+}
+
 export const adminApi = {
-  login(username: string, password: string): Promise<{ admin: AdminAuthUser }> {
+  login(username: string, password: string): Promise<LoginResponse> {
     return request(
       "/admin/auth/login",
       { method: "POST", body: JSON.stringify({ username, password }) },
+      { csrf: true }
+    );
+  },
+  verify2FA(tempToken: string, otp: string): Promise<{ admin: AdminAuthUser }> {
+    return request(
+      "/admin/auth/verify-2fa",
+      { method: "POST", body: JSON.stringify({ tempToken, otp }) },
+      { csrf: true }
+    );
+  },
+  resend2FA(tempToken: string): Promise<{ success: boolean; message: string }> {
+    return request(
+      "/admin/auth/resend-2fa",
+      { method: "POST", body: JSON.stringify({ tempToken }) },
       { csrf: true }
     );
   },

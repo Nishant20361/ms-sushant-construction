@@ -18,11 +18,33 @@ model Admin {
   lastLoginAt         DateTime?
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
+  failedLoginAttempts Int                       @default(0)
+  lockedUntil         DateTime?
+  twoFactorEnabled    Boolean                   @default(false)
+  twoFactorOtpHash    String?
+  twoFactorOtpExpiresAt DateTime?
   auditLogs           AdminAuditLog[]
   profile             AdminProfile?
   notifications       Notification[]
   pushDevices         AdminPushDevice[]
   passwordResetTokens AdminPasswordResetToken[]
+  sessions            AdminSession[]
+}
+
+model AdminSession {
+  id           String   @id @default(uuid())
+  adminId      Int
+  tokenHash    String   @unique
+  deviceInfo   String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+  expiresAt    DateTime
+  admin        Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
 }
 
 model AdminProfile {

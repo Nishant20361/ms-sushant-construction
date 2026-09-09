@@ -1623,7 +1623,7 @@ export function DuesScreen() {
                       >
                         <Ionicons name="time-outline" size={15} color={t.colors.text} />
                         <AppText style={{ color: t.colors.text, fontSize: 11, fontWeight: "700" }}>
-                          इतिहास (History)
+                          History
                         </AppText>
                       </Pressable>
                     </View>

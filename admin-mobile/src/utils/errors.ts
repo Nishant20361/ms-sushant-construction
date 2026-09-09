@@ -1,6 +1,14 @@
 import { AdminAppError, type AdminAppErrorKind, type ValidationIssue } from "@/types/errors";
 
-interface ErrorPayload { error?: string; details?: ValidationIssue[] }
+interface ErrorPayload {
+  error?: string;
+  details?: ValidationIssue[];
+  retryAfter?: number;
+  lockedUntil?: string;
+  require2FA?: boolean;
+  tempToken?: string;
+  maskedEmail?: string;
+}
 
 function kindForStatus(status: number): AdminAppErrorKind {
   if (status === 400 || status === 422) return "validation";
@@ -14,7 +22,15 @@ function kindForStatus(status: number): AdminAppErrorKind {
 }
 
 export function errorFromResponse(status: number, payload: ErrorPayload | null): AdminAppError {
-  return new AdminAppError(kindForStatus(status), payload?.error || "The request could not be completed.", { status, issues: payload?.details });
+  return new AdminAppError(kindForStatus(status), payload?.error || "The request could not be completed.", {
+    status,
+    issues: payload?.details,
+    retryAfter: payload?.retryAfter,
+    lockedUntil: payload?.lockedUntil,
+    require2FA: payload?.require2FA,
+    tempToken: payload?.tempToken,
+    maskedEmail: payload?.maskedEmail,
+  });
 }
 
 export function normalizeUnknownError(error: unknown): AdminAppError {

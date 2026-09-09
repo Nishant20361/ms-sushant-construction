@@ -15,6 +15,8 @@ import type { ThemeMode } from "@/theme/tokens";
 import { settingsService } from "./settingsService";
 import { useProfile } from "./useSettings";
 
+import { authService, type SessionInfo } from "@/features/auth/authService";
+
 export function AccountScreen() {
   const t = useTheme();
   const auth = useAuth();
@@ -39,10 +41,34 @@ export function AccountScreen() {
   const [khatabookRecoveryEmail, setKhatabookRecoveryEmail] = useState("");
   const [khatabookSaving, setKhatabookSaving] = useState(false);
 
+  // 2FA Security
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [toggling2fa, setToggling2fa] = useState(false);
+
+  // Active Sessions / Devices (Max 5-6 phones)
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [activeSessionsCount, setActiveSessionsCount] = useState(0);
+  const [maxSessionsAllowed, setMaxSessionsAllowed] = useState(6);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
   const [push, setPush] = useState<PushStatus>({
     permission: "undetermined",
     registered: !!pushService.token,
   });
+
+  const loadSessions = async () => {
+    try {
+      setLoadingSessions(true);
+      const res = await authService.getSessions();
+      setSessions(res.sessions);
+      setActiveSessionsCount(res.activeCount);
+      setMaxSessionsAllowed(res.maxAllowed);
+    } catch {
+      // Ignore background session fetch errors
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
 
   useEffect(() => {
     if (q.data) {
@@ -50,6 +76,13 @@ export function AccountScreen() {
       setThreshold(String(q.data.lowStockThreshold));
     }
   }, [q.data]);
+
+  useEffect(() => {
+    if (auth.admin?.twoFactorEnabled !== undefined) {
+      setTwoFactorEnabled(!!auth.admin.twoFactorEnabled);
+    }
+    void loadSessions();
+  }, [auth.admin]);
 
   useEffect(() => {
     void pushService.permission().then((permission) => setPush((x) => ({ ...x, permission })));
@@ -127,6 +160,48 @@ export function AccountScreen() {
     }
   };
 
+  const toggle2faHandler = async () => {
+    if (!email.trim()) {
+      Alert.alert("Email Required", "Please set and save your Notification Email above first before enabling 2FA.");
+      return;
+    }
+    const nextState = !twoFactorEnabled;
+    try {
+      setToggling2fa(true);
+      const res = await authService.toggle2FA(nextState);
+      setTwoFactorEnabled(res.twoFactorEnabled);
+      await auth.refreshSession();
+      Alert.alert(nextState ? "2FA Enabled" : "2FA Disabled", res.message);
+    } catch (e) {
+      Alert.alert("Failed", e instanceof Error ? e.message : "Unable to toggle 2FA.");
+    } finally {
+      setToggling2fa(false);
+    }
+  };
+
+  const revokeSessionHandler = (sessionId: string, deviceInfo: string | null) => {
+    Alert.alert(
+      "Revoke Device",
+      `Are you sure you want to log out ${deviceInfo || "this device"}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out Device",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await authService.revokeSession(sessionId);
+              await loadSessions();
+              Alert.alert("Success", "Device session revoked.");
+            } catch (e) {
+              Alert.alert("Error", e instanceof Error ? e.message : "Could not revoke session.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const enable = async () => {
     try {
       const result = await pushService.enable();
@@ -154,6 +229,80 @@ export function AccountScreen() {
         <FormField label="Notification email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
         <FormField label="Low-stock threshold" value={threshold} onChangeText={setThreshold} keyboardType="number-pad" />
         <Button title="Save Profile" loading={saving} disabled={offline || saving || !Number.isInteger(Number(threshold)) || Number(threshold) < 0} onPress={() => void saveProfile()} />
+      </Card>
+
+      {/* Two-Factor Authentication (2FA) */}
+      <Card style={s.gap}>
+        <View style={s.between}>
+          <AppText role="sectionTitle">Two-Factor Authentication (2FA)</AppText>
+          <StatusBadge
+            label={twoFactorEnabled ? "2FA Active" : "2FA Disabled"}
+            tone={twoFactorEnabled ? "success" : "neutral"}
+          />
+        </View>
+        <AppText style={{ color: t.colors.textSecondary }}>
+          जब 2FA चालू होगा, तो हर नए फोन/डिवाइस पर लॉगिन करने के लिए आपके रजिस्टर्ड ईमेल ({email || "ईमेल"}) पर 6 अंकों का OTP भेजा जाएगा।
+        </AppText>
+        <Button
+          title={twoFactorEnabled ? "Disable 2FA Security" : "Enable 2FA Security"}
+          variant={twoFactorEnabled ? "outline" : "primary"}
+          loading={toggling2fa}
+          disabled={offline || toggling2fa}
+          onPress={() => void toggle2faHandler()}
+        />
+      </Card>
+
+      {/* Connected Phones & Active Sessions */}
+      <Card style={s.gap}>
+        <View style={s.between}>
+          <AppText role="sectionTitle">Connected Staff Phones (सक्रिय फोन)</AppText>
+          <StatusBadge
+            label={`${activeSessionsCount} / ${maxSessionsAllowed} Phones`}
+            tone={activeSessionsCount >= maxSessionsAllowed ? "warning" : "info"}
+          />
+        </View>
+        <AppText style={{ color: t.colors.textSecondary }}>
+          अधिकतम {maxSessionsAllowed} स्टाफ फोन एक समय में एक्टिव रह सकते हैं। 7वां फोन लॉगिन होते ही सबसे पुराना फोन अपने आप लॉगआउट हो जाएगा।
+        </AppText>
+        {sessions.map((sess) => (
+          <View
+            key={sess.id}
+            style={{
+              padding: t.spacing.md,
+              borderRadius: t.radius.medium,
+              borderColor: sess.isCurrent ? t.colors.brand : t.colors.border,
+              borderWidth: 1,
+              backgroundColor: sess.isCurrent ? t.colors.brandSoft : t.colors.surfaceElevated,
+              gap: 4,
+            }}
+          >
+            <View style={s.between}>
+              <AppText role="bodyStrong">
+                📱 {sess.deviceInfo || "Mobile Device"}
+              </AppText>
+              {sess.isCurrent ? (
+                <StatusBadge label="This Phone (Current)" tone="success" />
+              ) : (
+                <Button
+                  title="Revoke / Logout"
+                  variant="outline"
+                  onPress={() => revokeSessionHandler(sess.id, sess.deviceInfo)}
+                  style={{ minHeight: 32, paddingHorizontal: 10 }}
+                />
+              )}
+            </View>
+            <AppText role="caption" style={{ color: t.colors.textSecondary }}>
+              IP: {sess.ipAddress || "Unknown"} • Active: {new Date(sess.lastActiveAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
+            </AppText>
+          </View>
+        ))}
+        <Button
+          title="Refresh Connected Phones"
+          variant="outline"
+          loading={loadingSessions}
+          disabled={offline || loadingSessions}
+          onPress={() => void loadSessions()}
+        />
       </Card>
 
       {/* Khatabook PIN & Recovery Email Card */}
