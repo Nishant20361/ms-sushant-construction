@@ -86,7 +86,7 @@ export default function Dashboard() {
               <span>+ ग्राहक के लिए ऑर्डर (Place Order)</span>
             </Link>
             <a
-              href="https://github.com/Nishant20361/ms-sushant-construction-releases/releases/download/sushant-control-v1.0.3/Sushant-Control-v1.0.3.apk"
+              href="https://github.com/Nishant20361/ms-sushant-construction-releases/releases/download/sushant-control-v1.0.4/Sushant-Control-v1.0.4.apk"
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-600/30 hover:from-blue-500 hover:to-indigo-500 transition active:scale-95 border border-blue-400/30"
             >
               <Download className="h-4 w-4" />
