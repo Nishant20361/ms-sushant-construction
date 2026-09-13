@@ -23,6 +23,7 @@ model Admin {
   twoFactorEnabled    Boolean                   @default(false)
   twoFactorOtpHash    String?
   twoFactorOtpExpiresAt DateTime?
+  twoFactorFailedAttempts Int                    @default(0)
   auditLogs           AdminAuditLog[]
   profile             AdminProfile?
   notifications       Notification[]
@@ -217,7 +218,7 @@ model OrderItem {
 model ProductPurchaseBatch {
   id                Int                       @id @default(autoincrement())
   productId         Int
-  batchNumber       String                    @unique @default(uuid())
+  batchNumber       String                    @unique @default(dbgenerated("(gen_random_uuid())::text"))
   supplierName      String?
   invoiceNumber     String?
   note              String?

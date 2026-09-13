@@ -523,7 +523,7 @@ describe("Admin permanent order delete (temporary cleanup feature)", () => {
     expect(login.status).toBe(200);
   });
 
-  it("permanently deletes an order and its dependent records", async () => {
+  it("deletes a cancelled unpaid order after restoring stock", async () => {
     // Create a dummy order.
     const products = await prisma.product.findMany({ where: { isActive: true } });
     const order = await agent
@@ -551,7 +551,9 @@ describe("Admin permanent order delete (temporary cleanup feature)", () => {
     expect(beforeItems).toBe(1);
     expect(beforeBill).toBe(1);
 
-    // Delete the order.
+    // Cancel first so inventory and FIFO allocations are restored.
+    const cancelled = await agent.patch(`/api/admin/orders/${orderId}/status`).set("X-CSRF-Token", token).send({ status: "CANCELLED" });
+    expect(cancelled.status).toBe(200);
     const del = await agent
       .delete(`/api/admin/orders/${orderId}`)
       .set("X-CSRF-Token", token);
@@ -665,7 +667,7 @@ describe("Native public API boundary", () => {
     expect(normalizeIndianMobile("+91 91234 56789")).toBe("9123456789");
   });
 
-  it("returns the latest customer name and address for checkout autofill", async () => {
+  it("requires an order reference before returning customer details", async () => {
     const order = await prisma.order.create({
       data: {
         orderNumber: `LOOKUP-${Date.now()}`,
@@ -676,7 +678,9 @@ describe("Native public API boundary", () => {
       },
     });
     try {
-      const found = await supertest(app).get("/api/public/customers/checkout-profile?customerMobile=9876543210");
+      const privateLookup = await supertest(app).get("/api/public/customers/checkout-profile?customerMobile=9876543210");
+      expect(privateLookup.body).toEqual({ customer: null });
+      const found = await supertest(app).get(`/api/public/customers/checkout-profile?customerMobile=9876543210&orderNumber=${order.orderNumber}`);
       expect(found.status).toBe(200);
       expect(found.headers["cache-control"]).toBe("no-store");
       expect(found.body).toEqual({
@@ -695,7 +699,10 @@ describe("Native public API boundary", () => {
   });
 
   it("returns privacy-minimized order summaries for mobile history", async () => {
-    const res = await supertest(app).get("/api/public/orders/track-by-mobile?customerMobile=9876543210");
+    const unverified = await supertest(app).get("/api/public/orders/track-by-mobile?customerMobile=9876543210");
+    expect(unverified.status).toBe(400);
+    const reference = await prisma.order.findFirstOrThrow({ where: { customerMobile: "9876543210" } });
+    const res = await supertest(app).get(`/api/public/orders/track-by-mobile?customerMobile=9876543210&orderNumber=${reference.orderNumber}`);
     expect(res.status).toBe(200);
     expect(res.body.orders.length).toBeGreaterThan(0);
     expect(res.body.orders[0]).toEqual(expect.objectContaining({ orderNumber: expect.any(String), status: expect.any(String), createdAt: expect.any(String), total: expect.any(Number), items: expect.any(Array) }));

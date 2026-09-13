@@ -5,9 +5,7 @@
  * for advanced vision, image recognition, and high-speed civil engineering reasoning.
  */
 
-export const DEFAULT_AGENTROUTER_API_KEY =
-  process.env.AGENTROUTER_API_KEY ||
-  "sk-ZPgFFgNbZisONeXoJ4pl6E566s8R5Ja3SbZhHeKVMcDpbA82";
+export const DEFAULT_AGENTROUTER_API_KEY = process.env.AGENTROUTER_API_KEY?.trim() || "";
 
 export const AGENTROUTER_BASE_URL =
   process.env.AGENTROUTER_BASE_URL || "https://agentrouter.org/v1";
@@ -40,6 +38,9 @@ export async function callAgentRouter(
   messages: AgentRouterMessage[],
   apiKey: string = DEFAULT_AGENTROUTER_API_KEY
 ): Promise<string> {
+  if (process.env.NODE_ENV === "test" || !apiKey.trim()) {
+    throw new Error("AgentRouter is not configured or is disabled in test mode");
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -49,9 +50,7 @@ export async function callAgentRouter(
       headers: {
         "Authorization": `Bearer ${apiKey.trim()}`,
         "Content-Type": "application/json",
-        "User-Agent": "RooCode/3.34.8",
-        "X-Title": "Roo Code",
-        "HTTP-Referer": "https://github.com/RooVetGit/Roo-Cline",
+        "User-Agent": "MS-Sushant-Construction/1.0",
       },
       body: JSON.stringify({
         model,
@@ -59,8 +58,6 @@ export async function callAgentRouter(
       }),
       signal: controller.signal,
     });
-
-    clearTimeout(timer);
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");

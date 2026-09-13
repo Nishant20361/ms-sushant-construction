@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useSettings } from "../context/SettingsContext";
@@ -28,49 +28,10 @@ export default function Checkout() {
     notes: "",
   });
   const [placing, setPlacing] = useState(false);
-  const [customerLookup, setCustomerLookup] = useState<"idle" | "loading" | "found" | "new">("idle");
-  const nameWasAutoFilled = useRef(false);
+  const submitting = useRef(false);
+  const orderAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [placedOrder, setPlacedOrder] = useState<{ orderNumber: string; subtotal: number } | null>(null);
-
-  useEffect(() => {
-    const mobile = normalizeIndianMobile(form.customerMobile);
-    if (!mobile) {
-      setCustomerLookup("idle");
-      if (nameWasAutoFilled.current) setForm((current) => ({ ...current, customerName: "" }));
-      nameWasAutoFilled.current = false;
-      return;
-    }
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setCustomerLookup("loading");
-      try {
-        const { customer } = await publicApi.getCheckoutCustomer(mobile, controller.signal);
-        if (customer) {
-          setForm((current) => {
-            const next = { ...current };
-            if (!current.customerName.trim() || nameWasAutoFilled.current) {
-              next.customerName = customer.customerName;
-              nameWasAutoFilled.current = true;
-            }
-            if (!current.deliveryAddress.trim() && customer.deliveryAddress) {
-              next.deliveryAddress = customer.deliveryAddress;
-            }
-            return next;
-          });
-          setFieldErrors((current) => ({ ...current, customerName: "", deliveryAddress: "" }));
-          setCustomerLookup("found");
-        } else {
-          if (nameWasAutoFilled.current) setForm((current) => ({ ...current, customerName: "" }));
-          nameWasAutoFilled.current = false;
-          setCustomerLookup("new");
-        }
-      } catch (lookupError) {
-        if (!(lookupError instanceof DOMException && lookupError.name === "AbortError")) setCustomerLookup("idle");
-      }
-    }, 350);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [form.customerMobile]);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -85,20 +46,32 @@ export default function Checkout() {
   };
 
   const handlePlaceOrder = async () => {
-    if (items.length === 0) return;
+    if (items.length === 0 || submitting.current) return;
     if (!validate()) {
       error("Please fix the highlighted fields");
       return;
     }
+    submitting.current = true;
     setPlacing(true);
     try {
-      const res = await publicApi.placeOrder({
+      const payload = {
         customerName: form.customerName.trim(),
-        customerMobile: form.customerMobile.trim(),
+        customerMobile: normalizeIndianMobile(form.customerMobile)!,
         deliveryAddress: form.deliveryAddress.trim(),
         notes: form.notes.trim() || undefined,
         items: items.map((it) => ({ productId: it.productId, quantity: it.quantity })),
-      });
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (!orderAttempt.current) {
+        try { orderAttempt.current = JSON.parse(sessionStorage.getItem("checkout-attempt") || "null"); } catch { /* storage is optional */ }
+      }
+      if (!orderAttempt.current || orderAttempt.current.fingerprint !== fingerprint) {
+        orderAttempt.current = { fingerprint, key: crypto.randomUUID() };
+        try { sessionStorage.setItem("checkout-attempt", JSON.stringify(orderAttempt.current)); } catch { /* retries still work in memory */ }
+      }
+      const res = await publicApi.placeOrder(payload, orderAttempt.current.key);
+      orderAttempt.current = null;
+      try { sessionStorage.removeItem("checkout-attempt"); } catch { /* storage is optional */ }
       setPlacedOrder({ orderNumber: res.order.orderNumber, subtotal: res.order.subtotal });
       clearCart();
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -110,6 +83,7 @@ export default function Checkout() {
         error("Failed to place order. Please try again.");
       }
     } finally {
+      submitting.current = false;
       setPlacing(false);
     }
   };
@@ -191,9 +165,6 @@ export default function Checkout() {
                   value={form.customerMobile}
                   onChange={(e) => setForm({ ...form, customerMobile: e.target.value })}
                 />
-                {customerLookup === "loading" && <p className="mt-1 text-xs text-slate-500">Checking previous orders…</p>}
-                {customerLookup === "found" && <p className="mt-1 text-xs font-medium text-green-700">Previous customer found. Please confirm or change the name below.</p>}
-                {customerLookup === "new" && <p className="mt-1 text-xs text-slate-500">New mobile number. Please enter your name.</p>}
                 {fieldErrors.customerMobile && (
                   <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.customerMobile}</p>
                 )}
@@ -206,7 +177,7 @@ export default function Checkout() {
                   className="input"
                   placeholder="e.g. Rahul Verma"
                   value={form.customerName}
-                  onChange={(e) => { nameWasAutoFilled.current = false; setForm({ ...form, customerName: e.target.value }); }}
+                  onChange={(e) => setForm({ ...form, customerName: e.target.value })}
                 />
                 {fieldErrors.customerName && (
                   <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.customerName}</p>

@@ -1,10 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import { config } from "./config.js";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 // Format DATABASE_URL with safe connection_limit if needed for Supabase pooler
 function getSafeDatabaseUrl(): string | undefined {
-  const url = process.env.DATABASE_URL;
+  const url = config.databaseUrl;
   if (!url) return undefined;
   // If connection_limit is not specified and it is postgres/supabase, limit to 3-5 connections per container
   if (url.startsWith("postgres") && !url.includes("connection_limit")) {

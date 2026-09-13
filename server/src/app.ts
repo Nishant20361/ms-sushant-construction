@@ -1,4 +1,6 @@
 import express from "express";
+import { prisma } from "./db.js";
+import { asyncHandler } from "./utils/asyncHandler.js";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -60,16 +62,20 @@ export function createApp() {
       },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "X-CSRF-Token", "X-Requested-With"],
+      allowedHeaders: ["Content-Type", "X-CSRF-Token", "X-Requested-With", "Idempotency-Key", "X-Client-Platform"],
+      exposedHeaders: ["Retry-After", "Content-Disposition"],
     })
   );
 
+  app.use("/api", generalLimiter);
+  app.use("/api/admin", (_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
   app.use(express.json({ limit: "25mb" }));
   app.use(express.urlencoded({ extended: true, limit: "25mb" }));
   app.use(cookieParser());
 
-  // ---------- Rate limiting (general) ----------
-  app.use("/api", generalLimiter);
 
   // ---------- Root status ----------
   app.get("/", (_req, res) => {
@@ -81,11 +87,25 @@ export function createApp() {
     res.json({ success: true, status: "ok", service: "ms-sushant-construction", time: new Date().toISOString() });
   });
 
+  app.get("/api/ready", asyncHandler(async (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ success: true, status: "ready" });
+    } catch {
+      res.status(503).json({ success: false, status: "unavailable" });
+    }
+  }));
+
   // ---------- Public static uploads (safe allowlist only) ----------
   app.use(
     "/uploads",
     (req, res, next) => {
-      const file = decodeURIComponent(req.path.slice(1));
+      let file: string;
+      try { file = decodeURIComponent(req.path.slice(1)); } catch {
+        res.status(400).json({ error: "Invalid file path" });
+        return;
+      }
       if (!isUploadedFileSafe(file)) {
         res.status(404).json({ error: "Not found" });
         return;

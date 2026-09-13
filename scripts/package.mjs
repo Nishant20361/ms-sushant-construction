@@ -1,95 +1,53 @@
 #!/usr/bin/env node
-
-/**
- * Creates a clean source ZIP of the project.
- * Excludes: node_modules, .env, logs, uploaded files, dist, .git, coverage.
- */
-
-import { createWriteStream, existsSync } from "fs";
-import { readFile, stat } from "fs/promises";
-import { join, relative, resolve } from "path";
-import { pipeline } from "stream/promises";
+import { createWriteStream } from "node:fs";
+import { lstat } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { pipeline } from "node:stream/promises";
 import archiver from "archiver";
 
-const ROOT = resolve(import.meta.dirname, "..");
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "ms-sushant-construction-source.zip");
 
-const EXCLUDE_PATTERNS = [
-  "node_modules",
-  ".env",
-  ".env.*",
-  "logs",
-  "*.log",
-  "dist",
-  "build",
-  "coverage",
-  ".git",
-  ".DS_Store",
-  "Thumbs.db",
-  "dev.db",
-  "dev.db-journal",
-  "server/uploads/*",
-  "*.tsbuildinfo",
-  ".vscode",
-  ".idea",
-  "ms-sushant-construction-source.zip",
-];
-
-function shouldExclude(name, path) {
-  for (const p of EXCLUDE_PATTERNS) {
-    const glob = new RegExp(p.replace(/\*/g, ".*").replace(/\./g, "\\."));
-    if (glob.test(name)) return true;
-    if (glob.test(path)) return true;
-  }
-  return false;
-}
-
-async function walk(dir) {
-  const entries = [];
-  const { readdir } = await import("fs/promises");
-  const items = await readdir(dir, { withFileTypes: true });
-  for (const item of items) {
-    const full = join(dir, item.name);
-    const rel = relative(ROOT, full);
-    if (shouldExclude(item.name, rel)) continue;
-    if (item.isDirectory()) {
-      entries.push(...(await walk(full)));
-    } else {
-      entries.push(full);
-    }
-  }
-  return entries;
+export function isSafeSourcePath(name) {
+  const parts = name.replaceAll("\\", "/").split("/");
+  const base = parts.at(-1);
+  if (parts.some((part) => ["..", "node_modules", ".git", ".expo", "dist", "build", "coverage", "uploads"].includes(part))) return false;
+  if (/^\.env(?:\.|$)/.test(base)) return base === ".env.example" || name === "client/.env.production";
+  return !/\.(?:zip|log|db|sqlite|pem|key|p12|pfx|jks|keystore|tsbuildinfo)$/i.test(base) &&
+    !["credentials.json", "google-services.json", ".DS_Store", "MEMORY.md", "memory.md"].includes(base) &&
+    !/^(?:migrate|verify_assistant|verify_assistant_part2|verify_rag)\.ts$/.test(base);
 }
 
 async function main() {
-  console.log("📦 Packaging source code…");
-  const files = await walk(ROOT);
-
-  const output = createWriteStream(OUT);
+  // Git's ignore rules prevent private local scripts and ignored credentials
+  // from being bundled. A second allowlist guard also checks tracked files.
+  const names = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: ROOT, encoding: "utf8" }).split("\0"))]
+    .filter((name) => name && isSafeSourcePath(name));
   const archive = archiver("zip", { zlib: { level: 9 } });
-
-  output.on("close", () => {
-    console.log(`✅ Created: ${OUT}`);
-    console.log(`   Size: ${(archive.pointer() / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`   Files: ${files.length}`);
-  });
-
-  archive.on("warning", (err) => {
-    if (err.code === "ENOENT") console.warn("⚠️", err.message);
-    else throw err;
-  });
-
-  archive.pipe(output);
-
-  for (const file of files) {
-    const rel = relative(ROOT, file);
-    archive.file(file, { name: join("ms-sushant-construction", rel) });
+  const completion = pipeline(archive, createWriteStream(OUT));
+  // Attach error handling before adding files to avoid unhandled stream errors.
+  completion.catch(() => {});
+  let count = 0;
+  try {
+    for (const name of names) {
+      const file = join(ROOT, name);
+      const info = await lstat(file).catch(() => null);
+      if (!info?.isFile()) continue; // Never follow symlinks outside the source tree.
+      archive.file(file, { name: `ms-sushant-construction/${name}` });
+      count++;
+    }
+    await archive.finalize();
+    await completion;
+    console.log(`Created ${basename(OUT)} (${count} source files, ${(archive.pointer() / 1024 / 1024).toFixed(2)} MB)`);
+  } catch (error) {
+    archive.destroy(error);
+    await completion.catch(() => {});
+    throw error;
   }
-
-  await archive.finalize();
 }
 
-main().catch((err) => {
-  console.error("❌ Packaging failed:", err.message);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((error) => { console.error("Packaging failed:", error.message); process.exitCode = 1; });
+}

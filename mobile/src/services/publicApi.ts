@@ -22,8 +22,8 @@ export const publicApi = {
     apiRequest<TrackOrderResponse>(`/orders/track${queryString({ orderNumber, customerMobile })}`, { signal }),
   // Service support only. The Phase 2 UI intentionally does not expose this
   // privacy-sensitive lookup until ownership protection is added server-side.
-  trackOrdersByMobile: (customerMobile: string, signal?: AbortSignal) =>
-    apiRequest<TrackOrdersByMobileResponse>(`/orders/track-by-mobile${queryString({ customerMobile })}`, { signal }),
+  trackOrdersByMobile: (customerMobile: string, orderNumber: string, signal?: AbortSignal) =>
+    apiRequest<TrackOrdersByMobileResponse>(`/orders/track-by-mobile${queryString({ customerMobile, orderNumber })}`, { signal }),
   sendConstructionAssistantMessage: (payload: AssistantRequest, signal?: AbortSignal) =>
     apiRequest<AssistantResponse>("/construction-assistant/chat", { method: "POST", body: JSON.stringify(payload), timeoutMs: API_TIMEOUTS.assistant, signal }),
   health: (signal?: AbortSignal) => apiRequest<{ success: boolean; status: string }>("/health", { signal, timeoutMs: API_TIMEOUTS.health }, API_ROOT_URL),

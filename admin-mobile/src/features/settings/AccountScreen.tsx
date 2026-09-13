@@ -160,16 +160,22 @@ export function AccountScreen() {
     }
   };
 
+  const [twoFactorPassword, setTwoFactorPassword] = useState("");
   const toggle2faHandler = async () => {
-    if (!email.trim()) {
+    if (!twoFactorPassword) {
+      Alert.alert("Password required", "Enter your current password to change two-factor authentication.");
+      return;
+    }
+    if (!twoFactorEnabled && !email.trim()) {
       Alert.alert("Email Required", "Please set and save your Notification Email above first before enabling 2FA.");
       return;
     }
     const nextState = !twoFactorEnabled;
     try {
       setToggling2fa(true);
-      const res = await authService.toggle2FA(nextState);
+      const res = await authService.toggle2FA(nextState, twoFactorPassword);
       setTwoFactorEnabled(res.twoFactorEnabled);
+      setTwoFactorPassword("");
       await auth.refreshSession();
       Alert.alert(nextState ? "2FA Enabled" : "2FA Disabled", res.message);
     } catch (e) {
@@ -243,6 +249,7 @@ export function AccountScreen() {
         <AppText style={{ color: t.colors.textSecondary }}>
           जब 2FA चालू होगा, तो हर नए फोन/डिवाइस पर लॉगिन करने के लिए आपके रजिस्टर्ड ईमेल ({email || "ईमेल"}) पर 6 अंकों का OTP भेजा जाएगा।
         </AppText>
+        <FormField label="Current password" value={twoFactorPassword} onChangeText={setTwoFactorPassword} secureTextEntry autoCapitalize="none" />
         <Button
           title={twoFactorEnabled ? "Disable 2FA Security" : "Enable 2FA Security"}
           variant={twoFactorEnabled ? "outline" : "primary"}

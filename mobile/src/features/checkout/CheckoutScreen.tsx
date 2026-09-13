@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,7 +10,6 @@ import { useOrderFlowStore } from "@/store/orderFlowStore";
 import { theme } from "@/theme";
 import { formatINR } from "@/utils/format";
 import { normalizeIndianMobile, validateCheckout, type CheckoutErrors } from "@/utils/customerValidation";
-import { publicApi } from "@/services/publicApi";
 
 const initialForm = { customerName: "", customerMobile: "", deliveryAddress: "", notes: "" };
 function newAttemptKey() { return `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`; }
@@ -24,44 +23,10 @@ export default function CheckoutScreen() {
   const mutation = usePlaceOrder();
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState<CheckoutErrors>({});
-  const [customerLookup, setCustomerLookup] = useState<"idle" | "loading" | "found" | "new">("idle");
-  const nameWasAutoFilled = useRef(false);
   const attempt = useRef<{ fingerprint: string; key: string } | undefined>(undefined);
   const fingerprint = useMemo(() => JSON.stringify({ form: { ...form, customerName: form.customerName.trim(), customerMobile: normalizeIndianMobile(form.customerMobile), deliveryAddress: form.deliveryAddress.trim(), notes: form.notes.trim() }, items: items.map(({ productId, quantity }) => ({ productId, quantity })).sort((a, b) => a.productId - b.productId) }), [form, items]);
 
-  useEffect(() => {
-    const mobile = normalizeIndianMobile(form.customerMobile);
-    if (!mobile) { setCustomerLookup("idle"); if (nameWasAutoFilled.current) setForm((current) => ({ ...current, customerName: "" })); nameWasAutoFilled.current = false; return; }
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setCustomerLookup("loading");
-      try {
-        const { customer } = await publicApi.getCheckoutCustomer(mobile, controller.signal);
-        if (customer) {
-          setForm((current) => {
-            const next = { ...current };
-            if (!current.customerName.trim() || nameWasAutoFilled.current) {
-              next.customerName = customer.customerName;
-              nameWasAutoFilled.current = true;
-            }
-            if (!current.deliveryAddress.trim() && customer.deliveryAddress) {
-              next.deliveryAddress = customer.deliveryAddress;
-            }
-            return next;
-          });
-          setErrors((current) => ({ ...current, customerName: undefined, deliveryAddress: undefined }));
-          setCustomerLookup("found");
-        } else {
-          if (nameWasAutoFilled.current) setForm((current) => ({ ...current, customerName: "" }));
-          nameWasAutoFilled.current = false;
-          setCustomerLookup("new");
-        }
-      } catch (error) { if (!(error instanceof Error && error.name === "AbortError")) setCustomerLookup("idle"); }
-    }, 350);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [form.customerMobile]);
-
-  const update = (field: keyof typeof form, value: string) => { if (field === "customerName") nameWasAutoFilled.current = false; setForm((current) => ({ ...current, [field]: value })); setErrors((current) => ({ ...current, [field]: undefined })); mutation.reset(); };
+  const update = (field: keyof typeof form, value: string) => { setForm((current) => ({ ...current, [field]: value })); setErrors((current) => ({ ...current, [field]: undefined })); mutation.reset(); };
   const submit = () => {
     if (mutation.isPending) return;
     const nextErrors = validateCheckout(form);
@@ -79,7 +44,7 @@ export default function CheckoutScreen() {
   const field = (key: keyof typeof form, label: string, props: object = {}) => <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} editable={!mutation.isPending} value={form[key]} onChangeText={(value) => update(key, value)} placeholderTextColor={theme.colors.muted} style={[styles.input, key === "deliveryAddress" && styles.address]} {...props} />{errors[key] ? <Text style={styles.fieldError}>{errors[key]}</Text> : null}</View>;
   const failure = mutation.error instanceof PlaceOrderFailure ? mutation.error : null;
   return <SafeAreaView edges={["bottom"]} style={styles.safe}><KeyboardAvoidingView style={styles.safe} behavior={Platform.OS === "ios" ? "padding" : undefined}><ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={styles.content}><Text style={styles.title}>Checkout</Text><Text style={styles.muted}>Delivery details and order review. Payment is managed separately by the business.</Text>
-    <View style={styles.card}><Text style={styles.heading}>Customer & delivery details</Text>{field("customerMobile", "Mobile number", { placeholder: "10-digit mobile number", keyboardType: "phone-pad", autoComplete: "tel", textContentType: "telephoneNumber", maxLength: 16 })}{customerLookup === "loading" ? <Text style={styles.lookup}>Checking previous orders…</Text> : customerLookup === "found" ? <Text style={styles.lookupFound}>Previous customer found. Confirm or change the name below.</Text> : customerLookup === "new" ? <Text style={styles.lookup}>New mobile number. Enter your name below.</Text> : null}{field("customerName", "Customer name", { placeholder: "Full name", autoCapitalize: "words", autoComplete: "name", textContentType: "name", returnKeyType: "next", maxLength: 120 })}{field("deliveryAddress", "Delivery address (optional)", { placeholder: "House, street, area, city and PIN code", autoComplete: "street-address", textContentType: "fullStreetAddress", multiline: true, textAlignVertical: "top", maxLength: 500 })}{field("notes", "Notes (optional)", { placeholder: "Delivery instructions or other details (optional)", multiline: true, textAlignVertical: "top", maxLength: 1000 })}</View>
+    <View style={styles.card}><Text style={styles.heading}>Customer & delivery details</Text>{field("customerMobile", "Mobile number", { placeholder: "10-digit mobile number", keyboardType: "phone-pad", autoComplete: "tel", textContentType: "telephoneNumber", maxLength: 16 })}{field("customerName", "Customer name", { placeholder: "Full name", autoCapitalize: "words", autoComplete: "name", textContentType: "name", returnKeyType: "next", maxLength: 120 })}{field("deliveryAddress", "Delivery address (optional)", { placeholder: "House, street, area, city and PIN code", autoComplete: "street-address", textContentType: "fullStreetAddress", multiline: true, textAlignVertical: "top", maxLength: 500 })}{field("notes", "Notes (optional)", { placeholder: "Delivery instructions or other details (optional)", multiline: true, textAlignVertical: "top", maxLength: 1000 })}</View>
     <View style={styles.card}><Text style={styles.heading}>Order review</Text>{items.map((item) => <CheckoutItem key={item.productId} item={item} />)}<View style={styles.totalRow}><Text style={styles.heading}>Estimated Total</Text><Text style={styles.total}>{formatINR(subtotal)}</Text></View><Text style={styles.notice}>Prices and stock are verified by the server when you place the order. The confirmed total may reflect current prices.</Text></View>
     {failure ? <View accessibilityLiveRegion="polite" style={styles.errorBox}><Text style={styles.errorText}>{failure.message}</Text>{failure.kind === "stock" || failure.kind === "unavailable" ? <Pressable accessibilityRole="button" onPress={() => router.push("/(tabs)/cart")}><Text style={styles.errorLink}>Review Cart</Text></Pressable> : null}<Pressable accessibilityRole="button" onPress={() => router.push("/about")}><Text style={styles.errorLink}>Contact us for help</Text></Pressable></View> : null}
     <SubmitOrderButton submitting={mutation.isPending} disabled={mutation.isPending} onPress={submit} />

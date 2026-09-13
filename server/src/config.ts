@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import crypto from "node:crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -9,36 +10,33 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config();
 
-const hasGroqKey = !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim());
-console.log("[GROQ CHECK]");
-console.log(`KEY LOADED: ${hasGroqKey ? "YES" : "NO"}`);
-
-console.log("[AGENTROUTER CHECK]");
-console.log(`KEY LOADED: YES (${process.env.AGENTROUTER_API_KEY ? "CUSTOM_ENV" : "DEFAULT_BUILTIN"})`);
-console.log(`MODELS: gpt-5.6-sol (Vision), claude-opus-4-8 (Vision), deepseek-v4-flash (Fast Reasoning)`);
-
 const isProd = process.env.NODE_ENV === "production";
 
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    // In production a missing secret is fatal; in dev we fall back to a dev-only
-    // random value so the project can start immediately. Never log the value.
-    if (isProd) {
-      throw new Error(`Missing required environment variable: ${name}`);
-    }
-    console.warn(`[config] WARNING: ${name} not set - using development default.`);
-    return `dev_${name}_${Math.random().toString(36).slice(2)}`;
+function jwtSecret(): string {
+  const value = process.env.JWT_SECRET?.trim();
+  if (isProd && (!value || value.length < 32 || /change-me|development|use-a-long|your-secret/i.test(value))) {
+    throw new Error("JWT_SECRET must be a non-placeholder random secret of at least 32 characters in production");
   }
-  return value;
+  return value || crypto.randomBytes(32).toString("hex");
 }
 
 function clientUrl(): string {
-  const value = process.env.CLIENT_URL?.trim();
-  if (isProd && (!value || !/^https:\/\//i.test(value))) {
-    throw new Error("CLIENT_URL must be an absolute HTTPS URL in production");
+  const value = process.env.CLIENT_URL?.trim() || (isProd ? "" : "http://localhost:5173");
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || (isProd && url.protocol !== 'https:') || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error();
+    return url.origin;
+  } catch {
+    throw new Error("CLIENT_URL must be an absolute origin without a path, credentials, query or fragment; HTTPS is required in production");
   }
-  return value || "http://localhost:5173";
+}
+
+function databaseUrl(): string {
+  const value = process.env.DATABASE_URL?.trim();
+  if (isProd && (!value || !/^postgres(ql)?:\/\//.test(value))) {
+    throw new Error("DATABASE_URL must be a PostgreSQL connection URL in production");
+  }
+  return value || "";
 }
 
 export const config = {
@@ -49,8 +47,8 @@ export const config = {
   // Render always terminates TLS and forwards requests through its trusted
   // proxy. Other hosts must explicitly opt in with TRUST_PROXY=true.
   trustProxy: process.env.TRUST_PROXY === "true" || !!process.env.RENDER_SERVICE_ID ? 1 : false,
-  databaseUrl: process.env.DATABASE_URL || "file:./dev.db",
-  jwtSecret: required("JWT_SECRET"),
+  databaseUrl: databaseUrl(),
+  jwtSecret: jwtSecret(),
   cookieDomain: process.env.COOKIE_DOMAIN || "",
   initialAdmin: {
     username: process.env.ADMIN_USERNAME || process.env.INITIAL_ADMIN_USERNAME || "admin",
@@ -69,7 +67,3 @@ export const config = {
     from: process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.EMAIL_USER || process.env.SMTP_USER || "",
   },
 };
-
-const hasEmailConfig = !!config.brevo.apiKey || !!(config.smtp.host && config.smtp.user && config.smtp.pass);
-console.log("[EMAIL CHECK]");
-console.log(`CONFIGURED: ${hasEmailConfig ? "YES" : "NO"} (${config.brevo.apiKey ? "BREVO_API" : "SMTP"})`);

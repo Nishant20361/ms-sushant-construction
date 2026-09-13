@@ -38,7 +38,7 @@
 
 ### Requirements
 
-- Node.js 20+
+- Node.js 24 LTS (see `.nvmrc`)
 - npm 9+
 - PostgreSQL
 
@@ -67,7 +67,7 @@ At minimum, set these values in `.env` before deployment:
 ```env
 NODE_ENV=production
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?schema=public"
-JWT_SECRET="use-a-long-random-secret"
+JWT_SECRET="replace-with-at-least-32-random-characters"
 CLIENT_URL="https://your-domain.example"
 TRUST_PROXY=true
 ```
@@ -102,15 +102,36 @@ Start Command: npm run start --workspace server
 | `npm run dev` | Start the API and frontend together |
 | `npm run lint` | Run lint checks |
 | `npm run typecheck` | Run TypeScript validation |
-| `npm test` | Run the isolated integration test suite |
+| `npm test` | Run isolated API integration tests and frontend unit tests |
+| `npm run test:unit` | Run database-free tests and source archive safeguards |
 | `npm run build` | Create production builds |
 | `npm run db:migrate` | Apply database migrations |
 | `npm run db:seed` | Seed initial data |
 
+## Audit and release verification
+
+See [PRODUCTION_AUDIT.md](PRODUCTION_AUDIT.md) for fixes, verification results, compatibility changes and remaining release gates. This audit does not replace production smoke tests, device testing or a database backup.
+
+Integration tests require an **isolated local PostgreSQL database** with `test` in its name. Put only the test URL in `server/.env.test` (or set it in your shell):
+
+```env
+TEST_DATABASE_URL="postgresql://USER@localhost:5432/ms_sushant_test?schema=public"
+```
+
+Do not set `DATABASE_URL` to the test database in your normal environment. Test setup refuses a shared application database or a remote host. It provisions the test schema and tests delete their fixtures. `npm run test:unit` runs without PostgreSQL.
+
+For the mobile clients, run `npm ci`, `npm run typecheck`, and `npm test --if-present` inside each of `mobile/` and `admin-mobile/`. CI also exports each Android bundle. Exporting JavaScript is not a signed APK/AAB or a physical-device test.
+
+The backend has `/api/health` for liveness and `/api/ready` for database readiness. Set readiness monitoring to the latter. Startup connects to PostgreSQL before listening. Failed startup and fatal process errors exit so the host can restart the service.
+
+Deployments must run migrations before starting the new code. `npm run start --workspace server` already does this. Preserve uploads using configured Cloudinary storage or a persistent `UPLOAD_DIR` disk; the default local uploads folder is not durable on an ephemeral host.
+
+The web and mobile clients must be released with the new API: public history requires both a mobile number and a known order reference; changing admin 2FA requires the current password. Guest checkout no longer exposes a previous customer's address based only on a phone number. Existing administrator sessions without server-side session records must sign in again.
+
 ## Production checklist
 
 - [ ] Use a managed PostgreSQL database and run migrations.
-- [ ] Set a strong `JWT_SECRET`.
+- [ ] Set a random `JWT_SECRET` with at least 32 characters; example placeholders are rejected.
 - [ ] Set `CLIENT_URL` to the exact public HTTPS website URL.
 - [ ] Verify `VITE_API_BASE` targets the deployed backend before building the frontend.
 - [ ] Configure SMTP credentials and send a test order/reset email.

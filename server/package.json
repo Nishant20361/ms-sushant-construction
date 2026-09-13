@@ -14,14 +14,15 @@
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:push": "prisma db push --accept-data-loss",
+    "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force --skip-seed",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:knowledge": "tsx prisma/seedConstructionKnowledge.ts",
     "db:check-admin": "tsx scripts/reset-admin-password.ts --check",
     "db:reset-admin": "tsx scripts/reset-admin-password.ts",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:unit": "vitest run --config vitest.pure.config.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -40,7 +41,7 @@
     "groq-sdk": "^1.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.3.0",
     "nodemailer": "^9.0.3",
     "sharp": "^0.35.3",
     "zod": "^3.23.8"
@@ -62,6 +63,6 @@
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.11"
   }
 }

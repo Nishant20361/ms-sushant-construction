@@ -320,7 +320,7 @@ describe("Admin Assisted Customer Orders", () => {
 
     // Lookup using +91 format
     const lookup2 = await agent.get("/api/admin/customers/lookup?mobile=%2B919939130538");
-    expect(lookup2.status).toBe(200);
+    expect(lookup2.status, lookup2.text).toBe(200);
     expect(lookup2.body.found).toBe(true);
     expect(lookup2.body.customer.name).toBe("Sanjay Mishra");
 

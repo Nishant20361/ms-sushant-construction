@@ -1,14 +1,6 @@
 import crypto from "crypto";
 
-/**
- * Generates a sequential, human-friendly order number like MSC-20260802-0001.
- *
- * Uniqueness is guaranteed by the unique constraint on Order.orderNumber plus
- * a strong random suffix in the rare case of a same-date collision. We use
- * the count of orders created on the same date + 1 as the sequence number,
- * and fall back to a random suffix if the resulting number already exists
- * (which keeps the format human readable while remaining collision-safe).
- */
+/** Date prefix in IST plus an unpredictable 64-bit suffix. */
 export function generateOrderNumber(date = new Date()): string {
   const istOffsetMs = 5.5 * 60 * 60 * 1000;
   const istDate = new Date(date.getTime() + istOffsetMs);
@@ -16,9 +8,7 @@ export function generateOrderNumber(date = new Date()): string {
   const mm = String(istDate.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(istDate.getUTCDate()).padStart(2, "0");
   const datePart = `${yyyy}${mm}${dd}`;
-  // Random suffix makes the whole string unique even if the sequence
-  // counter races across concurrent requests on the same date.
-  const rand = crypto.randomBytes(3).toString("hex").toUpperCase().slice(0, 4);
+  const rand = crypto.randomBytes(8).toString("hex").toUpperCase();
   return `MSC-${datePart}-${rand}`;
 }
 

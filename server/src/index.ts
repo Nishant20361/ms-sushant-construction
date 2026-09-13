@@ -4,7 +4,6 @@ import { config } from "./config.js";
 import { prisma } from "./db.js";
 
 let server: Server | null = null;
-let keepAliveTimer: NodeJS.Timeout | null = null;
 let isShuttingDown = false;
 
 // ---------------------------------------------------------------------------
@@ -16,6 +15,7 @@ process.on("unhandledRejection", (reason: unknown, promise: Promise<unknown>) =>
     reason: reason instanceof Error ? { message: reason.message, stack: reason.stack } : reason,
     promise,
   });
+  void gracefulShutdown("unhandledRejection", 1);
 });
 
 process.on("uncaughtException", (error: Error) => {
@@ -33,11 +33,6 @@ async function gracefulShutdown(signal: string, exitCode = 0): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
   console.log(`[server] Received ${signal}. Starting graceful shutdown...`);
-
-  if (keepAliveTimer) {
-    clearInterval(keepAliveTimer);
-    keepAliveTimer = null;
-  }
 
   // Force exit after 10s if active sockets refuse to close
   const forceTimeout = setTimeout(() => {
@@ -71,22 +66,14 @@ async function gracefulShutdown(signal: string, exitCode = 0): Promise<void> {
 }
 
 async function bootstrap() {
+  await prisma.$connect();
   const app = createApp();
   server = app.listen(config.port, () => {
     console.log(`[server] M/S Sushant Construction API listening on http://localhost:${config.port}`);
     console.log(`[server] Environment: ${config.env}`);
   });
 
-  // Keep Render free-tier PostgreSQL awake — ping every 4 minutes.
-  // Render pauses free DBs after ~5 min of inactivity, causing connection errors.
-  // This silent ping prevents that without affecting any app logic.
-  keepAliveTimer = setInterval(async () => {
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-    } catch {
-      // Ignore — server will reconnect automatically on next real request.
-    }
-  }, 4 * 60 * 1000); // every 4 minutes
+
 }
 
 bootstrap().catch(async (err) => {

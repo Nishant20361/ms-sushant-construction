@@ -4,7 +4,7 @@
   "private": true,
   "description": "M/S SUSHANT CONSTRUCTION - construction material supplier website + admin panel",
   "engines": {
-    "node": ">=20 <23",
+    "node": "^22.12.0 || ^24.0.0 || ^26.0.0",
     "npm": ">=9"
   },
   "workspaces": [
@@ -18,18 +18,27 @@
     "build": "npm run build --workspace server && npm run build --workspace client",
     "lint": "npm run lint --workspace server && npm run lint --workspace client",
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace client",
-    "test": "npm run test --workspace server",
+    "test": "npm run test --workspace server && npm run test --workspace client",
     "db:migrate": "npm run db:migrate --workspace server",
     "db:push": "npm run db:push --workspace server",
     "db:seed": "npm run db:seed --workspace server",
     "db:setup": "npm run db:migrate --workspace server && npm run db:seed --workspace server",
     "db:reset": "npm run db:reset --workspace server",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "test:unit": "node --test scripts/package.test.mjs && npm run test:unit --workspace server && npm run test --workspace client",
+    "verify": "npm run lint && npm run typecheck && npm run build && npm test"
   },
   "devDependencies": {
     "archiver": "^7.0.1",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    },
+    "qs": "^6.16.0",
+    "vite": "^7.3.6"
+  }
 }

@@ -620,24 +620,17 @@ router.delete(
   requireAdmin,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const id = parseIntegerParam(req.params.id, "order id");
-    const existing = await prisma.order.findUnique({
-      where: { id },
-      include: { bill: true },
+    const existing = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${id} FOR UPDATE`;
+      const order = await tx.order.findUnique({ where: { id }, include: { payments: true } });
+      if (!order) throw new HttpError(404, "Order not found");
+      if (order.payments.length) throw new HttpError(409, "Orders with payment history must be retained for accounting.");
+      if (order.status !== "CANCELLED") throw new HttpError(409, "Cancel the order before deleting it so its stock is restored.");
+      await tx.orderItem.deleteMany({ where: { orderId: id } });
+      await tx.bill.deleteMany({ where: { orderId: id } });
+      await tx.order.delete({ where: { id } });
+      return order;
     });
-    if (!existing) throw new HttpError(404, "Order not found");
-
-    try {
-      await prisma.$transaction(async (tx) => {
-        await tx.orderItem.deleteMany({ where: { orderId: id } });
-        if (existing.bill) {
-          await tx.bill.deleteMany({ where: { orderId: id } });
-        }
-        await tx.orderPayment.deleteMany({ where: { orderId: id } });
-        await tx.order.delete({ where: { id } });
-      });
-    } catch {
-      throw new HttpError(400, "Unable to delete order");
-    }
 
     await writeAudit(req, {
       action: "ORDER_DELETE",
@@ -667,7 +660,7 @@ router.patch(
 
       const existing = await tx.order.findUnique({
         where: { id },
-        include: { items: true, payments: true },
+        include: { items: { orderBy: { productId: "asc" } }, payments: true },
       });
       if (!existing) throw new HttpError(404, "Order not found");
 
@@ -705,18 +698,13 @@ router.patch(
         for (const item of existing.items) {
           const qty = Number(item.quantity);
           if (qty <= 0) continue;
-          const prod = await tx.product.findUnique({ where: { id: item.productId } });
-          if (!prod) continue;
-          if (Number(prod.stock) < qty) {
-            throw new HttpError(
-              400,
-              `Only ${prod.stock} units of "${item.productName}" in stock. Cannot re-activate this order.`
-            );
-          }
-          await tx.product.update({
-            where: { id: item.productId },
+          const changed = await tx.product.updateMany({
+            where: { id: item.productId, stock: { gte: qty } },
             data: { stock: { decrement: qty } },
           });
+          if (changed.count !== 1) {
+            throw new HttpError(409, `Insufficient stock of "${item.productName}" to re-activate this order.`);
+          }
           await allocateInventoryFifo(tx, {
             orderItemId: item.id,
             productId: item.productId,

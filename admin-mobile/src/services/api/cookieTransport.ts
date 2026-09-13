@@ -48,19 +48,25 @@ export class NativeCookieAuthTransport {
   }
 
   private async fetchCsrfToken() {
-    let response: Response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), environment.requestTimeoutMs);
     try {
-      response = await fetch(`${environment.apiBaseUrl}/csrf`, { credentials: "include" });
+      const response = await fetch(`${environment.apiBaseUrl}/csrf`, { credentials: "include", signal: controller.signal });
+      if (!response.ok) throw new AdminAppError("server", "Security initialization failed. Please try again.", { status: response.status });
+      const payload = await response.json() as { token?: unknown };
+      if (typeof payload.token !== "string" || payload.token.length < 32) throw new AdminAppError("server", "Security initialization failed. Please try again.");
+      this.csrfToken = payload.token;
+      await this.persistCookies();
+      return payload.token;
     } catch (cause) {
-      throw new AdminAppError("network", "You're offline. Connect to the internet to continue.", { cause });
+      if (cause instanceof AdminAppError) throw cause;
+      throw new AdminAppError(controller.signal.aborted ? "timeout" : "network",
+        controller.signal.aborted ? "Security initialization timed out. Please try again." : "You're offline. Connect to the internet to continue.", { cause });
+    } finally {
+      clearTimeout(timeout);
     }
-    if (!response.ok) throw new AdminAppError("server", "Security initialization failed. Please try again.", { status: response.status });
-    const payload = await response.json() as { token?: unknown };
-    if (typeof payload.token !== "string" || payload.token.length < 32) throw new AdminAppError("server", "Security initialization failed. Please try again.");
-    this.csrfToken = payload.token;
-    await this.persistCookies();
-    return payload.token;
   }
+
 }
 
 export const nativeCookieAuthTransport = new NativeCookieAuthTransport();

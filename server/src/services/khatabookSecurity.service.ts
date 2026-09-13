@@ -82,7 +82,8 @@ async function getEffectiveStore(): Promise<KhatabookSecurityStore> {
       }
     }
   } catch (err) {
-    console.error("[KHATABOOK SECURITY] DB read error, using fallback:", err);
+    console.error("[KHATABOOK SECURITY] DB read failed:", err);
+    throw err;
   }
 
   return jsonFallback;
@@ -146,7 +147,7 @@ export async function getAdminGmailAddress(): Promise<string> {
   }
 
   // Fallback to configured SMTP user or admin email from env
-  return config.initialAdmin.email || config.smtp.user || "admin@mssushant.com";
+  return config.initialAdmin.email || config.smtp.user || "";
 }
 
 function maskEmail(email: string): string {
@@ -211,18 +212,6 @@ export async function updateKhatabookSecurity(params: {
       throw new Error("Invalid email address format");
     }
     updates.recoveryEmail = cleanEmail;
-
-    // Also update Admin / SiteSetting email in background for system consistency
-    try {
-      await prisma.siteSetting.updateMany({
-        data: { email: cleanEmail },
-      });
-      await prisma.admin.updateMany({
-        data: { email: cleanEmail },
-      });
-    } catch (e) {
-      console.warn("[KHATABOOK SECURITY] Background email sync:", e);
-    }
   }
 
   updates.resetOtpHash = null;
@@ -255,7 +244,8 @@ export async function sendKhatabookResetOtp(): Promise<{
   });
 
   // Send email
-  await sendKhatabookOtpEmail(email, otp, 15);
+  const sent = await sendKhatabookOtpEmail(email, otp, 15);
+  if (!sent) throw new Error("Unable to send the recovery code. Check the email delivery configuration.");
 
   return {
     success: true,

@@ -16,7 +16,8 @@ import { Admin2faTempPayload, AuthenticatedRequest } from "../../types.js";
 import { Request, Response } from "express";
 
 const RESET_TOKEN_LIFETIME_MINUTES = 15;
-const MAX_CONCURRENT_SESSIONS = Number(process.env.MAX_ADMIN_CONCURRENT_SESSIONS) || 6;
+const configuredSessionLimit = Number(process.env.MAX_ADMIN_CONCURRENT_SESSIONS);
+const MAX_CONCURRENT_SESSIONS = Number.isInteger(configuredSessionLimit) && configuredSessionLimit > 0 ? configuredSessionLimit : 6;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 function hashResetToken(rawToken: string): string {
@@ -42,61 +43,44 @@ function getClientDeviceInfo(req: Request): { deviceInfo: string; ipAddress: str
   } else if (ua.includes("Mac")) {
     deviceInfo = "Mac";
   }
-  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "Unknown IP";
+  const ip = req.ip || "Unknown IP";
   return { deviceInfo, ipAddress: ip, userAgent: ua.slice(0, 255) };
 }
 
-async function createAdminSession(adminId: number, username: string, role: string, req: Request, res: Response) {
-  const now = new Date();
-  // 1. Prune expired sessions
-  await prisma.adminSession.deleteMany({
-    where: { adminId, expiresAt: { lt: now } },
-  });
-
-  // 2. Query active sessions ordered by lastActiveAt ASC
-  const activeSessions = await prisma.adminSession.findMany({
-    where: { adminId, expiresAt: { gt: now } },
-    orderBy: { lastActiveAt: "asc" },
-  });
-
-  // 3. FIFO Auto-eviction: if count >= MAX_CONCURRENT_SESSIONS, evict oldest
-  if (activeSessions.length >= MAX_CONCURRENT_SESSIONS) {
-    const excess = activeSessions.length - MAX_CONCURRENT_SESSIONS + 1;
-    const toEvict = activeSessions.slice(0, excess);
-    await prisma.adminSession.deleteMany({
-      where: { id: { in: toEvict.map((s) => s.id) } },
-    });
-    await writeAudit(req as AuthenticatedRequest, {
-      action: "SESSION_EVICTED",
-      entity: "AdminSession",
-      entityId: adminId,
-      details: JSON.stringify({ evictedCount: toEvict.length, maxAllowed: MAX_CONCURRENT_SESSIONS }),
-    });
-  }
-
-  // 4. Create new session
+async function createAdminSession(adminId: number, username: string, role: string, req: Request, res: Response, passwordHash: string) {
   const clientInfo = getClientDeviceInfo(req);
-  const sessionId = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-
-  const token = signAdminToken({ sub: String(adminId), username, role, sessionId });
-  const tokenHash = hashToken(token);
-
-  await prisma.adminSession.create({
-    data: {
-      id: sessionId,
-      adminId,
-      tokenHash,
-      deviceInfo: clientInfo.deviceInfo,
-      ipAddress: clientInfo.ipAddress,
-      userAgent: clientInfo.userAgent,
-      expiresAt,
-    },
+  const result = await prisma.$transaction(async (tx) => {
+    // Serialize logins per account, so concurrent devices cannot exceed the cap.
+    await tx.$queryRaw`SELECT id FROM "Admin" WHERE id = ${adminId} FOR UPDATE`;
+    const admin = await tx.admin.findUnique({ where: { id: adminId } });
+    if (!admin?.isActive || admin.passwordHash !== passwordHash) {
+      throw new HttpError(401, "Account or password changed. Please log in again.");
+    }
+    const now = new Date();
+    await tx.adminSession.deleteMany({ where: { adminId, expiresAt: { lte: now } } });
+    const sessions = await tx.adminSession.findMany({
+      where: { adminId }, orderBy: [{ lastActiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    });
+    const toEvict = sessions.slice(0, Math.max(0, sessions.length - MAX_CONCURRENT_SESSIONS + 1));
+    if (toEvict.length) {
+      await tx.adminSession.deleteMany({ where: { id: { in: toEvict.map((session) => session.id) } } });
+      await tx.adminAuditLog.create({ data: {
+        adminId, action: "SESSION_EVICTED", entity: "AdminSession", entityId: String(adminId),
+        details: JSON.stringify({ evictedCount: toEvict.length, maxAllowed: MAX_CONCURRENT_SESSIONS }),
+        ipAddress: clientInfo.ipAddress,
+      } });
+    }
+    const sessionId = crypto.randomUUID();
+    const token = signAdminToken({ sub: String(adminId), username, role, sessionId });
+    await tx.adminSession.create({ data: {
+      id: sessionId, adminId, tokenHash: hashToken(token), ...clientInfo,
+      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+    } });
+    return { token, sessionId };
   });
-
-  setAdminCookie(res, token);
+  setAdminCookie(res, result.token);
   issueCsrfToken(req, res);
-  return { token, sessionId };
+  return result;
 }
 
 const router = Router();
@@ -156,17 +140,19 @@ router.post(
     // 2. Verify password
     const ok = await verifyPassword(body.password, admin.passwordHash);
     if (!ok) {
-      const newAttempts = admin.failedLoginAttempts + 1;
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Admin" WHERE id = ${admin.id} FOR UPDATE`;
+        const current = await tx.admin.findUniqueOrThrow({ where: { id: admin.id } });
+        if (current.lockedUntil && current.lockedUntil > new Date()) return current;
+        const attempts = (current.lockedUntil ? 0 : current.failedLoginAttempts) + 1;
+        return tx.admin.update({ where: { id: admin.id }, data: {
+          failedLoginAttempts: attempts,
+          lockedUntil: attempts >= 10 ? new Date(Date.now() + 15 * 60 * 1000) : null,
+        } });
+      });
+      const newAttempts = updated.failedLoginAttempts;
       if (newAttempts >= 10) {
-        const lockoutDurationMs = 15 * 60 * 1000; // 15 minutes lockout
-        const lockedUntil = new Date(Date.now() + lockoutDurationMs);
-        await prisma.admin.update({
-          where: { id: admin.id },
-          data: {
-            failedLoginAttempts: newAttempts,
-            lockedUntil,
-          },
-        });
+        const lockedUntil = updated.lockedUntil!;
         await writeAudit(req as AuthenticatedRequest, {
           action: "LOGIN_LOCKED",
           entity: "Admin",
@@ -180,10 +166,6 @@ router.post(
           lockedUntil: lockedUntil.toISOString(),
         });
       } else {
-        await prisma.admin.update({
-          where: { id: admin.id },
-          data: { failedLoginAttempts: newAttempts },
-        });
         await writeAudit(req as AuthenticatedRequest, {
           action: "LOGIN_FAILED",
           entity: "Admin",
@@ -201,6 +183,9 @@ router.post(
     }
 
     // 3. Password verified! Check if 2FA is enabled
+    if (admin.twoFactorEnabled && !admin.email) {
+      throw new HttpError(403, "Two-factor authentication requires an account recovery email.");
+    }
     if (admin.twoFactorEnabled && admin.email) {
       const otp = crypto.randomInt(100000, 999999).toString();
       const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
@@ -209,6 +194,7 @@ router.post(
       await prisma.admin.update({
         where: { id: admin.id },
         data: {
+          twoFactorFailedAttempts: 0,
           twoFactorOtpHash: otpHash,
           twoFactorOtpExpiresAt: otpExpiresAt,
           failedLoginAttempts: 0,
@@ -217,7 +203,8 @@ router.post(
       });
 
       const tempToken = signTemp2faToken(admin.id, admin.username);
-      sendAdmin2faOtpEmail(admin.email, otp, 10).catch((e) => console.error("[2FA] Email error:", e));
+      const sent = await sendAdmin2faOtpEmail(admin.email, otp, 10);
+      if (!sent) throw new HttpError(503, "Unable to send the verification code. Please try again later.");
 
       await writeAudit(req as AuthenticatedRequest, {
         action: "2FA_OTP_SENT",
@@ -247,7 +234,7 @@ router.post(
       },
     });
 
-    await createAdminSession(admin.id, admin.username, admin.role, req, res);
+    await createAdminSession(admin.id, admin.username, admin.role, req, res, admin.passwordHash);
 
     await writeAudit(req as AuthenticatedRequest, {
       action: "LOGIN",
@@ -273,7 +260,7 @@ router.post(
   loginLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { tempToken, otp } = req.body;
-    if (!tempToken || !otp) {
+    if (typeof tempToken !== "string" || tempToken.length > 2048 || typeof otp !== "string" || !/^\d{6}$/.test(otp)) {
       throw new HttpError(400, "2FA token and OTP are required");
     }
 
@@ -287,10 +274,14 @@ router.post(
     const admin = await prisma.admin.findUnique({
       where: { id: Number(payload.sub) },
     });
-    if (!admin || !admin.isActive) {
-      throw new HttpError(401, "Admin account disabled or removed");
+    if (!admin || !admin.isActive || !admin.twoFactorEnabled ||
+        (admin.passwordChangedAt && (payload.issuedAtMs ?? (payload.iat ?? 0) * 1000) <= admin.passwordChangedAt.getTime())) {
+      throw new HttpError(401, "2FA session expired or invalid. Please log in again.");
     }
 
+    if (admin.lockedUntil && admin.lockedUntil > new Date()) {
+      throw new HttpError(429, "Account locked after too many attempts. Please try again in 15 minutes.");
+    }
     const now = new Date();
     if (!admin.twoFactorOtpHash || !admin.twoFactorOtpExpiresAt || admin.twoFactorOtpExpiresAt < now) {
       throw new HttpError(400, "Verification code expired. Please request a new one.");
@@ -298,6 +289,16 @@ router.post(
 
     const otpHash = crypto.createHash("sha256").update(String(otp).trim()).digest("hex");
     if (otpHash !== admin.twoFactorOtpHash) {
+      const failed = await prisma.admin.updateMany({
+        where: { id: admin.id, twoFactorOtpHash: admin.twoFactorOtpHash },
+        data: { twoFactorFailedAttempts: { increment: 1 } },
+      });
+      if (failed.count) {
+        await prisma.admin.updateMany({
+          where: { id: admin.id, twoFactorFailedAttempts: { gte: 5 } },
+          data: { twoFactorOtpHash: null, twoFactorOtpExpiresAt: null, lockedUntil: new Date(Date.now() + 15 * 60 * 1000) },
+        });
+      }
       await writeAudit(req as AuthenticatedRequest, {
         action: "2FA_OTP_FAILED",
         entity: "Admin",
@@ -306,19 +307,22 @@ router.post(
       throw new HttpError(400, "Incorrect verification code. Please try again.");
     }
 
-    // Clear OTP once verified
-    await prisma.admin.update({
-      where: { id: admin.id },
+    // Only one concurrent request can consume a valid code.
+    const consumed = await prisma.admin.updateMany({
+      where: {
+        id: admin.id, isActive: true, twoFactorEnabled: true,
+        passwordHash: admin.passwordHash, twoFactorOtpHash: otpHash,
+        twoFactorFailedAttempts: { lt: 5 },
+        twoFactorOtpExpiresAt: { gt: new Date() },
+      },
       data: {
-        twoFactorOtpHash: null,
-        twoFactorOtpExpiresAt: null,
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-        lastLoginAt: new Date(),
+        twoFactorOtpHash: null, twoFactorOtpExpiresAt: null, twoFactorFailedAttempts: 0,
+        failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date(),
       },
     });
+    if (consumed.count !== 1) throw new HttpError(400, "Verification code expired or already used. Please log in again.");
 
-    await createAdminSession(admin.id, admin.username, admin.role, req, res);
+    await createAdminSession(admin.id, admin.username, admin.role, req, res, admin.passwordHash);
 
     await writeAudit(req as AuthenticatedRequest, {
       action: "2FA_LOGIN_SUCCESS",
@@ -344,7 +348,7 @@ router.post(
   loginLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { tempToken } = req.body;
-    if (!tempToken) {
+    if (typeof tempToken !== "string" || !tempToken || tempToken.length > 2048) {
       throw new HttpError(400, "2FA token is required");
     }
 
@@ -358,10 +362,14 @@ router.post(
     const admin = await prisma.admin.findUnique({
       where: { id: Number(payload.sub) },
     });
-    if (!admin || !admin.isActive || !admin.email) {
+    if (!admin || !admin.isActive || !admin.email || !admin.twoFactorEnabled ||
+        (admin.passwordChangedAt && (payload.issuedAtMs ?? (payload.iat ?? 0) * 1000) <= admin.passwordChangedAt.getTime())) {
       throw new HttpError(400, "Cannot resend code: no valid email address found");
     }
 
+    if (admin.lockedUntil && admin.lockedUntil > new Date()) {
+      throw new HttpError(429, "Account locked after too many attempts. Please try again in 15 minutes.");
+    }
     const otp = crypto.randomInt(100000, 999999).toString();
     const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -374,7 +382,8 @@ router.post(
       },
     });
 
-    sendAdmin2faOtpEmail(admin.email, otp, 10).catch((e) => console.error("[2FA] Resend email error:", e));
+    const sent = await sendAdmin2faOtpEmail(admin.email, otp, 10);
+    if (!sent) throw new HttpError(503, "Unable to send the verification code. Please try again later.");
 
     res.json({ success: true, message: "New verification code sent to your email" });
   })
@@ -475,14 +484,15 @@ router.post(
       throw new HttpError(400, "Please configure an email address in your profile before enabling 2FA.");
     }
 
-    if (password) {
-      const ok = await verifyPassword(password, admin.passwordHash);
-      if (!ok) throw new HttpError(400, "Current password incorrect");
+    if (typeof password !== "string" || !password || password.length > 200) {
+      throw new HttpError(400, "Current password is required to change two-factor authentication.");
     }
+    const ok = await verifyPassword(password, admin.passwordHash);
+    if (!ok) throw new HttpError(400, "Current password incorrect");
 
     await prisma.admin.update({
       where: { id: adminId },
-      data: { twoFactorEnabled: enabled },
+      data: { twoFactorEnabled: enabled, twoFactorOtpHash: null, twoFactorOtpExpiresAt: null },
     });
 
     await writeAudit(req, {
@@ -514,7 +524,7 @@ router.post(
     if (!ok) throw new HttpError(400, "Current password is incorrect");
     const passwordHash = await hashPassword(body.newPassword);
     const now = new Date();
-    await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash, passwordChangedAt: now } });
+    await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash, passwordChangedAt: now, twoFactorOtpHash: null, twoFactorOtpExpiresAt: null, failedLoginAttempts: 0, lockedUntil: null } });
     // Invalidate all sessions across all devices
     await prisma.adminSession.deleteMany({ where: { adminId: admin.id } });
     await writeAudit(req, { action: "CHANGE_PASSWORD", entity: "Admin", entityId: admin.id });
@@ -594,6 +604,7 @@ router.post(
 // POST /api/admin/auth/reset-password
 router.post(
   "/auth/reset-password",
+  forgotPasswordLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const { token, newPassword } = resetPasswordSchema.parse(req.body);
 
@@ -640,9 +651,13 @@ router.post(
 
       await tx.admin.update({
         where: { id: targetAdmin.id },
-        data: { passwordHash, passwordChangedAt: now },
+        data: { passwordHash, passwordChangedAt: now, twoFactorOtpHash: null, twoFactorOtpExpiresAt: null, failedLoginAttempts: 0, lockedUntil: null },
       });
 
+      await tx.adminSession.deleteMany({ where: { adminId: targetAdmin.id } });
+      await tx.adminPasswordResetToken.updateMany({
+        where: { adminId: targetAdmin.id, usedAt: null }, data: { usedAt: now },
+      });
       return targetAdmin;
     });
 

@@ -1,24 +1,15 @@
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { assertTestDatabaseUrl } from "./tests/databaseSafety.js";
 import { defineConfig } from "vitest/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Load server/.env (dev) and server/.env.test (test) at CONFIG LOAD time so
-// the default DATABASE_URL handed to the test workers is the isolated test
-// database, not the dev/production (Render) URL.
-dotenv.config({ path: path.join(__dirname, ".env") });
+// Only an explicit, isolated test database may be provisioned and cleared.
 dotenv.config({ path: path.join(__dirname, ".env.test") });
 
-// NOTE: never omit the username in the fallback. A bare
-// "postgresql://localhost:5432/..." makes Prisma connect with an EMPTY user
-// and PostgreSQL rejects it (PrismaClientInitializationError P1010).
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-
-if (!TEST_DATABASE_URL) {
-  throw new Error("TEST_DATABASE_URL must be set to an isolated database before running tests.");
-}
+const TEST_DATABASE_URL = assertTestDatabaseUrl(process.env.TEST_DATABASE_URL, process.env.DATABASE_URL);
 
 export default defineConfig({
   test: {

@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { MulterError } from "multer";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { HttpError } from "../utils/httpError.js";
@@ -18,6 +19,27 @@ export function errorHandler(
   // to avoid triggering ERR_HTTP_HEADERS_SENT crashes.
   if (res.headersSent) {
     return _next(err);
+  }
+
+  // Body-parser errors are client errors, never application crashes.
+  const bodyError = err as { type?: string; status?: number } | null;
+  if (bodyError?.type === "entity.too.large") {
+    res.status(413).json({ success: false, error: "Request body is too large." });
+    return;
+  }
+  if (bodyError?.type === "entity.parse.failed") {
+    res.status(400).json({ success: false, error: "Invalid JSON request body." });
+    return;
+  }
+  if (bodyError?.status === 415) {
+    res.status(415).json({ success: false, error: "Unsupported request encoding." });
+    return;
+  }
+  if (err instanceof MulterError) {
+    res.status(400).json({ success: false, error: err.code === "LIMIT_FILE_SIZE"
+      ? "File too large. Maximum allowed size is 5 MB."
+      : "Invalid upload. Send one image in the file field." });
+    return;
   }
 
   // CORS rejection

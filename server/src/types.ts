@@ -14,6 +14,7 @@ export interface Admin2faTempPayload {
   sub: string;
   username: string;
   purpose: "2fa_pending";
+  issuedAtMs?: number;
   iat?: number;
   exp?: number;
 }

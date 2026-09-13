@@ -45,33 +45,22 @@ OrderItemInput,
 // body, falling back to the cookie only for same-origin (dev) setups.
 // ------------------------------------------------------------------
 let csrfToken: string | null = null;
+let csrfRequest: Promise<string> | null = null;
 
-async function getCsrfToken(): Promise<string> {
+async function getCsrfToken(force = false): Promise<string> {
+  if (force) csrfToken = null;
   if (csrfToken) return csrfToken;
-
-  // 1) Same-origin dev case: cookie is readable, avoid a network round-trip.
-  const fromCookie = document.cookie
-    .split("; ")
-    .find((c) => c.startsWith("ms_sushant_csrf="));
-  if (fromCookie) {
-    csrfToken = decodeURIComponent(fromCookie.split("=")[1]);
-    return csrfToken;
+  if (!csrfRequest) {
+    csrfRequest = (async () => {
+      const res = await fetch(`${API_BASE}/csrf`, { credentials: "include", signal: AbortSignal.timeout(20_000) });
+      if (!res.ok) throw new Error("Unable to initialize security token");
+      const data = await res.json() as { token?: string };
+      if (!data.token) throw new Error("Unable to initialize security token");
+      csrfToken = data.token;
+      return data.token;
+    })().finally(() => { csrfRequest = null; });
   }
-
-  // 2) Fetch the token from the response body (works cross-origin).
-  const res = await fetch(`${API_BASE}/csrf`, { credentials: "include" });
-  if (!res.ok) throw new Error("Unable to initialize security token");
-  const data = (await res.json()) as { token?: string };
-  csrfToken = data.token ?? null;
-
-  // 3) Last resort: read the cookie if the server set it readable.
-  if (!csrfToken) {
-    const cookie = document.cookie
-      .split("; ")
-      .find((c) => c.startsWith("ms_sushant_csrf="));
-    csrfToken = cookie ? decodeURIComponent(cookie.split("=")[1]) : null;
-  }
-  return csrfToken ?? "";
+  return csrfRequest;
 }
 
 export class ApiRequestError extends Error {
@@ -104,22 +93,21 @@ export class ApiRequestError extends Error {
 async function request<T>(
   path: string,
   options: RequestInit = {},
-  { csrf = false }: { csrf?: boolean } = {}
+  { csrf = false, csrfRetried = false }: { csrf?: boolean; csrfRetried?: boolean } = {}
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> | undefined),
-  };
+  const headers = new Headers(options.headers);
   if (options.body && typeof options.body === "string") {
-    headers["Content-Type"] = "application/json";
+    headers.set("Content-Type", "application/json");
   }
   if (csrf) {
     const token = await getCsrfToken();
-    if (token) headers["X-CSRF-Token"] = token;
+    if (token) headers.set("X-CSRF-Token", token);
   }
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
     credentials: "include",
+    signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
   });
   if (!res.ok) {
     let data: (ApiError & { retryAfter?: number; lockedUntil?: string; require2FA?: boolean; tempToken?: string; maskedEmail?: string }) | null = null;
@@ -127,6 +115,10 @@ async function request<T>(
       data = (await res.json()) as any;
     } catch {
       data = null;
+    }
+    if (csrf && !csrfRetried && res.status === 403 && /csrf/i.test(data?.error ?? "")) {
+      await getCsrfToken(true);
+      return request<T>(path, options, { csrf, csrfRetried: true });
     }
     throw new ApiRequestError(
       data?.error ?? `Request failed with status ${res.status}`,
@@ -180,10 +172,10 @@ export const publicApi = {
     deliveryAddress: string;
     notes?: string;
     items: OrderItemInput[];
-  }): Promise<{ message: string; order: { id: number; orderNumber: string; subtotal: number; status: string } }> {
+  }, idempotencyKey: string): Promise<{ message: string; order: { id: number; orderNumber: string; subtotal: number; status: string } }> {
     return request(
       "/orders",
-      { method: "POST", body: JSON.stringify(payload) },
+      { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify(payload) },
       { csrf: true }
     );
   },
@@ -195,9 +187,10 @@ export const publicApi = {
     return request(`/orders/track?${q.toString()}`);
   },
   trackOrdersByMobile(
-    customerMobile: string
+    customerMobile: string,
+    orderNumber: string
   ): Promise<{ orders: TrackedOrderSummary[] }> {
-    const q = new URLSearchParams({ customerMobile });
+    const q = new URLSearchParams({ customerMobile, orderNumber });
     return request(`/orders/track-by-mobile?${q.toString()}`);
   },
   health(): Promise<{ status: string; service: string; time: string }> {

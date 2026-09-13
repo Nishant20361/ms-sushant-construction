@@ -1,3 +1,4 @@
+import { HttpError } from "../../utils/httpError.js";
 import { Router } from "express";
 import { prisma } from "../../db.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -52,12 +53,9 @@ router.get(
     const adminId = Number(req.admin?.sub ?? 0);
     const admin = await prisma.admin.findUnique({ where: { id: adminId } });
     if (!admin) throw new Error("Admin not found");
-    let profile = await prisma.adminProfile.findUnique({ where: { adminId } });
-    if (!profile) {
-      profile = await prisma.adminProfile.create({
-        data: { adminId, lowStockThreshold: 10 },
-      });
-    }
+    const profile = await prisma.adminProfile.upsert({
+      where: { adminId }, update: {}, create: { adminId, lowStockThreshold: 10 },
+    });
     res.json({
       profile: {
         lowStockThreshold: profile.lowStockThreshold,
@@ -110,9 +108,13 @@ router.put(
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const adminId = Number(req.admin?.sub ?? 0);
     const body = adminEmailSchema.parse(req.body);
-    const admin = await prisma.admin.update({
-      where: { id: adminId },
-      data: { email: body.email ?? null },
+    const admin = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Admin" WHERE id = ${adminId} FOR UPDATE`;
+      const current = await tx.admin.findUniqueOrThrow({ where: { id: adminId } });
+      if (current.twoFactorEnabled && current.email !== (body.email ?? null)) {
+        throw new HttpError(409, "Disable two-factor authentication with your current password before changing its email address.");
+      }
+      return tx.admin.update({ where: { id: adminId }, data: { email: body.email ?? null } });
     });
     await writeAudit(req, {
       action: "PROFILE_EMAIL_UPDATE",

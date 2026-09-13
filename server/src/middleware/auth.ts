@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { NextFunction, Response } from "express";
 import { AuthenticatedRequest } from "../types.js";
 import { verifyAdminToken } from "../utils/token.js";
@@ -32,11 +33,13 @@ export async function requireAdmin(
         return next(new HttpError(401, "Session expired due to password change"));
       }
     }
+    if (!payload.sessionId) return next(new HttpError(401, "Session expired. Please log in again."));
     if (payload.sessionId) {
       const session = await prisma.adminSession.findUnique({
         where: { id: payload.sessionId },
       });
-      if (!session || session.expiresAt < new Date()) {
+      if (!session || session.adminId !== admin.id || session.expiresAt <= new Date() ||
+          session.tokenHash !== crypto.createHash("sha256").update(token).digest("hex")) {
         return next(
           new HttpError(
             401,
@@ -63,6 +66,9 @@ export async function requireAdmin(
     return next();
   } catch (err) {
     if (err instanceof HttpError) return next(err);
-    return next(new HttpError(401, "Invalid or expired session"));
+    if (err instanceof Error && ["JsonWebTokenError", "TokenExpiredError", "NotBeforeError"].includes(err.name)) {
+      return next(new HttpError(401, "Invalid or expired session"));
+    }
+    return next(err);
   }
 }

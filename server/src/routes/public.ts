@@ -39,7 +39,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { category, search, page: pageNum, limit: limitNum, sort, inStock } = publicProductQuerySchema.parse(req.query);
 
-    const where: any = { isActive: true };
+    const where: any = { isActive: true, category: { isActive: true } };
 
     if (category) {
       where.category = {
@@ -99,7 +99,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const id = parseIntegerParam(req.params.id, "product id");
     const product = await prisma.product.findFirst({
-      where: { id, isActive: true },
+      where: { id, isActive: true, category: { isActive: true } },
       include: { category: true, images: { orderBy: { isPrimary: "desc" } } },
     });
     if (!product) throw new HttpError(404, "Product not found");
@@ -191,7 +191,7 @@ router.post(
         const orderItems = lineItems.map((li) => {
           const product = products.find((p) => p.id === li.productId);
           if (!product) throw new HttpError(400, "Invalid product in order.");
-          if (!product.isActive) throw new HttpError(400, `"${product.name}" is not available.`);
+          if (!product.isActive || !product.category.isActive) throw new HttpError(400, `"${product.name}" is not available.`);
           // Unit-based validation: bag and piece must be whole numbers.
           if (!quantityMatchesUnit(li.quantity, product.unit)) {
             throw new HttpError(400, `Quantity for "${product.name}" must be a whole number (${product.unit}).`);
@@ -230,6 +230,7 @@ router.post(
         const created = await tx.order.create({
           data: {
             orderNumber: generateOrderNumber(),
+            source: req.baseUrl.endsWith("/public") ? "CUSTOMER_APP" : "CUSTOMER_WEB",
             customerName: body.customerName,
             customerMobile: mobile,
             deliveryAddress: body.deliveryAddress || null,
@@ -353,6 +354,7 @@ router.get(
       throw new HttpError(404, "Order not found");
     }
 
+    res.setHeader("Cache-Control", "no-store");
     res.json({ order: serializeOrderForTracking(order) });
   })
 );
@@ -370,6 +372,12 @@ router.get(
     const mobile = normalizeIndianMobile(parsed.customerMobile);
     if (!mobile) throw new HttpError(400, "Invalid mobile number");
 
+    res.setHeader("Cache-Control", "no-store");
+    const reference = typeof req.query.orderNumber === "string" ? req.query.orderNumber.trim() : "";
+    if (!reference || reference.length > 60) throw new HttpError(400, "Enter an order number and mobile number to verify your order history.");
+    const proof = await prisma.order.findUnique({ where: { orderNumber: reference }, select: { customerMobile: true } });
+    if (!proof || normalizeIndianMobile(proof.customerMobile) !== mobile) throw new HttpError(404, "Order not found");
+
     const orders = await prisma.order.findMany({
       where: { customerMobile: mobile },
       select: {
@@ -383,6 +391,7 @@ router.get(
         bill: { select: { finalAmount: true } },
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
 
     res.json({ orders: orders.map(serializeOrderListForTracking) });
@@ -401,6 +410,13 @@ router.get(
     });
     const mobile = normalizeIndianMobile(parsed.customerMobile);
     if (!mobile) throw new HttpError(400, "Invalid mobile number");
+
+    res.setHeader("Cache-Control", "no-store");
+    const reference = typeof req.query.orderNumber === "string" ? req.query.orderNumber.trim() : "";
+    // A phone number is public information, not proof of customer identity.
+    if (!reference || reference.length > 60) return res.json({ customer: null });
+    const proof = await prisma.order.findUnique({ where: { orderNumber: reference }, select: { customerMobile: true } });
+    if (!proof || normalizeIndianMobile(proof.customerMobile) !== mobile) return res.json({ customer: null });
 
     const last10 = mobile.slice(-10);
     const variants = [mobile, last10, `+91${last10}`, `91${last10}`, `0${last10}`];

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -29,6 +30,7 @@ interface StoredSession {
   updatedAt: number;
 }
 
+const MAX_SESSIONS = 500;
 const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
 const sessions = new Map<string, StoredSession>();
 
@@ -49,7 +51,11 @@ function getOrCreateSession(rawId: string | undefined, languageHint?: string): {
     }
   }
   const data = createInitialSession(languageHint === "Hindi" ? "Hindi" : "English");
-  const id = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  if (sessions.size >= MAX_SESSIONS) {
+    const oldest = [...sessions.entries()].sort((a, b) => a[1].updatedAt - b[1].updatedAt)[0];
+    if (oldest) sessions.delete(oldest[0]);
+  }
+  const id = `sess_${crypto.randomUUID()}`;
   sessions.set(id, { data, history: [], responseLanguage: languageHint as GroqResponseLanguage | undefined, updatedAt: Date.now() });
   return { id, data };
 }
@@ -173,9 +179,8 @@ router.post(
     }
 
     if (stored) {
-      const userEntryContent = imageUrl
-        ? [{ type: "text" as const, text: message }, { type: "image_url" as const, image_url: { url: imageUrl } }]
-        : message;
+      // Do not retain multi-megabyte base64 photographs in the session heap.
+      const userEntryContent = imageUrl ? `${message} [Photo attached in this turn]` : message;
       const nextHistory: GroqMessage[] = [...stored.history, { role: "user", content: userEntryContent }, { role: "assistant", content: result.reply }];
       stored.history = nextHistory.slice(-8);
     }

@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { clampCartQuantity, parseCart } from "../lib/cart";
 import type { CartItem, Product } from "../types";
 
 const STORAGE_KEY = "ms_sushant_cart";
@@ -30,9 +31,7 @@ function loadCart(): CartItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as CartItem[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((it) => it && typeof it.productId === "number");
+    return parseCart(JSON.parse(raw));
   } catch {
     return [];
   }
@@ -54,12 +53,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const closeCart = useCallback(() => setIsOpen(false), []);
 
   const addItem = useCallback((product: Product, quantity = 1) => {
+    if (!product.isActive || !Number.isFinite(quantity) || quantity <= 0 || clampCartQuantity(quantity, product.unit, product.stock) <= 0) return;
     setItems((prev) => {
       const existing = prev.find((it) => it.productId === product.id);
       if (existing) {
         return prev.map((it) =>
           it.productId === product.id
-            ? { ...it, quantity: Math.min(it.quantity + quantity, it.maxStock) }
+            ? { ...it, price: product.price, mrp: product.mrp, maxStock: product.stock, unit: product.unit, quantity: clampCartQuantity(it.quantity + quantity, product.unit, product.stock) }
             : it
         );
       }
@@ -70,7 +70,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         price: product.price,
         mrp: product.mrp,
         imageUrl: product.imageUrl,
-        quantity: Math.min(quantity, product.stock),
+        quantity: clampCartQuantity(quantity, product.unit, product.stock),
         maxStock: product.stock,
       };
       return [...prev, item];
@@ -88,13 +88,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems((prev) =>
       prev.map((it) => {
         if (it.productId !== productId) return it;
-        const unit = (it.unit || "").toLowerCase();
-        const requiresInteger = unit === "bag" || unit === "piece";
-        let q = quantity;
-        if (requiresInteger) q = Math.max(1, Math.floor(q));
-        else q = Math.max(0.001, Math.round(q * 1000) / 1000);
-        // Clamp to available stock
-        q = Math.min(q, it.maxStock);
+        if (!Number.isFinite(quantity)) return it;
+        const q = clampCartQuantity(quantity, it.unit, it.maxStock);
         return { ...it, quantity: q };
       })
     );

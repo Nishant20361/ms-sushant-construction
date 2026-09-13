@@ -16,6 +16,7 @@ export function signAdminToken(payload: AdminJwtPayload): string {
 
 export function verifyAdminToken(token: string): AdminJwtPayload {
   const decoded = jwt.verify(token, config.jwtSecret, {
+    algorithms: ["HS256"],
     issuer: "ms-sushant-construction",
     audience: "ms-sushant-admin",
   });
@@ -31,11 +32,12 @@ export function signTemp2faToken(adminId: number, username: string): string {
     issuer: "ms-sushant-construction",
     audience: "ms-sushant-admin-2fa",
   };
-  return jwt.sign({ sub: String(adminId), username, purpose: "2fa_pending" }, config.jwtSecret, opts);
+  return jwt.sign({ sub: String(adminId), username, purpose: "2fa_pending", issuedAtMs: Date.now() }, config.jwtSecret, opts);
 }
 
 export function verifyTemp2faToken(token: string): Admin2faTempPayload {
   const decoded = jwt.verify(token, config.jwtSecret, {
+    algorithms: ["HS256"],
     issuer: "ms-sushant-construction",
     audience: "ms-sushant-admin-2fa",
   });

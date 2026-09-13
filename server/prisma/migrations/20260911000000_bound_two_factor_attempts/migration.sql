@@ -1,0 +1,1 @@
+ALTER TABLE "Admin" ADD COLUMN "twoFactorFailedAttempts" INTEGER NOT NULL DEFAULT 0;

@@ -51,6 +51,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}, 
   const externalSignal = options.signal;
   const abortFromExternal = () => controller.abort();
   externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
+  if (externalSignal?.aborted) controller.abort();
 
   try {
     const headers = new Headers(options.headers);

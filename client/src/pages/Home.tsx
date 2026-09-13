@@ -27,7 +27,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
 // ----- Order tracking state -----
-const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
+const [trackMode, setTrackMode] = useState<"id" | "mobile">("id");
   const [trackOrderNumber, setTrackOrderNumber] = useState("");
   const [trackMobile, setTrackMobile] = useState("");
   const [tracking, setTracking] = useState(false);
@@ -61,8 +61,8 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
   };
 
   const handleTrackByMobile = async () => {
-    if (!trackMobile.trim()) {
-      setTrackError("Please enter your mobile number.");
+    if (!trackMobile.trim() || !trackOrderNumber.trim()) {
+      setTrackError("Please enter your mobile number and an order number from your receipt.");
       setTrackedOrders([]);
       setSelectedTrackedOrder(null);
       return;
@@ -71,7 +71,7 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
     setTrackError(null);
     setTrackedOrder(null);
     try {
-      const { orders } = await publicApi.trackOrdersByMobile(trackMobile.trim());
+      const { orders } = await publicApi.trackOrdersByMobile(trackMobile.trim(), trackOrderNumber.trim());
       if (orders.length === 0) {
         setTrackError("No orders found for this mobile number.");
         setTrackedOrders([]);
@@ -446,7 +446,7 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
             <span className="badge bg-brand-100 text-brand-800">Order Tracking</span>
             <h2 className="mt-3 text-3xl font-bold text-slate-900">Track Your Order</h2>
             <p className="mx-auto mt-2 max-w-lg text-slate-600">
-              Enter your mobile number to find all your orders, or use Order ID + mobile for a specific order.
+              Enter your order number and mobile number to securely view your orders.
             </p>
           </div>
 
@@ -456,7 +456,7 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
               onClick={() => { setTrackMode("mobile"); setTrackedOrder(null); setTrackedOrders([]); setSelectedTrackedOrder(null); setTrackError(null); }}
               className={`rounded-full px-5 py-2 text-sm font-medium transition ${trackMode === "mobile" ? "bg-brand-600 text-white" : "border border-slate-300 bg-white text-slate-600 hover:border-brand-400"}`}
             >
-              📱 All Orders (by Mobile)
+              📱 Order History
             </button>
             <button
               onClick={() => { setTrackMode("id"); setTrackedOrder(null); setTrackedOrders([]); setSelectedTrackedOrder(null); setTrackError(null); }}
@@ -500,6 +500,7 @@ const [trackMode, setTrackMode] = useState<"id" | "mobile">("mobile");
               className="mt-6 flex flex-col gap-3 sm:flex-row"
               onSubmit={(e) => { e.preventDefault(); handleTrackByMobile(); }}
             >
+              <input type="text" value={trackOrderNumber} onChange={(e) => setTrackOrderNumber(e.target.value)} placeholder="An order number from your receipt" className="input flex-1" aria-label="Order number for verification" />
               <input
                 type="tel"
                 value={trackMobile}

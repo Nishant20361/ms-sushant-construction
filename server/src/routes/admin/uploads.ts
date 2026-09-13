@@ -31,7 +31,7 @@ router.post(
     const originalFilename = req.file.filename;
     const ext = path.extname(originalFilename).toLowerCase();
     const baseName = path.basename(originalFilename, ext);
-    const webpPath = path.join(UPLOAD_DIR, `${baseName}.webp`);
+    const webpPath = path.join(UPLOAD_DIR, `${baseName}.optimized.webp`);
     let optimizedPath = originalPath;
 
     try {
@@ -73,7 +73,7 @@ router.post(
         url = result.secure_url || result.url;
       } else {
         // Fallback: serve from local disk (same behaviour as before).
-        const finalFilename = `${baseName}.webp`;
+        const finalFilename = `${baseName}.optimized.webp`;
         const finalPath = path.join(UPLOAD_DIR, "products", finalFilename);
         fs.mkdirSync(path.dirname(finalPath), { recursive: true });
         fs.copyFileSync(optimizedPath, finalPath);

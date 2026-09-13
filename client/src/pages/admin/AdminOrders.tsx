@@ -512,6 +512,8 @@ export default function AdminOrders() {
                         </button>
                         <button
                           onClick={() => handleDelete(o)}
+                          disabled={o.status !== "CANCELLED" || o.paidTotal > 0}
+                          title={o.status !== "CANCELLED" ? "Cancel the order first to restore its stock" : o.paidTotal > 0 ? "Orders with payment history are retained" : "Delete cancelled unpaid order"}
                           className="inline-flex items-center gap-1 rounded-xl bg-red-50 border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-600 hover:text-white transition"
                         >
                           <Trash2 className="h-3.5 w-3.5" />

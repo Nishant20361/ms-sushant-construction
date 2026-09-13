@@ -24,7 +24,7 @@ export function issueCsrfToken(req: Request, res: Response): string {
   const sameSite: "none" | "strict" = config.isProd ? "none" : "strict";
   res.cookie(CSRF_COOKIE, token, {
     httpOnly: false, // must be readable by frontend JS
-    secure: req.secure || req.headers["x-forwarded-proto"] === "https",
+    secure: config.isProd || req.secure,
     // Cross-origin (different subdomain) in production requires SameSite=None
     // so the browser sends the cookie with cross-origin fetch requests.
     sameSite,

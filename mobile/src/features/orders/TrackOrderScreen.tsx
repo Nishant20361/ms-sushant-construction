@@ -58,7 +58,7 @@ function SummaryCard({ order, pending, expanded, onView, children }: { order: Tr
 export default function TrackOrderScreen() {
   const confirmed = useOrderFlowStore((state) => state.confirmedOrder);
   const savedMobile = useOrderFlowStore((state) => state.trackingMobile);
-  const [mode, setMode] = useState<TrackMode>("mobile");
+  const [mode, setMode] = useState<TrackMode>("order");
   const [orderNumber, setOrderNumber] = useState(confirmed?.orderNumber ?? "");
   const [mobile, setMobile] = useState(savedMobile);
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
@@ -82,11 +82,11 @@ export default function TrackOrderScreen() {
 
   const findOrders = () => {
     const normalized = normalizedMobile();
-    const next = { mobile: normalized ? undefined : "Enter a valid 10-digit mobile number." };
+    const next = { mobile: normalized ? undefined : "Enter a valid 10-digit mobile number.", orderNumber: orderNumber.trim() ? undefined : "Enter an order number from your receipt." };
     setErrors(next);
-    if (next.mobile || history.isPending) return;
+    if (next.mobile || next.orderNumber || history.isPending) return;
     Keyboard.dismiss();
-    history.mutate({ mobile: normalized! });
+    history.mutate({ mobile: normalized!, orderNumber: orderNumber.trim() });
   };
 
   const track = () => {
@@ -121,7 +121,7 @@ export default function TrackOrderScreen() {
       title="Track Order"
       subtitle={
         mode === "mobile"
-          ? "View order history and delivery status using your mobile number."
+          ? "Verify your history with an order number and your mobile number."
           : "Track single order with order number and mobile."
       }
     >
@@ -134,7 +134,7 @@ export default function TrackOrderScreen() {
           style={[styles.segmentButton, mode === "mobile" && styles.segmentActive]}
         >
           <Text style={[styles.segmentText, mode === "mobile" && styles.segmentTextActive]}>
-            📱 Mobile Number
+            📱 Order History
           </Text>
         </Pressable>
         <Pressable
@@ -151,7 +151,7 @@ export default function TrackOrderScreen() {
 
       {/* Input Card */}
       <View style={styles.card}>
-        {mode === "order" ? (
+        {(
           <>
             <Text style={styles.label}>Order Number</Text>
             <TextInput
@@ -170,8 +170,6 @@ export default function TrackOrderScreen() {
             />
             {errors.orderNumber ? <Text style={styles.fieldError}>{errors.orderNumber}</Text> : null}
           </>
-        ) : (
-          <Text style={styles.cardTitle}>Enter Your Mobile Number</Text>
         )}
 
         <Text style={styles.label}>Customer Mobile</Text>
