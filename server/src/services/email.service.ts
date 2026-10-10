@@ -1,4 +1,4 @@
-import nodemailer, { Transporter } from "nodemailer";
+import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
 import { config } from "../config.js";
 
 /**
@@ -83,7 +83,7 @@ async function sendWithBrevo(message: EmailMessage): Promise<void> {
  * Helper to send email with automatic port fallback (e.g., 587 -> 465) if network times out.
  */
 async function sendMailWithFallback(
-  mailOptions: nodemailer.SendMailOptions,
+  mailOptions: SendMailOptions,
   emailType: string
 ): Promise<boolean> {
   // Integration tests must never contact the real SMTP provider or send
