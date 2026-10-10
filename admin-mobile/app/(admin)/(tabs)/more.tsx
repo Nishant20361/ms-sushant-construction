@@ -1,4 +1,5 @@
 import {useState} from "react";
+import Constants from "expo-constants";
 import {StyleSheet,View} from "react-native";
 import {Ionicons} from "@expo/vector-icons";
 import {router} from "expo-router";
@@ -22,6 +23,7 @@ export default function MoreRoute(){
    <ListRow title="Account" subtitle="Profile, security, theme and notifications" leading={<Ionicons name="person-outline" size={22} color={t.colors.brand}/>} trailing={<Ionicons name="chevron-forward" size={17} color={t.colors.textMuted}/>} onPress={()=>router.push("/(admin)/account" as never)}/><Divider/>
   </Card>
   <Card style={{gap:t.spacing.md}}><AppText role="cardTitle">Signed in</AppText><AppText style={{color:t.colors.textSecondary}}>{auth.admin?.username}</AppText><AppText role="caption" style={{color:t.colors.textMuted}}>Role: {auth.admin?.role}. Role-level authorization remains server-controlled.</AppText><Button title="Sign Out" variant="outline" loading={loggingOut} disabled={loggingOut} onPress={()=>setConfirm(true)}/></Card>
+  <AppText role="caption" style={{color:t.colors.textMuted,textAlign:"center"}}>Sushant Control v{Constants.expoConfig?.version ?? "1.0.5"}</AppText>
   <ConfirmDialog visible={confirm} title="Sign out?" description="This clears the secure session and all Admin query data on this device." confirmLabel="Sign Out" danger={false} onCancel={()=>setConfirm(false)} onConfirm={()=>void logout()}/>
  </Screen>
 }
