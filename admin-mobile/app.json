@@ -52,7 +52,7 @@
         {
           "photosPermission": "Allow Sushant Control to choose a product or category image only when you request it.",
           "cameraPermission": "Allow Sushant Control to take a product or category photo only when you request it.",
-          "microphonePermission": false
+          "microphonePermission": "Allow Sushant Control to transcribe your admin request when you tap Voice."
         }
       ],
       "@react-native-community/datetimepicker",
