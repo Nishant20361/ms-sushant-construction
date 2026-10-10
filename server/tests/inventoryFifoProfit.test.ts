@@ -49,6 +49,28 @@ beforeAll(async () => {
     .send({ username: "fifoadmin", password: TEST_PASSWORD });
   expect(login.status).toBe(200);
 
+  // Profit reports require a PIN-unlocked session, even after admin login.
+  const locked = await agent.get("/api/admin/khatabook/profit");
+  expect(locked.status).toBe(403);
+
+  const setup = await agent
+    .post("/api/admin/khatabook/change-pin")
+    .set("X-CSRF-Token", adminToken)
+    .send({ adminPassword: TEST_PASSWORD, newPin: "7392" });
+  expect(setup.status).toBe(200);
+
+  const lock = await agent
+    .post("/api/admin/khatabook/lock")
+    .set("X-CSRF-Token", adminToken);
+  expect(lock.status).toBe(200);
+  expect((await agent.get("/api/admin/khatabook/profit")).status).toBe(403);
+
+  const unlock = await agent
+    .post("/api/admin/khatabook/verify-pin")
+    .set("X-CSRF-Token", adminToken)
+    .send({ pin: "7392" });
+  expect(unlock.status).toBe(200);
+
   const cat = await prisma.category.create({
     data: { name: "FIFO Test Cat", slug: `fifo-cat-${Date.now()}`, displayOrder: 1 },
   });
