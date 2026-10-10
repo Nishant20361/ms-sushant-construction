@@ -40,6 +40,8 @@ import { useOrderProducts, useAssistedOrder } from "./useOrders";
 import { ordersService } from "./ordersService";
 import type { CustomerLookupResult, Order, ProductChoice } from "./types";
 
+import { isWholeUnit, sanitizeQuantityInput, parseQuantityInput } from "./quantityInput";
+
 type Step = "products" | "cart" | "customer" | "payment" | "success";
 
 interface CartLineItem {
@@ -49,11 +51,6 @@ interface CartLineItem {
 
 const FALLBACK_PRODUCT_IMAGE =
   "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=400&q=80";
-
-function isWholeUnit(unit: string): boolean {
-  const u = (unit || "").trim().toLowerCase();
-  return u === "bag" || u === "piece" || u === "pkt" || u === "box" || u === "nos";
-}
 
 export function PlaceOrderScreen() {
   const t = useTheme();
@@ -91,6 +88,8 @@ export function PlaceOrderScreen() {
   // Cart state
   const [cart, setCart] = useState<CartLineItem[]>([]);
   const [localQtys, setLocalQtys] = useState<Record<number, string>>({});
+  const [cartQtyDrafts, setCartQtyDrafts] = useState<Record<number, string>>({});
+  const invalidCartQuantity = cart.some(({ product }) => cartQtyDrafts[product.id] !== undefined && parseQuantityInput(cartQtyDrafts[product.id], product.unit, product.stock) === null);
 
   // Customer state
   const [mobile, setMobile] = useState("");
@@ -150,8 +149,11 @@ export function PlaceOrderScreen() {
   // Cart Operations
   const addToCart = (product: ProductChoice, qtyToAdd?: number) => {
     const rawVal = localQtys[product.id];
-    const parsed = parseFloat(rawVal || "");
-    const qty = qtyToAdd !== undefined && qtyToAdd > 0 ? qtyToAdd : parsed > 0 ? parsed : 1;
+    const qty = parseQuantityInput(String(qtyToAdd ?? (rawVal || "1")), product.unit, product.stock);
+    if (qty === null) {
+      Alert.alert("Invalid quantity", `Enter a positive ${isWholeUnit(product.unit) ? "whole " : ""}quantity up to ${product.stock} ${product.unit}.`);
+      return;
+    }
     if (qty <= 0) return;
     if (qty > product.stock) {
       Alert.alert("Stock Limit", `Only ${product.stock} ${product.unit} available in warehouse.`);
@@ -176,7 +178,8 @@ export function PlaceOrderScreen() {
     setLocalQtys((prev) => ({ ...prev, [product.id]: "" }));
   };
 
-  const updateCartQty = (productId: number, newQty: number) => {
+  const updateCartQty = (productId: number, newQty: number, preserveDraft = false) => {
+    if (!preserveDraft) setCartQtyDrafts((prev) => { const next = { ...prev }; delete next[productId]; return next; });
     const item = cart.find((i) => i.product.id === productId);
     if (!item) return;
 
@@ -219,6 +222,11 @@ export function PlaceOrderScreen() {
   // Submit assisted order
   const handleCreateOrder = async () => {
     setErrorMessage("");
+    if (invalidCartQuantity) {
+      setStep("cart");
+      setErrorMessage("Correct the highlighted quantities before continuing.");
+      return;
+    }
     if (cart.length === 0) {
       setErrorMessage("Please select at least one item");
       return;
@@ -315,6 +323,7 @@ export function PlaceOrderScreen() {
     setStep("products");
     setCart([]);
     setLocalQtys({});
+    setCartQtyDrafts({});
     setMobile("");
     setCustomerName("");
     setAddress("");
@@ -486,7 +495,7 @@ export function PlaceOrderScreen() {
             </AppText>
           </Pressable>
           <Pressable
-            onPress={() => cart.length > 0 && setStep("customer")}
+            onPress={() => cart.length > 0 && !invalidCartQuantity && setStep("customer")}
             style={[s.stepPill, step === "customer" && { backgroundColor: t.colors.brand }]}
           >
             <AppText numberOfLines={1} style={[s.stepPillText, step === "customer" && s.stepPillActive]}>
@@ -494,7 +503,7 @@ export function PlaceOrderScreen() {
             </AppText>
           </Pressable>
           <Pressable
-            onPress={() => cart.length > 0 && customerName && setStep("payment")}
+            onPress={() => cart.length > 0 && !invalidCartQuantity && customerName && setStep("payment")}
             style={[s.stepPill, step === "payment" && { backgroundColor: t.colors.brand }]}
           >
             <AppText numberOfLines={1} style={[s.stepPillText, step === "payment" && s.stepPillActive]}>
@@ -623,7 +632,8 @@ export function PlaceOrderScreen() {
                       ) : null}
                     </View>
 
-                    {/* Direct Quantity Input + Add Button Row */}
+                    <AppText numberOfLines={1} style={{ color: t.colors.textMuted, fontSize: 11 }}>{p.unit}</AppText>
+                    {/* Keep quantity input wide even when the product unit is long. */}
                     <View style={s.cardBottomRow}>
                       <View
                         style={[
@@ -637,11 +647,11 @@ export function PlaceOrderScreen() {
                         <TextInput
                           value={localQtys[p.id] !== undefined ? localQtys[p.id] : ""}
                           onChangeText={(text) => {
-                            const sanitized = text.replace(/,/g, ".");
-                            if (sanitized === "" || /^\d*\.?\d*$/.test(sanitized)) {
-                              setLocalQtys((prev) => ({ ...prev, [p.id]: sanitized }));
-                            }
+                            const sanitized = sanitizeQuantityInput(text);
+                            if (sanitized !== null) setLocalQtys((prev) => ({ ...prev, [p.id]: sanitized }));
                           }}
+                          accessibilityLabel={`Quantity for ${p.name}`}
+                          editable={p.stock > 0}
                           keyboardType={isWholeUnit(p.unit) ? "number-pad" : "decimal-pad"}
                           inputMode={isWholeUnit(p.unit) ? "numeric" : "decimal"}
                           placeholder={isWholeUnit(p.unit) ? "1" : "0.5"}
@@ -649,9 +659,6 @@ export function PlaceOrderScreen() {
                           selectTextOnFocus
                           style={[s.directQtyInput, { color: t.colors.text }]}
                         />
-                        <AppText numberOfLines={1} style={[s.unitSuffix, { color: t.colors.textMuted }]}>
-                          {p.unit}
-                        </AppText>
                       </View>
 
                       <Pressable
@@ -734,14 +741,18 @@ export function PlaceOrderScreen() {
                         </Pressable>
 
                         <TextInput
-                          value={String(item.quantity)}
+                          value={cartQtyDrafts[item.product.id] ?? String(item.quantity)}
                           onChangeText={(text) => {
-                            const val = parseFloat(text.replace(/,/g, "."));
-                            if (!isNaN(val) && val >= 0) {
-                              updateCartQty(item.product.id, val);
-                            }
+                            const draft = sanitizeQuantityInput(text);
+                            if (draft === null) return;
+                            setCartQtyDrafts((prev) => ({ ...prev, [item.product.id]: draft }));
+                            const quantity = parseQuantityInput(draft, item.product.unit, item.product.stock);
+                            if (quantity !== null) updateCartQty(item.product.id, quantity, true);
                           }}
+                          accessibilityLabel={`Cart quantity for ${item.product.name}`}
+                          selectTextOnFocus
                           keyboardType={isWholeUnit(item.product.unit) ? "number-pad" : "decimal-pad"}
+                          inputMode={isWholeUnit(item.product.unit) ? "numeric" : "decimal"}
                           style={[
                             s.cartQtyInput,
                             {
@@ -762,7 +773,7 @@ export function PlaceOrderScreen() {
                           <AppText style={[s.stepperBtnText, { color: t.colors.brand }]}>+</AppText>
                         </Pressable>
 
-                        <AppText style={{ fontSize: 11, color: t.colors.textMuted }}>
+                        <AppText numberOfLines={1} style={{ maxWidth: 72, fontSize: 11, color: t.colors.textMuted }}>
                           {item.product.unit}
                         </AppText>
                       </View>
@@ -773,6 +784,9 @@ export function PlaceOrderScreen() {
                     </View>
                   </View>
                 </View>
+                {cartQtyDrafts[item.product.id] !== undefined && parseQuantityInput(cartQtyDrafts[item.product.id], item.product.unit, item.product.stock) === null && (
+                  <AppText role="caption" style={{ color: t.colors.danger }}>Enter a positive {isWholeUnit(item.product.unit) ? "whole " : ""}quantity up to {item.product.stock}.</AppText>
+                )}
                 {idx < cart.length - 1 && <Divider />}
               </View>
             ))}
@@ -787,6 +801,7 @@ export function PlaceOrderScreen() {
             />
             <Button
               title="Customer Details ➔"
+              disabled={invalidCartQuantity}
               onPress={() => setStep("customer")}
               style={s.flex}
             />
@@ -1139,6 +1154,7 @@ export function PlaceOrderScreen() {
             <Button
               title="← Customer Details"
               variant="outline"
+              disabled={invalidCartQuantity}
               onPress={() => setStep("customer")}
               style={s.flex}
             />
@@ -1727,14 +1743,14 @@ const s = StyleSheet.create({
     textDecorationLine: "line-through",
   },
   cardBottomRow: {
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
     gap: 6,
     marginTop: 2,
   },
   qtyInputBox: {
-    flex: 1.1,
-    height: 36,
+    width: "100%",
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
@@ -1743,7 +1759,8 @@ const s = StyleSheet.create({
   },
   directQtyInput: {
     flex: 1,
-    height: "100%",
+    minWidth: 48,
+    height: 44,
     paddingVertical: 0,
     fontWeight: "700",
     fontSize: 13,
@@ -1755,8 +1772,8 @@ const s = StyleSheet.create({
     marginLeft: 2,
   },
   addCartBtn: {
-    flex: 1,
-    height: 36,
+    width: "100%",
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1785,13 +1802,16 @@ const s = StyleSheet.create({
     backgroundColor: "#f1f5f9",
   },
   cartQtyControl: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 4,
   },
   cartQtyInput: {
-    width: 48,
-    height: 32,
+    width: 64,
+    height: 44,
     paddingHorizontal: 4,
     paddingVertical: 0,
     textAlign: "center",

@@ -8,6 +8,9 @@ import { writeAudit } from "../../middleware/audit.js";
 import { serializeSettings } from "../../utils/serializer.js";
 import { AuthenticatedRequest } from "../../types.js";
 
+import { verifyPassword } from "../../utils/password.js";
+import { loginLimiter } from "../../middleware/rateLimit.js";
+
 const router = Router();
 
 // GET /api/admin/settings
@@ -105,6 +108,7 @@ router.put(
 router.put(
   "/profile/email",
   requireAdmin,
+  loginLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const adminId = Number(req.admin?.sub ?? 0);
     const body = adminEmailSchema.parse(req.body);
@@ -113,6 +117,11 @@ router.put(
       const current = await tx.admin.findUniqueOrThrow({ where: { id: adminId } });
       if (current.twoFactorEnabled && current.email !== (body.email ?? null)) {
         throw new HttpError(409, "Disable two-factor authentication with your current password before changing its email address.");
+      }
+      if (current.email !== (body.email ?? null)) {
+        if (!body.currentPassword || !await verifyPassword(body.currentPassword, current.passwordHash)) {
+          throw new HttpError(403, "Current password is required to change your recovery email.");
+        }
       }
       return tx.admin.update({ where: { id: adminId }, data: { email: body.email ?? null } });
     });

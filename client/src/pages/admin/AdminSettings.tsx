@@ -34,11 +34,14 @@ function validationMessage(requestError: ApiRequestError): string {
 export default function AdminSettings() {
   const { success, error } = useToast();
   const [settings, setSettings] = useState<SiteSettings | null>(null);
-  const [profile, setProfile] = useState<AdminProfile | null>(null);
+  const [, setProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
   const [threshold, setThreshold] = useState(10);
 
 const load = () => {
@@ -52,6 +55,7 @@ const load = () => {
         setSettings(s.settings);
         if (p) {
           setProfile(p.profile);
+          setEmailDraft(p.profile.email ?? "");
           setThreshold(p.profile.lowStockThreshold);
         }
       })
@@ -504,24 +508,24 @@ const load = () => {
         <div className="mt-4 flex items-center gap-3">
           <input
             type="email"
-            value={profile?.email ?? ""}
-            onChange={async (e) => {
-              try {
-                const res = await adminApi.updateProfileEmail(e.target.value || null);
-                setProfile((prev) => prev ? { ...prev, email: res.email } : prev);
-                success("Notification email updated");
-              } catch (err) {
-                if (err instanceof ApiRequestError) error(err.message);
-                else error("Update failed");
-              }
-            }}
+            value={emailDraft}
+            onChange={(e) => setEmailDraft(e.target.value)}
             className="input flex-1"
             placeholder="admin@example.com"
           />
         </div>
-        <p className="mt-2 text-xs text-slate-400">
-          Leave blank to disable email notifications. Changes take effect immediately.
-        </p>
+        <input type="password" autoComplete="current-password" value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} className="input mt-3" placeholder="Current password to change email" aria-label="Current password to change email" />
+        <button className="btn-primary mt-3" disabled={emailSaving || !emailPassword} onClick={async () => {
+          setEmailSaving(true);
+          try {
+            const res = await adminApi.updateProfileEmail(emailDraft || null, emailPassword);
+            setProfile((prev) => prev ? { ...prev, email: res.email } : prev);
+            setEmailPassword("");
+            success("Notification email updated");
+          } catch (err) { error(err instanceof Error ? err.message : "Update failed"); }
+          finally { setEmailSaving(false); }
+        }}>{emailSaving ? "Saving…" : "Save Email"}</button>
+        <p className="mt-2 text-xs text-slate-400">Changing this recovery address requires your current password. Disable 2FA before changing its email.</p>
       </div>
 
       <div className="flex justify-end">

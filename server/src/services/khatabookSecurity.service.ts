@@ -15,7 +15,6 @@ interface KhatabookSecurityStore {
 }
 
 const STORE_PATH = path.resolve(process.cwd(), "uploads", "khatabook_security.json");
-const DEFAULT_PIN = "1234"; // Default initial PIN if none configured yet
 
 function readJsonStore(): KhatabookSecurityStore {
   try {
@@ -115,6 +114,11 @@ async function persistStore(data: Partial<KhatabookSecurityStore>): Promise<void
     });
   }
 
+  // Changing PIN/recovery configuration revokes unlocks on every device.
+  if (data.pinHash !== undefined || data.recoveryEmail !== undefined) {
+    await prisma.adminSession.updateMany({ data: { khatabookUnlockedUntil: null } });
+  }
+
   // Keep the legacy file only as a best-effort migration/rollback cache. The
   // database write above is authoritative and must succeed before the API does.
   saveJsonStore(merged);
@@ -172,7 +176,7 @@ export async function getKhatabookStatus(): Promise<{
     isPinSet: !!store.pinHash,
     recoveryEmail: store.recoveryEmail || email,
     maskedEmail: maskEmail(email),
-    defaultPinActive: !store.pinHash,
+    defaultPinActive: false,
   };
 }
 
@@ -182,8 +186,7 @@ export async function getKhatabookStatus(): Promise<{
 export async function verifyKhatabookPin(pin: string): Promise<boolean> {
   const store = await getEffectiveStore();
   if (!store.pinHash) {
-    // Check against default PIN 1234
-    return pin === DEFAULT_PIN;
+    return false; // Initial setup requires the admin password, never a shared default PIN.
   }
   return verifyPassword(pin, store.pinHash);
 }

@@ -61,30 +61,30 @@ describe("Admin 10-Attempt Lockout Security", () => {
         .send({ username: TEST_ADMIN_USERNAME, password: "wrong-password" });
 
       expect(res.status).toBe(401);
-      expect(res.body.attemptsRemaining).toBe(10 - i);
+      expect(res.body).not.toHaveProperty("attemptsRemaining");
+      expect((await prisma.admin.findUniqueOrThrow({ where: { id: adminId } })).failedLoginAttempts).toBe(i);
     }
 
-    // 10th attempt should trigger lockout (429)
+    // 10th attempt triggers an internal lockout without revealing it
     const { agent, token } = await getCsrf();
     const res10 = await agent
       .post("/api/admin/auth/login")
       .set("X-CSRF-Token", token)
       .send({ username: TEST_ADMIN_USERNAME, password: "wrong-password" });
 
-    expect(res10.status).toBe(429);
-    expect(res10.body.error).toContain("Account locked");
-    expect(res10.body.retryAfter).toBeGreaterThan(0);
-    expect(res10.body.lockedUntil).toBeDefined();
+    expect(res10.status).toBe(401);
+    expect(res10.body.error).toBe("Invalid username or password");
+    expect((await prisma.admin.findUniqueOrThrow({ where: { id: adminId } })).lockedUntil!.getTime()).toBeGreaterThan(Date.now());
 
-    // 11th attempt (even with correct password) while locked must be rejected with 429
+    // 11th attempt (even with correct password) while locked must still be rejected
     const { agent: agent11, token: token11 } = await getCsrf();
     const res11 = await agent11
       .post("/api/admin/auth/login")
       .set("X-CSRF-Token", token11)
       .send({ username: TEST_ADMIN_USERNAME, password: TEST_PASSWORD });
 
-    expect(res11.status).toBe(429);
-    expect(res11.body.error).toContain("Account locked");
+    expect(res11.status).toBe(401);
+    expect(res11.body.error).toBe("Invalid username or password");
 
     // Manually unlock for remaining tests
     await prisma.admin.update({

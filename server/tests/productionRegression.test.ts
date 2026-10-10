@@ -64,7 +64,7 @@ describe("Production regressions", () => {
     const clients = await Promise.all(Array.from({ length: 10 }, () => client()));
     const results = await Promise.all(clients.map(({ agent, token }) => agent.post("/api/admin/auth/login")
       .set("X-CSRF-Token", token).send({ username, password: "incorrect-password" })));
-    expect(results.filter((result) => result.status === 429)).toHaveLength(1);
+    expect(results.every((result) => result.status === 401)).toBe(true);
     const admin = await prisma.admin.findUniqueOrThrow({ where: { id: adminId } });
     expect(admin.failedLoginAttempts).toBe(10);
     expect(admin.lockedUntil).not.toBeNull();
@@ -72,7 +72,8 @@ describe("Production regressions", () => {
     const { agent, token } = await client();
     const retry = await agent.post("/api/admin/auth/login").set("X-CSRF-Token", token).send({ username, password: "incorrect-password" });
     expect(retry.status).toBe(401);
-    expect(retry.body.attemptsRemaining).toBe(9);
+    expect(retry.body).not.toHaveProperty("attemptsRemaining");
+    expect((await prisma.admin.findUniqueOrThrow({ where: { id: adminId } })).failedLoginAttempts).toBe(1);
   });
 
   it("enforces the device limit under concurrent successful logins", async () => {
@@ -119,7 +120,7 @@ describe("Production regressions", () => {
     }
     expect((await agent.post("/api/admin/auth/verify-2fa").set("X-CSRF-Token", token).send({ tempToken, otp: "123456" })).status).toBe(429);
     expect((await agent.post("/api/admin/auth/resend-2fa").set("X-CSRF-Token", token).send({ tempToken })).status).toBe(429);
-    expect((await agent.post("/api/admin/auth/login").set("X-CSRF-Token", token).send({ username, password })).status).toBe(429);
+    expect((await agent.post("/api/admin/auth/login").set("X-CSRF-Token", token).send({ username, password })).status).toBe(401);
     await prisma.admin.update({ where: { id: adminId }, data: { twoFactorEnabled: false, twoFactorFailedAttempts: 0, lockedUntil: null, failedLoginAttempts: 0 } });
   });
 

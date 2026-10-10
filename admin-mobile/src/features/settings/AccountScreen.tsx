@@ -25,6 +25,7 @@ export function AccountScreen() {
   const q = useProfile();
 
   const [email, setEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
   const [threshold, setThreshold] = useState("10");
   const [saving, setSaving] = useState(false);
 
@@ -36,6 +37,7 @@ export function AccountScreen() {
 
   // Khatabook Security
   const [khatabookCurrentPin, setKhatabookCurrentPin] = useState("");
+  const [khatabookAdminPassword, setKhatabookAdminPassword] = useState("");
   const [khatabookNewPin, setKhatabookNewPin] = useState("");
   const [khatabookConfirmPin, setKhatabookConfirmPin] = useState("");
   const [khatabookRecoveryEmail, setKhatabookRecoveryEmail] = useState("");
@@ -100,7 +102,10 @@ export function AccountScreen() {
     try {
       setSaving(true);
       await settingsService.saveProfile(Number(threshold));
-      await settingsService.saveEmail(email.trim());
+      if (email.trim() !== (q.data?.email ?? "")) {
+        await settingsService.saveEmail(email.trim(), emailPassword);
+        setEmailPassword("");
+      }
       await qc.invalidateQueries({ queryKey: adminQueryKeys.profile() });
       await auth.refreshSession();
       Alert.alert("Account updated", "Notification email and stock threshold were saved.");
@@ -146,11 +151,13 @@ export function AccountScreen() {
       setKhatabookSaving(true);
       const res = await settingsService.changeKhatabookSecurity({
         currentPin: khatabookCurrentPin.trim() || undefined,
+        adminPassword: khatabookAdminPassword || undefined,
         newPin: khatabookNewPin.trim() || undefined,
         recoveryEmail: khatabookRecoveryEmail.trim() || undefined,
       });
       Alert.alert("Khatabook Updated", res.message || "Security settings updated successfully!");
       setKhatabookCurrentPin("");
+      setKhatabookAdminPassword("");
       setKhatabookNewPin("");
       setKhatabookConfirmPin("");
     } catch (e) {
@@ -233,6 +240,7 @@ export function AccountScreen() {
         <Row label="Username" value={auth.admin?.username ?? q.data?.username ?? "—"} />
         <Row label="Role" value={auth.admin?.role ?? "ADMIN"} />
         <FormField label="Notification email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+        <PasswordField label="Current password to change email" value={emailPassword} onChangeText={setEmailPassword} />
         <FormField label="Low-stock threshold" value={threshold} onChangeText={setThreshold} keyboardType="number-pad" />
         <Button title="Save Profile" loading={saving} disabled={offline || saving || !Number.isInteger(Number(threshold)) || Number(threshold) < 0} onPress={() => void saveProfile()} />
       </Card>
@@ -319,12 +327,13 @@ export function AccountScreen() {
           खाताबुक सुरक्षा पिन और पासवर्ड रीसेट के लिए रिकवरी Gmail सेट करें।
         </AppText>
         <FormField
-          label="वर्तमान पिन (Current PIN or default 1234)"
+          label="वर्तमान पिन (Current PIN, if already set)"
           value={khatabookCurrentPin}
           onChangeText={setKhatabookCurrentPin}
           secureTextEntry
           keyboardType="number-pad"
         />
+        <PasswordField label="Admin password (required for first PIN setup)" value={khatabookAdminPassword} onChangeText={setKhatabookAdminPassword} />
         <FormField
           label="रिकवरी जीमेल (Forgot PIN / OTP Gmail)"
           value={khatabookRecoveryEmail}

@@ -293,6 +293,7 @@ export const constructionKnowledgeSchema = z.object({
 });
 
 export const adminEmailSchema = z.object({
+  currentPassword: z.string().min(1).max(200).optional(),
   email: z.preprocess(
     (v) => (v === null || v === undefined || v === "" ? null : v),
     z

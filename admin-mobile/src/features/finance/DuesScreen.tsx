@@ -62,6 +62,12 @@ export function DuesScreen() {
   const authStatusQ = useKhatabookAuthStatus();
   const authStatus = authStatusQ.data;
 
+  useEffect(() => {
+    if (!isUnlocked) return;
+    const timer = setTimeout(() => setIsUnlocked(false), 15 * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [isUnlocked]);
+
   // Change PIN Modal State
   const [showChangePinModal, setShowChangePinModal] = useState(false);
   const [currentPin, setCurrentPin] = useState("");
@@ -205,7 +211,11 @@ export function DuesScreen() {
   };
 
   // Lock Khatabook
-  const handleLock = () => {
+  const handleLock = async () => {
+    try { await financeService.lock(); } catch (error) {
+      setPinError(error instanceof Error ? error.message : "Unable to lock. Please retry.");
+      return;
+    }
     setIsUnlocked(false);
     setPinInput("");
     setPinError(null);
@@ -474,6 +484,9 @@ export function DuesScreen() {
             ग्राहक उधारी, लेनदेन एवं स्टॉक बैलेंस देखने के लिए अपना गोपनीय सुरक्षा पिन दर्ज करें।
           </AppText>
 
+          {authStatusQ.data && !authStatusQ.data.isPinSet && (
+            <Button title="Set up Khatabook PIN in Account" onPress={() => router.push("/(admin)/account")} />
+          )}
           {pinError && (
             <View style={s.errorBox}>
               <Ionicons name="alert-circle" size={16} color="#991b1b" />

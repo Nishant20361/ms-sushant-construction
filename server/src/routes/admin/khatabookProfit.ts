@@ -5,6 +5,8 @@ import { requireAdmin } from "../../middleware/auth.js";
 import { getProfitAnalytics } from "../../utils/inventoryFifo.js";
 import { parseProfitDateRange } from "../../utils/profitDateRange.js";
 
+import { requireKhatabook } from "../../middleware/khatabook.js";
+
 const router = Router();
 
 /**
@@ -15,6 +17,7 @@ const router = Router();
 router.get(
   "/khatabook/profit",
   requireAdmin,
+  requireKhatabook,
   asyncHandler(async (req, res) => {
     const range = parseProfitDateRange(req.query.from, req.query.to);
     const analytics = await getProfitAnalytics(prisma, range);

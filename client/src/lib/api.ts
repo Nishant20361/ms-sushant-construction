@@ -397,6 +397,9 @@ getDuesSummary(params: {
   }> {
     return request("/admin/khatabook/auth-status");
   },
+  lockKhatabook(): Promise<{ success: boolean }> {
+    return request("/admin/khatabook/lock", { method: "POST" }, { csrf: true });
+  },
   verifyKhatabookPin(pin: string): Promise<{ success: boolean; message: string }> {
     return request("/admin/khatabook/verify-pin", { method: "POST", body: JSON.stringify({ pin }) }, { csrf: true });
   },
@@ -461,10 +464,10 @@ getDuesSummary(params: {
       { csrf: true }
     );
   },
-  updateProfileEmail(email: string | null): Promise<{ email: string | null }> {
+  updateProfileEmail(email: string | null, currentPassword: string): Promise<{ email: string | null }> {
     return request(
       "/admin/profile/email",
-      { method: "PUT", body: JSON.stringify({ email }) },
+      { method: "PUT", body: JSON.stringify({ email, currentPassword }) },
       { csrf: true }
     );
   },

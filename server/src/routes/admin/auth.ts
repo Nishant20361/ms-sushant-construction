@@ -83,6 +83,8 @@ async function createAdminSession(adminId: number, username: string, role: strin
   return result;
 }
 
+const dummyPasswordHash = hashPassword(crypto.randomBytes(32).toString("hex"));
+
 const router = Router();
 
 function setAdminCookie(res: Response, token: string): void {
@@ -121,20 +123,15 @@ router.post(
     const admin = await prisma.admin.findUnique({ where: { username: body.username } });
     const generic = "Invalid username or password";
     if (!admin || !admin.isActive) {
+      await verifyPassword(body.password, await dummyPasswordHash);
       throw new HttpError(401, generic);
     }
 
     const now = new Date();
     // 1. Check if account is currently locked
     if (admin.lockedUntil && admin.lockedUntil > now) {
-      const remainingSec = Math.ceil((admin.lockedUntil.getTime() - now.getTime()) / 1000);
-      const remainingMin = Math.ceil(remainingSec / 60);
-      res.set("Retry-After", String(remainingSec));
-      return res.status(429).json({
-        error: `Too many failed password attempts. Account locked. Please try again in ${remainingMin} minute${remainingMin === 1 ? "" : "s"}.`,
-        retryAfter: remainingSec,
-        lockedUntil: admin.lockedUntil.toISOString(),
-      });
+      await verifyPassword(body.password, admin.passwordHash);
+      throw new HttpError(401, generic);
     }
 
     // 2. Verify password
@@ -159,12 +156,7 @@ router.post(
           entityId: admin.id,
           details: JSON.stringify({ attempts: newAttempts, lockedUntil: lockedUntil.toISOString() }),
         });
-        res.set("Retry-After", "900");
-        return res.status(429).json({
-          error: "Too many failed password attempts. Account locked for 15 minutes.",
-          retryAfter: 900,
-          lockedUntil: lockedUntil.toISOString(),
-        });
+        throw new HttpError(401, generic);
       } else {
         await writeAudit(req as AuthenticatedRequest, {
           action: "LOGIN_FAILED",
@@ -172,13 +164,7 @@ router.post(
           entityId: admin.id,
           details: JSON.stringify({ attempts: newAttempts }),
         });
-        const remaining = 10 - newAttempts;
-        return res.status(401).json({
-          error: remaining <= 3
-            ? `Invalid username or password. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining before 15-minute lockout.`
-            : generic,
-          attemptsRemaining: remaining,
-        });
+        throw new HttpError(401, generic);
       }
     }
 

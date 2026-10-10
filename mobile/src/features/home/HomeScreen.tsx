@@ -96,7 +96,7 @@ export default function HomeScreen() {
             Prices shown in the app are for browsing. The server verifies current price, stock and final subtotal when an order is placed.
           </Text>
           <View style={styles.brandBadge}>
-            <Text style={styles.brandBadgeText}>★ MS Sushant Construction · Bihar</Text>
+            <Text style={styles.brandBadgeText}>★ MS Sushant Construction · Dhanbad</Text>
           </View>
           <Text style={styles.developer}>Designed & Developed by Nishant</Text>
         </View>

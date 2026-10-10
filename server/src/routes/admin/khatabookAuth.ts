@@ -13,6 +13,9 @@ import {
 import { prisma } from "../../db.js";
 import { verifyPassword } from "../../utils/password.js";
 
+import { KHATABOOK_UNLOCK_MS } from "../../middleware/khatabook.js";
+import { loginLimiter } from "../../middleware/rateLimit.js";
+
 const router = Router();
 
 /**
@@ -35,6 +38,7 @@ router.get(
 router.post(
   "/khatabook/verify-pin",
   requireAdmin,
+  loginLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { pin } = req.body;
     if (!pin || typeof pin !== "string") {
@@ -48,6 +52,10 @@ router.post(
       return;
     }
 
+    await prisma.adminSession.update({
+      where: { id: req.admin!.sessionId! },
+      data: { khatabookUnlockedUntil: new Date(Date.now() + KHATABOOK_UNLOCK_MS) },
+    });
     await writeAudit(req, {
       action: "KHATABOOK_UNLOCKED",
       entity: "Khatabook",
@@ -68,6 +76,7 @@ router.post(
 router.post(
   "/khatabook/change-pin",
   requireAdmin,
+  loginLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { currentPin, adminPassword, newPin, recoveryEmail } = req.body;
 
@@ -107,6 +116,9 @@ router.post(
       recoveryEmail: recoveryEmail ? recoveryEmail.trim() : undefined,
     });
 
+    await prisma.adminSession.update({ where: { id: req.admin!.sessionId! }, data: {
+      khatabookUnlockedUntil: new Date(Date.now() + KHATABOOK_UNLOCK_MS),
+    } });
     await writeAudit(req, {
       action: "KHATABOOK_SECURITY_UPDATED",
       entity: "Khatabook",
@@ -127,6 +139,7 @@ router.post(
 router.post(
   "/khatabook/forgot-pin",
   requireAdmin,
+  loginLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const result = await sendKhatabookResetOtp();
 
@@ -151,6 +164,7 @@ router.post(
 router.post(
   "/khatabook/reset-pin",
   requireAdmin,
+  loginLimiter,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { otp, newPin } = req.body;
 
@@ -165,6 +179,10 @@ router.post(
 
     try {
       await resetKhatabookPinWithOtp(otp.trim(), newPin.trim());
+      await prisma.adminSession.update({
+        where: { id: req.admin!.sessionId! },
+        data: { khatabookUnlockedUntil: new Date(Date.now() + KHATABOOK_UNLOCK_MS) },
+      });
 
       await writeAudit(req, {
         action: "KHATABOOK_PIN_RESET_WITH_OTP",
@@ -181,5 +199,10 @@ router.post(
     }
   })
 );
+
+router.post("/khatabook/lock", requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  await prisma.adminSession.update({ where: { id: req.admin!.sessionId! }, data: { khatabookUnlockedUntil: null } });
+  res.json({ success: true });
+}));
 
 export default router;

@@ -56,6 +56,7 @@ export const financeService = {
       .then(normalizeOrdersPage),
   authStatus: async (signal?: AbortSignal) =>
     adminApiClient.request<KhatabookAuthStatus>("/admin/khatabook/auth-status", { signal }),
+  lock: async () => adminApiClient.request("/admin/khatabook/lock", { method: "POST" }),
   verifyPin: async (pin: string) =>
     adminApiClient.request<{ success: boolean; message?: string }>("/admin/khatabook/verify-pin", {
       method: "POST",

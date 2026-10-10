@@ -38,13 +38,17 @@ export default function Khatabook() {
   const { success, error: toastError } = useToast();
 
   // Security Lock State
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
-    return sessionStorage.getItem(UNLOCK_STORAGE_KEY) === "true";
-  });
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinVerifying, setPinVerifying] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [showPin, setShowPin] = useState(false);
+
+  useEffect(() => {
+    if (!isUnlocked) return;
+    const timer = setTimeout(() => setIsUnlocked(false), 15 * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [isUnlocked]);
 
   // Auth Status (from server)
   const [authStatus, setAuthStatus] = useState<{
@@ -208,7 +212,11 @@ export default function Khatabook() {
   };
 
   // Handle Lock
-  const handleLock = () => {
+  const handleLock = async () => {
+    try { await adminApi.lockKhatabook(); } catch (err) {
+      toastError(err instanceof Error ? err.message : "Unable to lock. Please retry.");
+      return;
+    }
     sessionStorage.removeItem(UNLOCK_STORAGE_KEY);
     setIsUnlocked(false);
     setPinInput("");
@@ -530,16 +538,34 @@ export default function Khatabook() {
             </p>
           </div>
 
-          {authStatus?.defaultPinActive && (
+          {authStatus && !authStatus.isPinSet && (
             <div className="rounded-xl bg-amber-50 p-3 border border-amber-200 text-xs text-amber-900 text-left">
               <p className="font-bold flex items-center gap-1.5 text-amber-800">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                डिफ़ॉल्ट पिन: 1234
+                पहले अपना सुरक्षा पिन सेट करें
               </p>
               <p className="mt-0.5 text-[11px] text-amber-700">
-                पहली बार लॉगिन करने के लिए <strong>1234</strong> डालें, फिर अंदर जाकर पिन बदल लें।
+                नीचे एडमिन पासवर्ड से नया पिन सेट करें।
               </p>
             </div>
+          )}
+
+          {authStatus && !authStatus.isPinSet && (
+            <form className="space-y-3" onSubmit={async (event) => {
+              event.preventDefault();
+              setPinVerifying(true);
+              try {
+                await adminApi.changeKhatabookPin({ adminPassword, newPin });
+                await adminApi.verifyKhatabookPin(newPin);
+                setIsUnlocked(true);
+                setAdminPassword(""); setNewPin(""); loadAuthStatus();
+              } catch (err) { setPinError(err instanceof Error ? err.message : "PIN setup failed"); }
+              finally { setPinVerifying(false); }
+            }}>
+              <input className="input" type="password" autoComplete="current-password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Current admin password" aria-label="Current admin password" required />
+              <input className="input" type="password" inputMode="numeric" minLength={4} maxLength={8} value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="New Khatabook PIN" aria-label="New Khatabook PIN" required />
+              <button className="btn-primary" disabled={pinVerifying}>Set PIN and unlock</button>
+            </form>
           )}
 
           {pinError && (
@@ -2106,7 +2132,7 @@ export default function Khatabook() {
                   type="password"
                   value={currentPin}
                   onChange={(e) => setCurrentPin(e.target.value)}
-                  placeholder="वर्तमान पिन (या डिफ़ॉल्ट 1234)"
+                  placeholder="वर्तमान पिन"
                   className="input text-sm"
                   autoFocus
                 />

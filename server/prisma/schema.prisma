@@ -42,6 +42,7 @@ model AdminSession {
   createdAt    DateTime @default(now())
   lastActiveAt DateTime @default(now())
   expiresAt    DateTime
+  khatabookUnlockedUntil DateTime?
   admin        Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   @@index([adminId])
