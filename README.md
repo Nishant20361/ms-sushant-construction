@@ -9,14 +9,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/your-github-username">GitHub profile</a>
+  <a href="https://github.com/Nishant20361">GitHub profile</a>
   &nbsp;•&nbsp;
-  <a href="https://your-domain.example">Live website</a>
+  <a href="https://ms-sushant-construction-client.vercel.app">Live website</a>
   &nbsp;•&nbsp;
   <a href="LICENSE.md">MIT License</a>
 </p>
 
-> **Placeholders:** replace `your-github-username` and `your-domain.example` with your real GitHub profile and website domain before publishing.
+## Latest source update — October 2026
+
+- Admin recovery email changes require the current password; failed login responses are consistent.
+- Khatabook profit access requires a server-verified PIN unlock that expires after 15 minutes.
+- Admin Android customer-order quantity fields have dedicated touch space and editable quantity drafts.
+- Customer Android home branding now says **Dhanbad**.
+- Production dependencies are updated to patched versions. [Verified CI run](https://github.com/Nishant20361/ms-sushant-construction/actions/runs/38079177553) passed backend checks, database migrations, tests and both Android bundle exports; its production dependency audit reported zero vulnerabilities.
+
+[Release notes and downloads](https://github.com/Nishant20361/ms-sushant-construction/releases) · [Security and input update details](docs/admin-security-and-input-fixes.md)
+
+**Mobile delivery:** these changes are in source. Existing APK downloads are older builds; new signed APKs and physical-device verification are still required. Apply the included database migration and deploy the API with the updated clients.
 
 ## Highlights
 
@@ -30,6 +40,7 @@
 ## Technology
 
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
+- **Mobile apps:** React Native, Expo (customer app and Sushant Control admin app)
 - **Backend:** Express, TypeScript, Prisma
 - **Database:** PostgreSQL
 - **Quality:** Vitest, ESLint, TypeScript checks and GitHub Actions CI
@@ -45,7 +56,7 @@
 ### Run locally
 
 ```bash
-git clone https://github.com/your-github-username/ms-sushant-construction.git
+git clone https://github.com/Nishant20361/ms-sushant-construction.git
 cd ms-sushant-construction
 cp .env.example .env
 npm install
@@ -68,19 +79,19 @@ At minimum, set these values in `.env` before deployment:
 NODE_ENV=production
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?schema=public"
 JWT_SECRET="replace-with-at-least-32-random-characters"
-CLIENT_URL="https://your-domain.example"
+CLIENT_URL="https://ms-sushant-construction-client.vercel.app"
 TRUST_PROXY=true
 ```
 
 For Render Free, use Brevo's HTTPS API: set `BREVO_API_KEY` and set `EMAIL_FROM` to a sender email verified in Brevo. This avoids Render's blocked SMTP ports. SMTP credentials remain supported for paid hosting.
 
-### Current Render deployment
+### Deployment URLs
 
 | Service | Required configuration |
 | --- | --- |
-| Frontend | `https://ms-sushant-construction-1.onrender.com` |
+| Frontend | `https://ms-sushant-construction-client.vercel.app` |
 | Backend | `https://ms-sushant-construction.onrender.com` |
-| Backend `CLIENT_URL` | `https://ms-sushant-construction-1.onrender.com` |
+| Backend `CLIENT_URL` | `https://ms-sushant-construction-client.vercel.app` |
 | Frontend `VITE_API_BASE` | `https://ms-sushant-construction.onrender.com/api` |
 | Frontend `VITE_UPLOADS_BASE` | `https://ms-sushant-construction.onrender.com/uploads` |
 
@@ -144,6 +155,9 @@ The web and mobile clients must be released with the new API: public history req
 ```text
 client/       React storefront and admin panel
 server/       Express API, Prisma schema, routes and tests
+mobile/       Customer Android app (React Native / Expo)
+admin-mobile/ Sushant Control admin Android app
+docs/         Deployment and security update notes
 assets/       README and project visual assets
 .github/      Continuous-integration workflow
 ```
@@ -152,8 +166,8 @@ assets/       README and project visual assets
 
 Built and maintained by **Nishant Kumar**.
 
-- GitHub: `https://github.com/your-github-username`
-- Website: `https://your-domain.example`
+- GitHub: `https://github.com/Nishant20361`
+- Website: `https://ms-sushant-construction-client.vercel.app`
 
 ## License
 
