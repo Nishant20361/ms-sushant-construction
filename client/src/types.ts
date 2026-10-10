@@ -697,3 +697,9 @@ export interface ProfitAnalyticsData {
   productProfits: ProductProfitItem[];
   recentBatches: ProductPurchaseBatch[];
 }
+
+export interface AdminAssistantResponse {
+  message: string;
+  contextToken?: string;
+  options?: { label: string; value: string }[];
+}

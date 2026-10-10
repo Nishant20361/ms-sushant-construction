@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sushant Control",
     "slug": "sushant-control",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "scheme": "sushantcontrol",
     "userInterfaceStyle": "automatic",
@@ -13,10 +13,9 @@
     },
     "android": {
       "package": "com.mssushantconstruction.admin",
-      "versionCode": 2,
+      "versionCode": 3,
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW"
@@ -57,7 +56,14 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Sushant Control to transcribe your admin request when you tap Voice.",
+          "speechRecognitionPermission": "Allow Sushant Control to convert your spoken admin request to editable text."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

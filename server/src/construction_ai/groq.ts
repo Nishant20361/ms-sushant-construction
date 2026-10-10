@@ -197,7 +197,8 @@ export async function askGroq(
   systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
   model?: string,
   history: GroqMessage[] = [],
-  imageUrl?: string
+  imageUrl?: string,
+  options?: { json?: boolean; maxCompletionTokens?: number }
 ): Promise<{ text: string; model: string }> {
   if (process.env.NODE_ENV === "test" && process.env.GROQ_ALLOW_TEST_REQUESTS !== "true") {
     throw new Error("Groq is disabled in test mode");
@@ -239,6 +240,8 @@ export async function askGroq(
         {
           model: currentModel,
           messages,
+          ...(options?.json ? { response_format: { type: "json_object" as const } } : {}),
+          ...(options?.maxCompletionTokens ? { max_completion_tokens: options.maxCompletionTokens } : {}),
         },
         { signal: controller.signal }
       );

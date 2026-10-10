@@ -678,3 +678,7 @@ export interface CategoryPayload {
   displayOrder: number;
   isActive: boolean;
 }
+
+export const adminAssistantApi = {
+  chat: (body: { message: string; contextToken?: string; selection?: string }) => request<import("../types").AdminAssistantResponse>("/admin/assistant/chat", { method:"POST", body:JSON.stringify(body) }, {csrf:true}),
+};

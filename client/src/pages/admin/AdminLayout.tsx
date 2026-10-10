@@ -46,6 +46,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Overview",
     items: [
       { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/admin/assistant", label: "Business Saathi", icon: BookOpen, badge: "NEW" },
       { to: "/admin/analytics", label: "Analytics & Trends", icon: BarChart3 },
     ],
   },
@@ -89,6 +90,7 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 const ROUTE_TITLES: Record<string, { title: string; subtitle: string }> = {
+  "/admin/assistant": { title: "Business Saathi", subtitle: "Customer udhari and friendly business advice" },
   "/admin": { title: "Executive Dashboard", subtitle: "Overview of sales, inventory & operations" },
   "/admin/khatabook": { title: "खाताबुक व डिजिटल लेजर (Khatabook)", subtitle: "ग्राहक उधारी हिसाब-किताब, पैसा जमा, WhatsApp रिमाइंडर व गोदाम स्टॉक" },
   "/admin/analytics": { title: "Business Analytics", subtitle: "Detailed sales trends & customer insights" },

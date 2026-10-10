@@ -16,6 +16,10 @@
   <a href="LICENSE.md">MIT License</a>
 </p>
 
+## Business Saathi — private admin companion
+
+The web admin and Sushant Control source now include a discreet Business Saathi shortcut: customer udhari lookup with PIN protection and same-name selection, plus friendly Hindi/Hinglish/English business advice and voice dictation. It cannot change business records or generate reports. [Setup, scope and verification](docs/business-saathi.md).
+
 ## Latest source update — October 2026
 
 - Admin recovery email changes require the current password; failed login responses are consistent.

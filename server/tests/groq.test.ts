@@ -45,6 +45,14 @@ afterEach(() => {
 });
 
 describe("Groq primary and fallback requests", () => {
+  it("bounds admin JSON responses without changing public request defaults", async () => {
+    createCompletion.mockResolvedValue({ choices: [{ message: { content: '{"action":"help"}' } }] });
+    await askGroq("admin prompt", "JSON only", GROQ_FALLBACK_MODEL, [], undefined, { json: true, maxCompletionTokens: 2048 });
+    expect(createCompletion.mock.calls[0][0]).toMatchObject({ response_format: { type: "json_object" }, max_completion_tokens: 2048 });
+    await askGroq("public prompt");
+    expect(createCompletion.mock.calls[1][0]).not.toHaveProperty("response_format");
+    expect(createCompletion.mock.calls[1][0]).not.toHaveProperty("max_completion_tokens");
+  });
   it("returns a successful primary response without requesting the fallback", async () => {
     createCompletion.mockResolvedValueOnce({ choices: [{ message: { content: "primary ok" } }] });
 

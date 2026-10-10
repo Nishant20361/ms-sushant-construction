@@ -14,7 +14,10 @@ import khatabookAuthRoutes from "./khatabookAuth.js";
 import khatabookProfitRoutes from "./khatabookProfit.js";
 import assistedOrderRoutes from "./assistedOrder.js";
 
+import assistantRoutes from "./assistant.js";
+
 const router = Router();
+router.use("/", assistantRoutes);
 
 router.use("/", authRoutes);
 router.use("/", dashboardRoutes);
