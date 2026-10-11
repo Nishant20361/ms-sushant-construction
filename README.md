@@ -176,3 +176,10 @@ Built and maintained by **Nishant Kumar**.
 ## License
 
 Released under the [MIT License](LICENSE.md). © 2026 Nishant Kumar.
+
+## Android downloads
+
+- [Customer app 1.0.6 (build 9)](https://github.com/Nishant20361/ms-sushant-construction-releases/releases/tag/customer-app-v1.0.6)
+- [Sushant Control admin app 1.0.5 (build 7)](https://github.com/Nishant20361/ms-sushant-construction-releases/releases/tag/sushant-control-v1.0.5)
+
+Signed APKs are published in the separate releases repository. The website customer download and admin dashboard download link to their respective APKs. Customer in-app update prompts use the admin-configured Site Settings version, build number and direct APK URL; these database settings are independent of a GitHub push. Sushant Control currently uses manual APK updates. Physical-device installation has not been verified.

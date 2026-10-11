@@ -22,7 +22,7 @@ The balance is current at lookup time, uses all non-cancelled orders (including 
 
 ## Deployment
 
-Deploy the updated backend and web frontend together. Keep `GROQ_API_KEY` on the backend only. No new database migration is required. Install admin app dependencies with `npm ci` and create a new signed native build: Sushant Control source version **1.0.5**, Android versionCode **7**. The speech recognition native plugin requires a new APK; old APKs do not gain this feature from a web deployment. Microphone/speech permission is requested only after tapping Voice. Recognition availability depends on the browser/device and speech service. Existing APK download links continue to point to published signed builds.
+Deploy the updated backend and web frontend together. Keep `GROQ_API_KEY` on the backend only. No new database migration is required. Install admin app dependencies with `npm ci` and create a new signed native build: Sushant Control source version **1.0.5**, Android versionCode **7**. The speech recognition native plugin requires a new APK; old APKs do not gain this feature from a web deployment. Microphone/speech permission is requested only after tapping Voice. Recognition availability depends on the browser/device and speech service. The admin dashboard download points to the signed Sushant Control 1.0.5 APK in the separate releases repository.
 
 ## Verification
 
